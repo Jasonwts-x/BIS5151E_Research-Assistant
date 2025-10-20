@@ -1,0 +1,11 @@
+llm:
+  provider: "ollama"
+  model: "llama3"
+rag:
+  chunk_size: 1000
+  chunk_overlap: 150
+  top_k: 5
+guardrails:
+  citation_required: true
+eval:
+  faithfulness_metric: "trulens_groundedness"

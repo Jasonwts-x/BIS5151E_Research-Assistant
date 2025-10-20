@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.pytest_cache/
+
+# Virtual env
+.venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# VS Code logs
+.vscode/*.log
+
+# Data & logs
+data/*
+!data/.gitkeep
+logs/*
+outputs/*
+!outputs/.gitkeep
+
+# Docker logs
+docker/*.log

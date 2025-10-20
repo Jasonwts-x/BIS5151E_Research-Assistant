@@ -1,0 +1,8 @@
+haystack-ai
+ollama
+pyyaml
+requests
+ruff
+black
+isort
+pytest
