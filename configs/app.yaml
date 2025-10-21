@@ -1,9 +1,10 @@
 llm:
   provider: "ollama"
   model: "llama3"
+  host: "http://localhost:11434"
 rag:
-  chunk_size: 1000
-  chunk_overlap: 150
+  chunk_size: 350
+  chunk_overlap: 60
   top_k: 5
 guardrails:
   citation_required: true

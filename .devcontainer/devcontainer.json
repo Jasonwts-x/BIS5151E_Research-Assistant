@@ -20,6 +20,11 @@
     "runArgs": [
         "--add-host=host.docker.internal:host-gateway"
     ],
+    "containerEnv": {
+        "OLLAMA_HOST": "http://host.docker.internal:11434",
+        "OPENAI_API_KEY": "${localEnv:OPENAI_API_KEY}",
+        "TRULENS_API_KEY": "${localEnv:TRULENS_API_KEY}"
+    },
     "postCreateCommand": "python -m pip install --upgrade pip && pip install -r requirements.txt",
     "remoteUser": "vscode",
     "portsAttributes": {
