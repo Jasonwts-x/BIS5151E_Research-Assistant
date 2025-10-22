@@ -1,0 +1,12 @@
+* text=auto
+
+# Ensure Unix line endings for scripts and Python
+*.sh text eol=lf
+*.py text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Keep images/binaries untouched
+*.png -text
+*.jpg -text
+*.pdf -text

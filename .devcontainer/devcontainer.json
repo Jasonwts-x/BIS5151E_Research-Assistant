@@ -11,7 +11,11 @@
                 "charliermarsh.ruff",
                 "ms-azuretools.vscode-docker",
                 "redhat.vscode-yaml"
-            ]
+            ],
+            "settings": {
+                "python.defaultInterpreterPath": "/usr/local/bin/python",
+                "python.terminal.activateEnvironment": false
+            }
         }
     },
     "runArgs": [
