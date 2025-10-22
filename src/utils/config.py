@@ -1,13 +1,16 @@
 from __future__ import annotations
+
+import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
-import os
+from typing import Any, Dict
+
 import yaml
 from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG_FILE = ROOT / "configs" / "app.yaml"
+
 
 @dataclass
 class LLMConfig:
@@ -15,22 +18,26 @@ class LLMConfig:
     model: str = "llama3"
     host: str = "http://localhost:11434"
 
+
 @dataclass
 class RAGConfig:
     chunk_size: int = 350
     chunk_overlap: int = 60
     top_k: int = 5
 
+
 @dataclass
 class AppConfig:
     llm: LLMConfig
     rag: RAGConfig
+
 
 def _read_yaml(path: Path) -> Dict[str, Any]:
     if not path.exists():
         return {}
     with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
+
 
 def load_config() -> AppConfig:
     # 1) load .env
@@ -43,10 +50,13 @@ def load_config() -> AppConfig:
 
     # 3) env overrides (if set)
     llm_model = os.getenv("LLM_MODEL", llm_y.get("model", "llama3"))
-    llm_host = os.getenv("OLLAMA_HOST", llm_y.get("host", "http://localhost:11434"))
+    llm_host = os.getenv("OLLAMA_HOST", llm_y.get(
+        "host", "http://localhost:11434"))
 
-    rag_chunk_size = int(os.getenv("RAG_CHUNK_SIZE", rag_y.get("chunk_size", 350)))
-    rag_chunk_overlap = int(os.getenv("RAG_CHUNK_OVERLAP", rag_y.get("chunk_overlap", 60)))
+    rag_chunk_size = int(
+        os.getenv("RAG_CHUNK_SIZE", rag_y.get("chunk_size", 350)))
+    rag_chunk_overlap = int(
+        os.getenv("RAG_CHUNK_OVERLAP", rag_y.get("chunk_overlap", 60)))
     rag_top_k = int(os.getenv("RAG_TOP_K", rag_y.get("top_k", 5)))
 
     llm = LLMConfig(
