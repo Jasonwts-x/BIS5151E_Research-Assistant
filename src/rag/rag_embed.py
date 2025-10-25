@@ -13,7 +13,7 @@ from haystack.components.embedders import (
 )
 from haystack.components.retrievers.in_memory import InMemoryEmbeddingRetriever
 from ollama import chat
-from utils.config import load_config
+from ..utils.config import load_config  # <— use package-relative import
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = ROOT / "data" / "raw"
@@ -79,14 +79,16 @@ def call_ollama(context: List[Document], question: str, model_name: str) -> str:
         f"Context:\n{context_txt}\n\n"
         "Write 6–8 sentences and include inline citations [1], [2] that match the source labels."
     )
+
     try:
         r = chat(model=model_name, messages=[{"role": "user", "content": prompt}])
         answer = r.message.content.strip()
+        return answer + ("\n\nSources:\n" + src_map if src_map else "\n\nSources: (none)")
     except Exception as e:
         print(f"⚠️  Could not reach Ollama at {OLLAMA_HOST}. Is the app running?")
         print(f"Error details: {e}")
-    answer = f"❌ Ollama connection failed. Please start Ollama and retry.\n\nDetails: {e}"
-    return answer + ("\n\nSources:\n" + src_map if src_map else "\n\nSources: (none)")
+        answer = f"❌ Ollama connection failed. Please start Ollama and retry.\n\nDetails: {e}"
+        return answer + ("\n\nSources:\n" + src_map if src_map else "\n\nSources: (none)")
 
 def main():
     OUTPUTS.mkdir(parents=True, exist_ok=True)

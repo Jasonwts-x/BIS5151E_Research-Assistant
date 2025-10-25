@@ -40,15 +40,15 @@ def _read_yaml(path: Path) -> Dict[str, Any]:
 
 
 def load_config() -> AppConfig:
-    # 1) load .env
     load_dotenv(ROOT / ".env", override=False)
 
-    # 2) load YAML defaults
     y = _read_yaml(CONFIG_FILE)
+    if not y:
+        print(f"ℹ️  No configs/app.yaml found at {CONFIG_FILE}, using defaults/env only.")
+        
     llm_y = (y.get("llm") or {})
     rag_y = (y.get("rag") or {})
 
-    # 3) env overrides (if set)
     llm_model = os.getenv("LLM_MODEL", llm_y.get("model", "llama3"))
     llm_host = os.getenv("OLLAMA_HOST", llm_y.get(
         "host", "http://localhost:11434"))
@@ -58,6 +58,10 @@ def load_config() -> AppConfig:
     rag_chunk_overlap = int(
         os.getenv("RAG_CHUNK_OVERLAP", rag_y.get("chunk_overlap", 60)))
     rag_top_k = int(os.getenv("RAG_TOP_K", rag_y.get("top_k", 5)))
+
+    rag_chunk_size = max(1, rag_chunk_size)
+    rag_chunk_overlap = max(0, rag_chunk_overlap)
+    rag_top_k = max(1, rag_top_k)
 
     llm = LLMConfig(
         provider=llm_y.get("provider", "ollama"),
