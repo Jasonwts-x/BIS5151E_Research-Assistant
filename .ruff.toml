@@ -1,7 +1,7 @@
 # .ruff.toml — repo root
 
 # Keep compatible with Black
-line-length = 88
+line-length = 150
 target-version = "py311"
 
 # Don't waste lint time on generated / heavy dirs
