@@ -1,15 +1,17 @@
 from __future__ import annotations
-from pathlib import Path
+
 from datetime import datetime
+from pathlib import Path
 from typing import List
 
-from haystack.dataclasses import Document
-from haystack.document_stores.in_memory import InMemoryDocumentStore
 from haystack.components.converters import PyPDFToDocument, TextFileToDocument
 from haystack.components.preprocessors import DocumentSplitter
 from haystack.components.retrievers.in_memory import InMemoryBM25Retriever
+from haystack.dataclasses import Document
+from haystack.document_stores.in_memory import InMemoryDocumentStore
 from ollama import chat
-from utils.config import load_config
+
+from ..utils.config import load_config
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = ROOT / "data" / "raw"
@@ -22,42 +24,46 @@ QUESTION = (
     "and cite the filenames as [1], [2], ..."
 )
 
+
 def load_documents() -> List[Document]:
     docs: List[Document] = []
     pdfs = sorted(DATA_DIR.glob("*.pdf"))
     txts = sorted(DATA_DIR.glob("*.txt"))
 
     if pdfs:
-        pdf_conv = PyPDFToDocument()  # requires pypdf
+        pdf_conv = PyPDFToDocument()
         for p in pdfs:
-            docs += pdf_conv.run(paths=[str(p)])["documents"]
+            docs += pdf_conv.run(sources=[str(p)])["documents"]
 
     if txts:
         txt_conv = TextFileToDocument(encoding="utf-8")
         for t in txts:
-            docs += txt_conv.run(paths=[str(t)])["documents"]
+            docs += txt_conv.run(sources=[str(t)])["documents"]
 
-    # normalize source meta for citations
     for d in docs:
-        meta = getattr(d, "metadata", {}) or {}
+        meta = getattr(d, "meta", {}) or {}
         src = meta.get("file_path") or meta.get("file_name") or meta.get("source")
         if src:
             meta["source"] = Path(src).name
-        d.metadata = meta
+        d.meta = meta
     return docs
+
 
 def build_index(docs: List[Document], chunk_size: int, chunk_overlap: int):
     store = InMemoryDocumentStore()
-    splitter = DocumentSplitter(split_by="word", split_length=chunk_size, split_overlap=chunk_overlap)
+    splitter = DocumentSplitter(
+        split_by="word", split_length=chunk_size, split_overlap=chunk_overlap
+    )
     chunks = splitter.run(documents=docs)["documents"]
     store.write_documents(chunks)
     retriever = InMemoryBM25Retriever(document_store=store)
     return retriever
 
+
 def answer_with_ollama(chunks: List[Document], question: str, model_name: str) -> str:
     unique_sources, lines = [], []
     for d in chunks:
-        src = d.metadata.get("source", "unknown")
+        src = (d.meta or {}).get("source", "unknown")
         if src not in unique_sources:
             unique_sources.append(src)
         idx = unique_sources.index(src) + 1
@@ -82,12 +88,18 @@ def answer_with_ollama(chunks: List[Document], question: str, model_name: str) -
     except Exception as e:
         print(f"⚠️  Could not reach Ollama at {OLLAMA_HOST}. Is the app running?")
         print(f"Error details: {e}")
-        return f"❌ Ollama connection failed. Please start Ollama and retry.\n\nDetails: {e}"
-    return answer + ("\n\nSources:\n" + source_map if source_map else "\n\nSources: (none)")
+        return (
+            "❌ Ollama connection failed. Please start Ollama and retry.\n\n"
+            f"Details: {e}"
+        )
+    return answer + (
+        "\n\nSources:\n" + source_map if source_map else "\n\nSources: (none)"
+    )
 
-def main():
+
+def main() -> None:
     OUTPUTS.mkdir(parents=True, exist_ok=True)
-    cfg = load_config()  # ← read model & RAG params
+    cfg = load_config()  # read model & RAG params
 
     docs = load_documents()
     if not docs:
@@ -102,6 +114,7 @@ def main():
     out.write_text(final, encoding="utf-8")
     print("✅ RAG MVP complete\nSaved:", out, "\n")
     print(final)
+
 
 if __name__ == "__main__":
     main()
