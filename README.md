@@ -93,5 +93,5 @@ python src/app/main.py
 ---
 
 ## 🧠 License
-This project is for educational and non-commercial use within the M.Sc. Information Systems program at Hochschule Pforzheim.  
+This project is for educational and non-commercial use within the Master of Information Systems program at Hochschule Pforzheim.  
 All AI models and datasets used must comply with open-source or institutional usage rights.
