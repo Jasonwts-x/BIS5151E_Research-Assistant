@@ -19,6 +19,7 @@ This project is part of the BIS5151 Generative Artificial Intelligence course at
 
 The tool demonstrates how **Retrieval-Augmented Generation (RAG)**, **multi-agent collaboration**, and **AI governance** can work together to create trustworthy generative systems.
 
+
 ---
 
 ## 🧩 Core Objectives
@@ -87,11 +88,11 @@ pip install -r requirements.txt
 ### 3. Configure and run the project
 
 ```
-python src/app/main.py
+python src/app/main.py 
 ```
 
 ---
 
 ## 🧠 License
-This project is for educational and non-commercial use within the M.Sc. Information Systems program at Hochschule Pforzheim.  
+This project is for educational and non-commercial use within the Master of Information Systems program at Hochschule Pforzheim.  
 All AI models and datasets used must comply with open-source or institutional usage rights.
