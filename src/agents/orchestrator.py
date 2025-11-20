@@ -39,7 +39,6 @@ class Orchestrator:
         checked = self.factchecker.check(reviewed)
 
         if translate_to:
-            checked = self.translator.translate(
-                checked, target_lang=translate_to)
+            checked = self.translator.translate(checked, target_lang=translate_to)
 
         return checked

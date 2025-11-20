@@ -52,11 +52,9 @@ def load_config() -> AppConfig:
     rag_y = y.get("rag") or {}
 
     llm_model = os.getenv("LLM_MODEL", llm_y.get("model", "llama3"))
-    llm_host = os.getenv("OLLAMA_HOST", llm_y.get(
-        "host", "http://localhost:11434"))
+    llm_host = os.getenv("OLLAMA_HOST", llm_y.get("host", "http://localhost:11434"))
 
-    rag_chunk_size = int(
-        os.getenv("RAG_CHUNK_SIZE", rag_y.get("chunk_size", 350)))
+    rag_chunk_size = int(os.getenv("RAG_CHUNK_SIZE", rag_y.get("chunk_size", 350)))
     rag_chunk_overlap = int(
         os.getenv("RAG_CHUNK_OVERLAP", rag_y.get("chunk_overlap", 60))
     )
