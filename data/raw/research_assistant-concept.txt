@@ -1,0 +1,5 @@
+ResearchAssistantGPT is a prototype designed within the BIS5151 course to explore the application of Generative AI in academic workflows. 
+It demonstrates how retrieval-augmented generation (RAG) pipelines can support literature review, citation management, and automated summarization of documents. 
+The project uses frameworks such as Haystack and Ollama to integrate open-source language models into a structured research environment. 
+Its goal is to combine transparency, reproducibility, and human oversight in AI-assisted research. 
+Through this project, students gain practical experience with modern AI architectures and understand their impact on digital transformation in education and research.

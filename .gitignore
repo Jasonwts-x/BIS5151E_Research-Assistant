@@ -24,10 +24,3 @@ __pycache__/
 
 # Docker logs
 docker/*.log
-
-# Data & logs
-data/*
-!data/.gitkeep
-logs/*
-outputs/*
-!outputs/.gitkeep

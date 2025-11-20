@@ -1,0 +1,5 @@
+Digital transformation refers to the integration of digital technologies into all areas of a business. 
+It fundamentally changes how organizations operate and deliver value to customers. 
+Key enablers include cloud computing, data analytics, artificial intelligence, and automation. 
+Successful transformation requires not only technology adoption but also cultural change, leadership commitment, and continuous innovation. 
+Companies like Databricks play an important role in accelerating digital transformation by providing data and AI infrastructure.

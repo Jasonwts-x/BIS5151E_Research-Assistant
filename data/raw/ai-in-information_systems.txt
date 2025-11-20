@@ -1,0 +1,5 @@
+In the context of Information Systems, Generative Artificial Intelligence is reshaping how organizations create, manage, and utilize knowledge. 
+Large Language Models (LLMs) such as GPT enable new forms of human-computer interaction by generating coherent text, summaries, and insights from complex data. 
+Beyond automation, these models serve as cognitive tools that augment human decision-making. 
+However, their integration into enterprise systems requires careful consideration of data governance, ethical constraints, and transparency. 
+The strategic use of GenAI in Information Systems aligns technology capabilities with organizational learning and innovation.
