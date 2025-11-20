@@ -1,0 +1,29 @@
+# .ruff.toml — repo root
+
+# Keep compatible with Black
+line-length = 150
+target-version = "py311"
+
+# Don't waste lint time on generated / heavy dirs
+extend-exclude = [
+  "data/",
+  "outputs/",
+  "docs/",
+  ".venv/",
+  ".devcontainer/",
+]
+
+[lint]
+# Core error checks + imports (isort) + a few useful bugbears
+select = ["E", "F", "I", "B"]
+ignore = []
+
+# Silence "imported but unused" in package markers only
+[lint.per-file-ignores]
+"**/__init__.py" = ["F401", "F403"]
+
+# isort behavior via Ruff
+[lint.isort]
+combine-as-imports = true
+force-single-line = false
+known-first-party = ["src"]

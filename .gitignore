@@ -6,18 +6,24 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 
+# Jupyter
+.ipynb_checkpoints/
+
+# Hugging Face cache
+.hf_cache/
+
 # Env
 .env
-.env.*    # if you ever use .env.local, etc.
+.env.*
 
 # Virtual env
 .venv/
 
-# Jupyter
-.ipynb_checkpoints/
-
 # VS Code logs
 .vscode/*.log
+
+# Docker logs
+docker/*.log
 
 # Data & logs
 data/*
@@ -25,6 +31,3 @@ data/*
 logs/*
 outputs/*
 !outputs/.gitkeep
-
-# Docker logs
-docker/*.log
