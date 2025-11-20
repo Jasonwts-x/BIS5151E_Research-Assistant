@@ -1,7 +1,7 @@
 llm:
   provider: "ollama"
   model: "llama3"
-  host: "http://localhost:11434"
+  host: "http://host.docker.internal:11434"
 rag:
   chunk_size: 350
   chunk_overlap: 60
