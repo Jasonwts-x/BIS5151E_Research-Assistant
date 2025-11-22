@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from ..agents.factchecker import default_factchecker
 from ..agents.orchestrator import (
-    default_orchestrator,
+    Orchestrator,
     serialize_result,
 )
 from ..agents.reviewer import default_reviewer
@@ -19,21 +19,32 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api")
 
-# Instantiate default agents once per process -------------------------------
+
+# ---------------------------------------------------------------------------
+# Shared agent instances (singletons for whole FastAPI process)
+# ---------------------------------------------------------------------------
+
 WRITER = default_writer()
 REVIEWER = default_reviewer()
 FACTCHECKER = default_factchecker()
 TRANSLATOR = default_translator()
-ORCHESTRATOR = default_orchestrator()
+
+ORCHESTRATOR = Orchestrator(
+    writer=WRITER,
+    reviewer=REVIEWER,
+    factchecker=FACTCHECKER,
+    translator=TRANSLATOR,
+)
 
 
-# ----- Pydantic models -----------------------------------------------------
+# ---------------------------------------------------------------------------
+# Pydantic Models
+# ---------------------------------------------------------------------------
+
+
 class WriterRequest(BaseModel):
     topic: str = Field(..., description="Topic or research question.")
-    context: Optional[str] = Field(
-        None,
-        description="Optional retrieved context (e.g., from RAG).",
-    )
+    context: Optional[str] = None
 
 
 class WriterResponse(BaseModel):
@@ -71,7 +82,7 @@ class PipelineRequest(BaseModel):
     language: str = Field("en", examples=["en", "de", "fr"])
     context: Optional[str] = Field(
         None,
-        description="Optional context that later will come from Haystack.",
+        description="Optional context that later comes from RAG.",
     )
 
 
@@ -84,7 +95,9 @@ class PipelineResponse(BaseModel):
     final_output: str
 
 
-# ----- Agent endpoints -----------------------------------------------------
+# ---------------------------------------------------------------------------
+# Agent Endpoints
+# ---------------------------------------------------------------------------
 
 
 @router.post("/agent/writer", response_model=WriterResponse)
@@ -114,13 +127,15 @@ def call_translator(payload: TranslatorRequest) -> TranslatorResponse:
     return TranslatorResponse(translated=translated)
 
 
-# ----- Orchestrator / pipeline endpoint -----------------------------------
+# ---------------------------------------------------------------------------
+# Pipeline Endpoint
+# ---------------------------------------------------------------------------
 
 
 @router.post(
     "/pipeline/summary",
     response_model=PipelineResponse,
-    summary="Run writer → reviewer → factchecker → (translator) pipeline.",
+    summary="Run complete Writer → Reviewer → FactChecker → (Translator) pipeline.",
 )
 def run_pipeline(payload: PipelineRequest) -> PipelineResponse:
     result = ORCHESTRATOR.run_pipeline(
@@ -132,7 +147,7 @@ def run_pipeline(payload: PipelineRequest) -> PipelineResponse:
     return PipelineResponse(**data)
 
 
-# Backwards-compatible alias for earlier experiments
+# Legacy alias
 @router.post("/summarize", response_model=PipelineResponse)
 def summarize_alias(payload: PipelineRequest) -> PipelineResponse:
     return run_pipeline(payload)
