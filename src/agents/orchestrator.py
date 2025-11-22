@@ -46,26 +46,26 @@ class Orchestrator:
         language: str = "en",
         context: Optional[str] = None,
     ) -> PipelineResult:
-        logger.info(
-            "Pipeline: starting for topic='%s' (language=%s)", topic, language)
+        logger.info("Pipeline: starting for topic='%s' (language=%s)", topic, language)
         timings: Dict[str, float] = {}
 
         # ---------- Writer ----------
         t0 = time.time()
-        draft = self._run_step("writer", lambda: self.writer.run(
-            topic=topic, context=context))
+        draft = self._run_step(
+            "writer", lambda: self.writer.run(topic=topic, context=context)
+        )
         timings["writer"] = time.time() - t0
 
         # ---------- Reviewer ----------
         t0 = time.time()
-        reviewed = self._run_step(
-            "reviewer", lambda: self.reviewer.run(draft=draft))
+        reviewed = self._run_step("reviewer", lambda: self.reviewer.run(draft=draft))
         timings["reviewer"] = time.time() - t0
 
         # ---------- FactChecker ----------
         t0 = time.time()
-        checked = self._run_step("factchecker", lambda: self.factchecker.run(
-            text=reviewed, context=context))
+        checked = self._run_step(
+            "factchecker", lambda: self.factchecker.run(text=reviewed, context=context)
+        )
         timings["factchecker"] = time.time() - t0
 
         # ---------- Translator ----------
@@ -73,8 +73,7 @@ class Orchestrator:
             t0 = time.time()
             final = self._run_step(
                 "translator",
-                lambda: self.translator.run(
-                    text=checked, target_language=language),
+                lambda: self.translator.run(text=checked, target_language=language),
             )
             timings["translator"] = time.time() - t0
         else:

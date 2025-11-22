@@ -67,14 +67,11 @@ class BaseAgent(ABC):
             logger.error("%s (agent=%s)", msg, self.config.name)
             raise RuntimeError(msg)
 
-        logger.info("Agent %s calling model %s",
-                    self.config.name, self.config.model)
+        logger.info("Agent %s calling model %s", self.config.name, self.config.model)
 
         messages = []
         if self.config.system_prompt:
-            messages.append(
-                {"role": "system", "content": self.config.system_prompt}
-            )
+            messages.append({"role": "system", "content": self.config.system_prompt})
         messages.append({"role": "user", "content": user_prompt})
 
         options: Dict[str, Any] = {}
@@ -90,7 +87,9 @@ class BaseAgent(ABC):
         except Exception as exc:
             logger.error(
                 "Agent '%s' failed to call model '%s': %s",
-                self.config.name, self.config.model, exc,
+                self.config.name,
+                self.config.model,
+                exc,
             )
             raise
 
