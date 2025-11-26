@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import asdict, dataclass
-from typing import Dict, Optional
+from dataclasses import asdict, dataclass, field
+from typing import Callable, Dict, Optional
 
 from .base import BaseAgent
 from .factchecker import default_factchecker
@@ -22,7 +22,8 @@ class PipelineResult:
     reviewed_output: str
     checked_output: str
     final_output: str
-    timing: Dict[str, float]
+    # New: simple per-step timings in seconds (writer, reviewer, factchecker, translator)
+    timings: Dict[str, float] = field(default_factory=dict)
 
 
 class Orchestrator:
@@ -40,6 +41,20 @@ class Orchestrator:
         self.factchecker = factchecker
         self.translator = translator
 
+    # ------------------------------------------------------------------ #
+    # Internal helper for a single step
+    # ------------------------------------------------------------------ #
+    def _run_step(self, name: str, fn: Callable[[], str]) -> str:
+        logger.info("Orchestrator: running step '%s'", name)
+        try:
+            return fn()
+        except Exception as exc:
+            logger.error("Orchestrator step '%s' failed: %s", name, exc)
+            raise
+
+    # ------------------------------------------------------------------ #
+    # Main multi-agent pipeline
+    # ------------------------------------------------------------------ #
     def run_pipeline(
         self,
         topic: str,
@@ -68,7 +83,7 @@ class Orchestrator:
         )
         timings["factchecker"] = time.time() - t0
 
-        # ---------- Translator ----------
+        # ---------- Translator (optional) ----------
         if language.lower() != "en" and self.translator:
             t0 = time.time()
             final = self._run_step(
@@ -89,16 +104,6 @@ class Orchestrator:
             final_output=final,
             timings=timings,
         )
-
-    def _run_step(self, name: str, fn):
-        try:
-            logger.info("Pipeline step '%s' started...", name)
-            output = fn()
-            logger.info("Pipeline step '%s' completed.", name)
-            return output
-        except Exception as exc:
-            logger.error("Pipeline step '%s' failed: %s", name, exc)
-            raise
 
 
 def default_orchestrator() -> Orchestrator:
