@@ -77,7 +77,7 @@ Rules:
 
 ```bash
 git checkout feature/<your-branch>
-git pull origin feature/<your-branch>
+git pull origin main
 ```
 
 ### Work normally inside the branch.
