@@ -35,8 +35,7 @@ def test_pipeline_summary_endpoint(monkeypatch) -> None:
         )
 
     # Patch the global RAG instance used inside api.py
-    monkeypatch.setattr(api_module.RAG, "run_with_agents",
-                        fake_run_with_agents)
+    monkeypatch.setattr(api_module.RAG, "run_with_agents", fake_run_with_agents)
 
     client = TestClient(app)
 

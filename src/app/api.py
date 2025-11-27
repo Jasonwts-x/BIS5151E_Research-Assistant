@@ -18,7 +18,7 @@ from ..rag.service import RAGService
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api")
+router = APIRouter()
 
 # ----- Global singletons ---------------------------------------------------
 
@@ -36,6 +36,7 @@ RAG = RAGService()
 
 
 # ----- Pydantic models -----------------------------------------------------
+
 
 class WriterRequest(BaseModel):
     topic: str = Field(..., description="Topic or research question.")
