@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Dict, Optional
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from ..agents.factchecker import default_factchecker
-from ..agents.orchestrator import serialize_result
+from ..agents.orchestrator import (
+    default_orchestrator,
+    serialize_result,
+)
 from ..agents.reviewer import default_reviewer
 from ..agents.translator import default_translator
 from ..agents.writer import default_writer
@@ -17,32 +20,28 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api")
 
-# ---------------------------------------------------------------------------
-# Shared agent instances (singletons for whole FastAPI process)
-#   - Direct endpoints still use them (writer / reviewer / factchecker / translator)
-#   - The full pipeline now goes through RAGService, which internally uses
-#     its own default_orchestrator().
-# ---------------------------------------------------------------------------
+# ----- Global singletons ---------------------------------------------------
 
+# Individual agents for direct “microservice-style” calls
 WRITER = default_writer()
 REVIEWER = default_reviewer()
 FACTCHECKER = default_factchecker()
 TRANSLATOR = default_translator()
 
-# High-level RAG + multi-agent service
-RAG_SERVICE = RAGService()
+# Full orchestrator (used earlier; kept for backwards compatibility)
+ORCHESTRATOR = default_orchestrator()
+
+# RAG + multi-agent facade: one instance per process
+RAG = RAGService()
 
 
-# ---------------------------------------------------------------------------
-# Pydantic Models
-# ---------------------------------------------------------------------------
-
+# ----- Pydantic models -----------------------------------------------------
 
 class WriterRequest(BaseModel):
     topic: str = Field(..., description="Topic or research question.")
     context: Optional[str] = Field(
         None,
-        description="Optional external context (e.g. from RAG or another system).",
+        description="Optional retrieved context (e.g., from RAG).",
     )
 
 
@@ -79,13 +78,11 @@ class TranslatorResponse(BaseModel):
 class PipelineRequest(BaseModel):
     topic: str
     language: str = Field("en", examples=["en", "de", "fr"])
-    # NOTE: kept for forward-compatibility with n8n etc.
-    #       For now, the server builds its own RAG context internally.
     context: Optional[str] = Field(
         None,
         description=(
-            "Optional additional context. The server will still perform RAG "
-            "internally; this field can be used later to append custom context."
+            "Optional context (currently ignored by RAGService; "
+            "reserved for future overrides)."
         ),
     )
 
@@ -97,11 +94,10 @@ class PipelineResponse(BaseModel):
     reviewed_output: str
     checked_output: str
     final_output: str
+    timings: Dict[str, float]
 
 
-# ---------------------------------------------------------------------------
-# Agent Endpoints
-# ---------------------------------------------------------------------------
+# ----- Agent endpoints -----------------------------------------------------
 
 
 @router.post("/agent/writer", response_model=WriterResponse)
@@ -131,28 +127,24 @@ def call_translator(payload: TranslatorRequest) -> TranslatorResponse:
     return TranslatorResponse(translated=translated)
 
 
-# ---------------------------------------------------------------------------
-# Pipeline Endpoint (now via RAGService)
-# ---------------------------------------------------------------------------
+# ----- RAG + multi-agent pipeline endpoint --------------------------------
 
 
 @router.post(
     "/pipeline/summary",
     response_model=PipelineResponse,
-    summary="Run complete Writer → Reviewer → FactChecker → (Translator) pipeline with RAG context.",
+    summary="Run RAG + writer → reviewer → factchecker → (translator) pipeline.",
 )
 def run_pipeline(payload: PipelineRequest) -> PipelineResponse:
     """
-    End-to-end pipeline:
-
-    - Uses RAGService to retrieve relevant chunks from data/raw via Haystack.
-    - Builds a context string with numbered sources.
-    - Runs Writer → Reviewer → FactChecker → (optional) Translator.
+    Main endpoint for the project:
+    - Uses RAGService to retrieve context from data/raw
+    - Runs the multi-agent orchestrator with that context
+    - Returns all intermediate steps + timings
     """
-    result = RAG_SERVICE.run_with_agents(
+    result = RAG.run_with_agents(
         topic=payload.topic,
         language=payload.language,
-        # In the future we might combine payload.context with the RAG context.
     )
     data = serialize_result(result)
     return PipelineResponse(**data)
