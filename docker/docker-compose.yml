@@ -1,11 +1,66 @@
 version: "3.9"
+
 services:
-  n8n:
-    image: n8nio/n8n
+  weaviate:
+    image: semitechnologies/weaviate:latest
+    container_name: weaviate
+    restart: unless-stopped
     ports:
-      - "5678:5678"
+      - "8080:8080"
+    environment:
+      QUERY_DEFAULTS_LIMIT: 25
+      PERSISTENCE_DATA_PATH: "/var/lib/weaviate"
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
+      DEFAULT_VECTORIZER_MODULE: "none"
+      ENABLE_MODULES: ""
+    volumes:
+      - weaviate_data:/var/lib/weaviate
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n
+    restart: unless-stopped
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+    environment:
+      # basic config
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - GENERIC_TIMEZONE=Europe/Berlin
+
+      # DB
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=${POSTGRES_DB}
+      - DB_POSTGRESDB_USER=${POSTGRES_USER}
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
+
+    depends_on:
+      - postgres
+
     volumes:
       - n8n_data:/home/node/.n8n
+      # optional: export/import workflows
+      - ./workflows:/home/node/workflows
+
+  postgres:
+    image: postgres:15
+    container_name: n8n-postgres
     restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+
 volumes:
   n8n_data:
+  postgres_data:
+  weaviate_data:
+  
