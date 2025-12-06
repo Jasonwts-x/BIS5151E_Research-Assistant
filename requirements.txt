@@ -1,4 +1,6 @@
 haystack-ai==2.18.1
+weaviate-haystack==6.3.0
+# weaviate-client
 ollama==0.6.0
 pyyaml==6.0.3
 requests==2.32.5
