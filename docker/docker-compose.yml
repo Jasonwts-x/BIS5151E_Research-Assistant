@@ -9,3 +9,8 @@ services:
     restart: unless-stopped
 volumes:
   n8n_data:
+  
+  rag-backend:
+    build: .
+    environment:
+      DEEPL_API_KEY: ${DEEPL_API_KEY}
