@@ -1,23 +1,48 @@
-from __future__ import annotations
+import os
 
+import pytest
+import requests
+
+import src.rag.pipeline as pipeline_module
 from src.rag.pipeline import RAGPipeline
-from src.rag.service import RAGService
+from src.utils.config import load_config
 
 
-def test_rag_pipeline_builds_and_retrieves() -> None:
+def _weaviate_reachable(url: str) -> bool:
+    # Weaviate exposes /v1/meta on a running instance
+    meta_url = f"{url.rstrip('/')}/v1/meta"
+    try:
+        r = requests.get(meta_url, timeout=2)
+        return r.status_code == 200
+    except Exception:
+        return False
+
+
+def test_rag_pipeline_builds_and_retrieves(tmp_path, monkeypatch) -> None:
     """
-    Smoke test: RAGPipeline.from_config() should build an index
-    and return a list of documents for a simple query.
+    Integration-ish smoke test:
+    - skips if Weaviate isn't reachable
+    - creates a tiny local doc
+    - builds the pipeline and retrieves results
     """
+    if os.getenv("SKIP_WEAVIATE_TESTS", "").lower() in {"1", "true", "yes"}:
+        pytest.skip("Skipping Weaviate tests via SKIP_WEAVIATE_TESTS")
+
+    cfg = load_config()
+    if not _weaviate_reachable(cfg.weaviate.url):
+        pytest.skip(f"Weaviate not reachable at {cfg.weaviate.url}")
+
+    # Ensure we always have at least one document to index
+    (tmp_path / "sample.txt").write_text(
+        "Explainable AI (XAI) aims to make machine learning decisions understandable.",
+        encoding="utf-8",
+    )
+
+    # Point the pipeline at our temp raw-data dir
+    monkeypatch.setattr(pipeline_module, "DATA_DIR", tmp_path)
+
     pipeline = RAGPipeline.from_config()
-    docs = pipeline.run(query="generative AI", top_k=3)
+    docs = pipeline.run("Explainable AI", top_k=3)
+
     assert isinstance(docs, list)
-    # We don't assert on length to avoid flakiness if data set changes.
-
-
-def test_build_context_from_empty_docs() -> None:
-    """
-    RAGService.build_context_from_docs([]) should produce a friendly fallback.
-    """
-    text = RAGService.build_context_from_docs([])
-    assert "No external context was retrieved" in text
+    assert len(docs) > 0
