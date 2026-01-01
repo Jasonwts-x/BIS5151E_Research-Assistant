@@ -8,12 +8,12 @@ rag:
   chunk_size: 350
   chunk_overlap: 60
   top_k: 5
-
-weaviate:
-  url: "http://host.docker.internal:8080"
-  api_key: "" # empty for local dev (no auth)
-  index_name: "research_assistant"
-  text_key: "content"
+  weaviate:
+    url: "http://host.docker.internal:8080"
+    api_key: "" # empty for local dev (no auth)
+    index_name: "research_assistant"
+    text_key: "content"
+    embedding_model: "sentence-transformers/all-MiniLM-L6-v2"
 
 guardrails:
   citation_required: true
