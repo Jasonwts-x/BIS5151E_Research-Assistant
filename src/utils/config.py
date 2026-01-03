@@ -38,6 +38,7 @@ class WeaviateConfig:
     api_key: Optional[str] = None
     index_name: str = "research_assistant"
     text_key: str = "content"
+    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
 
 
 @dataclass
@@ -86,14 +87,13 @@ def load_config() -> AppConfig:
 
     llm_y = y.get("llm") or {}
     rag_y = y.get("rag") or {}
-    weav_y = y.get("weaviate") or {}
+    weav_y = rag_y.get("weaviate") or {}
     guard_y = y.get("guardrails") or {}
     eval_y = y.get("eval") or {}
 
     # ---------------- LLM ----------------
     llm_model = os.getenv("LLM_MODEL", llm_y.get("model", "llama3"))
-    llm_host = os.getenv("OLLAMA_HOST", llm_y.get(
-        "host", "http://localhost:11434"))
+    llm_host = os.getenv("OLLAMA_HOST", llm_y.get("host", "http://localhost:11434"))
 
     llm = LLMConfig(
         provider=llm_y.get("provider", "ollama"),
@@ -103,8 +103,7 @@ def load_config() -> AppConfig:
 
     # ---------------- RAG ----------------
     rag_backend = os.getenv("RAG_BACKEND", rag_y.get("backend", "weaviate"))
-    rag_chunk_size = int(
-        os.getenv("RAG_CHUNK_SIZE", rag_y.get("chunk_size", 350)))
+    rag_chunk_size = int(os.getenv("RAG_CHUNK_SIZE", rag_y.get("chunk_size", 350)))
     rag_chunk_overlap = int(
         os.getenv("RAG_CHUNK_OVERLAP", rag_y.get("chunk_overlap", 60))
     )
@@ -122,8 +121,7 @@ def load_config() -> AppConfig:
     )
 
     # -------------- Weaviate -------------
-    weav_url = os.getenv("WEAVIATE_URL", weav_y.get(
-        "url", "http://localhost:8080"))
+    weav_url = os.getenv("WEAVIATE_URL", weav_y.get("url", "http://localhost:8080"))
 
     weav_api_key_env = os.getenv("WEAVIATE_API_KEY", "")
     weav_api_key_yaml = weav_y.get("api_key") or ""
@@ -132,21 +130,25 @@ def load_config() -> AppConfig:
     weav_index_name = os.getenv(
         "WEAVIATE_INDEX_NAME", weav_y.get("index_name", "research_assistant")
     )
-    weav_text_key = os.getenv(
-        "WEAVIATE_TEXT_KEY", weav_y.get("text_key", "content"))
+    weav_text_key = os.getenv("WEAVIATE_TEXT_KEY", weav_y.get("text_key", "content"))
+
+    weav_embedding_model = os.getenv(
+        "WEAVIATE_EMBEDDING_MODEL",
+        weav_y.get("embedding_model", "sentence-transformers/all-MiniLM-L6-v2"),
+    )
 
     weaviate = WeaviateConfig(
         url=weav_url,
         api_key=weav_api_key,
         index_name=weav_index_name,
         text_key=weav_text_key,
+        embedding_model=weav_embedding_model,
     )
 
     # -------------- Guardrails -----------
     citation_required_env = os.getenv("GUARDRAILS_CITATION_REQUIRED")
     if citation_required_env is not None:
-        citation_required = citation_required_env.lower() in {
-            "1", "true", "yes"}
+        citation_required = citation_required_env.lower() in {"1", "true", "yes"}
     else:
         citation_required = bool(guard_y.get("citation_required", True))
 
