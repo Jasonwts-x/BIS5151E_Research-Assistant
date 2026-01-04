@@ -56,7 +56,8 @@ def _load_documents(data_dir: Path) -> List[Document]:
 
     for d in docs:
         meta = getattr(d, "meta", {}) or {}
-        src = meta.get("file_path") or meta.get("file_name") or meta.get("source")
+        src = meta.get("file_path") or meta.get(
+            "file_name") or meta.get("source")
         if src:
             meta["source"] = Path(src).name
         d.meta = meta
@@ -123,15 +124,8 @@ class RAGPipeline:
 
         # If an API key is configured (cloud), use auth_client_secret=AuthApiKey()
         if weav_cfg.api_key:
-            from haystack_integrations.document_stores.weaviate import AuthApiKey
-
-            try:
-                store_kwargs["auth_client_secret"] = AuthApiKey(
-                    api_key=weav_cfg.api_key
-                )
-            except TypeError:
-                # Fallback for versions where AuthApiKey() takes no args
-                store_kwargs["auth_client_secret"] = AuthApiKey()
+            from weaviate.auth import AuthApiKey
+            store_kwargs["auth_client_secret"] = AuthApiKey(weav_cfg.api_key)
 
         store = WeaviateDocumentStore(**store_kwargs)
 
@@ -143,7 +137,8 @@ class RAGPipeline:
         )
         chunks = splitter.run(documents=docs)["documents"]
         logger.info(
-            "RAGPipeline: created %d chunks from %d docs", len(chunks), len(docs)
+            "RAGPipeline: created %d chunks from %d docs", len(
+                chunks), len(docs)
         )
 
         # Embed chunks and write them into Weaviate
@@ -182,7 +177,9 @@ class RAGPipeline:
         )
 
         # Hybrid retriever needs BOTH query and query_embedding
-        query_embedding = self.text_embedder.run(texts=query)["embedding"]
+        emb_res = self.text_embedder.run(texts=[query])
+        query_embedding = emb_res["embeddings"][0]
+
         result = self.retriever.run(
             query=query, query_embedding=query_embedding, top_k=top_k
         )
