@@ -30,7 +30,6 @@
         "OLLAMA_HOST": "http://host.docker.internal:11434",
         "WEAVIATE_URL": "http://host.docker.internal:8080",
         "HF_HOME": "/workspaces/BIS5151E_Research-Assistant/.hf_cache",
-        "TRANSFORMERS_CACHE": "/workspaces/BIS5151E_Research-Assistant/.hf_cache/hub",
         "SENTENCE_TRANSFORMERS_HOME": "/workspaces/BIS5151E_Research-Assistant/.hf_cache/sentence-transformers"
     },
     "mounts": [
@@ -41,6 +40,12 @@
     "portsAttributes": {
         "5678": {
             "label": "n8n"
+        },
+        "8080": {
+            "label": "weaviate"
+        },
+        "8000": {
+            "label": "fastapi"
         }
     }
 }
