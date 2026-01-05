@@ -1,0 +1,31 @@
+draft_task:
+  description: >
+    Write an initial academic draft on the topic {topic}.
+    Base the text strictly on the provided source material and context.
+    Structure the draft logically with an introduction, main sections, and a conclusion.
+    Use a neutral, scholarly tone.
+  expected_output: >
+    A structured academic draft in markdown format with clear sections and paragraphs.
+    No unsupported claims.
+  agent: writer
+
+review_task:
+  description: >
+    Review the drafted text for coherence, clarity, structure, and academic writing quality.
+    Improve logical flow, remove redundancies, and refine language where necessary.
+    Do not add new factual claims.
+  expected_output: >
+    A revised and improved version of the draft with better structure, coherence,
+    and academic tone. Formatted as markdown.
+  agent: reviewer
+
+fact_check_task:
+  description: >
+    Verify all factual claims in the reviewed text.
+    Identify unsupported statements, unclear assumptions, or potential hallucinations.
+    Flag claims that require citations or clarification.
+    Do not rewrite the text unless necessary for factual correctness.
+  expected_output: >
+    The final validated text in markdown format.
+    Clearly mark any flagged issues or uncertainties inline using comments.
+  agent: fact_checker
