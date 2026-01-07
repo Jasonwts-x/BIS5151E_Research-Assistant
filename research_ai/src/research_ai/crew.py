@@ -10,81 +10,78 @@ from crewai.project import CrewBase, agent, crew, task
 class ResearchAi:
     """
     Research AI Crew
-    - Writer: erstellt den ersten Entwurf
-    - Reviewer: prüft Struktur, Argumentation und Stil
-    - Fact Checker: überprüft Aussagen und Referenzen
+    - Writer: initial academic draft
+    - Reviewer: structure and style refinement
+    - Fact Checker: factual validation
     """
+
+    # Pfade als Strings - @CrewBase lädt diese automatisch!
+    agents_config = 'config/agents.yaml'
+    tasks_config = 'config/tasks.yaml'
 
     agents: List[BaseAgent]
     tasks: List[Task]
 
-    # --------------------
-    # Gemeinsame LLM-Definition (Ollama, lokal, kostenlos)
-    # --------------------
-    def _ollama_llm(self) -> LLM:
-        return LLM(
+    def __init__(self):
+        self.llm = LLM(
             model="ollama/llama3.2:3b",
-            base_url="http://localhost:11434",
-            temperature=0.2
+            base_url="http://host.docker.internal:11434",
+            temperature=0.2,
+            max_tokens=2048,
+            timeout=800,
         )
 
-    # --------------------
-    # Agents
-    # --------------------
+    # -------- Agents --------
     @agent
     def writer(self) -> Agent:
         return Agent(
-            config=self.agents_config["writer"],
-            llm=self._ollama_llm(),
-            verbose=True
+            config=self.agents_config['writer'],
+            llm=self.llm,
+            verbose=True,
         )
 
     @agent
     def reviewer(self) -> Agent:
         return Agent(
-            config=self.agents_config["reviewer"],
-            llm=self._ollama_llm(),
-            verbose=True
+            config=self.agents_config['reviewer'],
+            llm=self.llm,
+            verbose=True,
         )
 
     @agent
     def fact_checker(self) -> Agent:
         return Agent(
-            config=self.agents_config["fact_checker"],
-            llm=self._ollama_llm(),
-            verbose=True
+            config=self.agents_config['fact_checker'],
+            llm=self.llm,
+            verbose=True,
         )
 
-    # --------------------
-    # Tasks
-    # --------------------
+    # -------- Tasks --------
     @task
     def draft_task(self) -> Task:
         return Task(
-            config=self.tasks_config["draft_task"]
+            config=self.tasks_config['draft_task'],
         )
 
     @task
     def review_task(self) -> Task:
         return Task(
-            config=self.tasks_config["review_task"]
+            config=self.tasks_config['review_task'],
         )
 
     @task
     def fact_check_task(self) -> Task:
         return Task(
-            config=self.tasks_config["fact_check_task"],
-            output_file="final_report.md"
+            config=self.tasks_config['fact_check_task'],
+            output_file="final_report.md",
         )
 
-    # --------------------
-    # Crew
-    # --------------------
+    # -------- Crew --------
     @crew
     def crew(self) -> Crew:
         return Crew(
             agents=self.agents,
             tasks=self.tasks,
             process=Process.sequential,
-            verbose=True
+            verbose=True,
         )

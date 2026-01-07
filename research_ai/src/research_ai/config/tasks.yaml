@@ -1,31 +1,35 @@
 draft_task:
   description: >
-    Write an initial academic draft on the topic {topic}.
+    Write a short academic literature summary of about 300 words on the topic {topic}.
     Base the text strictly on the provided source material and context.
-    Structure the draft logically with an introduction, main sections, and a conclusion.
-    Use a neutral, scholarly tone.
+    Briefly introduce the topic, synthesize key findings from the literature in 2–3 main sections,
+    and end with a concise concluding statement about the current state of research.
+    Use a neutral, scholarly tone and avoid speculation.
   expected_output: >
-    A structured academic draft in markdown format with clear sections and paragraphs.
-    No unsupported claims.
+    A well-structured literature summary of approximately 300 words in markdown format,
+    with clear headings and paragraphs, and no unsupported claims.
   agent: writer
 
 review_task:
   description: >
-    Review the drafted text for coherence, clarity, structure, and academic writing quality.
-    Improve logical flow, remove redundancies, and refine language where necessary.
-    Do not add new factual claims.
+    Review the drafted literature summary for coherence, clarity, structure, and academic writing quality.
+    Ensure that the summary is concise (around 300 words), logically organized from introduction to conclusion,
+    and that arguments are clearly expressed without redundancy.
+    Improve logical flow, remove repetitions, and refine language where necessary.
+    Do not add new factual claims or new sources.
   expected_output: >
-    A revised and improved version of the draft with better structure, coherence,
-    and academic tone. Formatted as markdown.
+    A refined version of the literature summary with improved structure, coherence,
+    and academic tone, still around 300 words and formatted as markdown.
   agent: reviewer
 
 fact_check_task:
   description: >
-    Verify all factual claims in the reviewed text.
+    Verify all factual claims in the reviewed literature summary against the provided sources or context.
     Identify unsupported statements, unclear assumptions, or potential hallucinations.
-    Flag claims that require citations or clarification.
-    Do not rewrite the text unless necessary for factual correctness.
+    Flag any claims that lack evidence or require citations, and correct obvious factual errors when possible.
+    Do not substantially rewrite the text beyond what is necessary for factual correctness.
   expected_output: >
-    The final validated text in markdown format.
-    Clearly mark any flagged issues or uncertainties inline using comments.
+    The final validated literature summary in markdown format.
+    Clearly mark any flagged issues or remaining uncertainties inline using comments,
+    so that each statement can be traced back to sources in a later traceability table.
   agent: fact_checker
