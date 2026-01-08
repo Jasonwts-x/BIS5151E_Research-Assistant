@@ -177,8 +177,8 @@ class RAGPipeline:
         )
 
         # Hybrid retriever needs BOTH query and query_embedding
-        emb_res = self.text_embedder.run(texts=[query])
-        query_embedding = emb_res["embeddings"][0]
+        emb_res = self.text_embedder.run(text=query)
+        query_embedding = emb_res["embedding"]
 
         result = self.retriever.run(
             query=query, query_embedding=query_embedding, top_k=top_k
