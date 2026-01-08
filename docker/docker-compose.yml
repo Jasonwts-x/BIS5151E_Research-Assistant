@@ -1,3 +1,4 @@
+name: research-assistant
 services:
   weaviate:
     image: semitechnologies/weaviate:latest
@@ -5,8 +6,6 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
-    env_file:
-      - ../.env
     environment:
       QUERY_DEFAULTS_LIMIT: 25
       PERSISTENCE_DATA_PATH: "/var/lib/weaviate"
@@ -16,6 +15,8 @@ services:
       CLUSTER_HOSTNAME: "node-1"
     volumes:
       - weaviate_data:/var/lib/weaviate
+    networks:
+      - research_net
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/v1/.well-known/ready"]
       interval: 10s
@@ -24,20 +25,20 @@ services:
 
   postgres:
     image: postgres:15
-    container_name: n8n-postgres
+    container_name: postgres
     restart: unless-stopped
-    env_file:
-      - ../.env
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-n8n_db}
+      POSTGRES_USER: ${POSTGRES_USER:-n8n_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-n8n_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - research_net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-n8n} -d ${POSTGRES_DB:-n8n}"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -48,29 +49,33 @@ services:
     restart: unless-stopped
     ports:
       - "${N8N_PORT:-5678}:5678"
-    env_file:
-      - ../.env
     environment:
       N8N_HOST: localhost
       N8N_PORT: 5678
       N8N_PROTOCOL: http
-      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-change-this-secret-key}
       GENERIC_TIMEZONE: Europe/Berlin
 
       DB_TYPE: postgresdb
       DB_POSTGRESDB_HOST: postgres
       DB_POSTGRESDB_PORT: 5432
-      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
-      DB_POSTGRESDB_USER: ${POSTGRES_USER}
-      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB:-n8n_db}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER:-n8n_user}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:-n8n_password}
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
       - n8n_data:/home/node/.n8n
       - ./workflows:/home/node/workflows
+    networks:
+      - research_net
 
 volumes:
   weaviate_data:
   n8n_data:
   postgres_data:
+
+networks:
+  research_net:
+    name: research_net
