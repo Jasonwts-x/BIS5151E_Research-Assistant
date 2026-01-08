@@ -12,11 +12,15 @@ __pycache__/
 # Hugging Face cache
 .hf_cache/
 
-# Env
+# .env files
 .env
 .env.*
 
-# Virtual env
+# Allow .env templates
+!.env.example
+!.doker/env.example
+
+# Virtual environments
 .venv/
 
 # VS Code logs
@@ -24,3 +28,6 @@ __pycache__/
 
 # Docker logs
 docker/*.log
+
+# Readme Template
+readme-template.md
