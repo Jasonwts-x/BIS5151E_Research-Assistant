@@ -1,53 +1,34 @@
 {
-    "name": "ResearchAssistant-DevContainer",
-    "image": "mcr.microsoft.com/devcontainers/python:3.11",
+    "name": "ResearchAssistantGPT (compose devcontainer)",
+    "dockerComposeFile": [
+        "../docker/docker-compose.yml"
+    ],
+    "service": "devcontainer",
+    "workspaceFolder": "/workspaces/BIS5151E_Research-Assistant",
+    "shutdownAction": "stopCompose",
+    "runServices": [
+        "postgres",
+        "weaviate",
+        "n8n",
+        "devcontainer"
+    ],
     "customizations": {
         "vscode": {
+            "settings": {
+                "python.defaultInterpreterPath": "/usr/local/bin/python",
+                "python.analysis.extraPaths": [
+                    "/workspaces/BIS5151E_Research-Assistant"
+                ],
+                "python.analysis.typeCheckingMode": "basic",
+                "editor.formatOnSave": true
+            },
             "extensions": [
                 "ms-python.python",
                 "ms-python.vscode-pylance",
-                "ms-toolsai.jupyter",
-                "eamodio.gitlens",
-                "charliermarsh.ruff",
                 "ms-azuretools.vscode-docker",
-                "redhat.vscode-yaml"
-            ],
-            "settings": {
-                "python.defaultInterpreterPath": "/usr/local/bin/python",
-                "python.terminal.activateEnvironment": false,
-                "editor.formatOnSave": true,
-                "editor.codeActionsOnSave": {
-                    "source.organizeImports": "explicit"
-                }
-            }
+                "charliermarsh.ruff"
+            ]
         }
     },
-    "runArgs": [
-        "--name=research-assistant_devcontainer",
-        "--add-host=host.docker.internal:host-gateway",
-        "--network=research_net"
-    ],
-    "containerEnv": {
-        "PYTHONPATH": "/workspaces/BIS5151E_Research-Assistant",
-        "OLLAMA_HOST": "http://host.docker.internal:11434",
-        "WEAVIATE_URL": "http://weaviate:8080",
-        "HF_HOME": "/workspaces/BIS5151E_Research-Assistant/.hf_cache",
-        "SENTENCE_TRANSFORMERS_HOME": "/workspaces/BIS5151E_Research-Assistant/.hf_cache/sentence-transformers"
-    },
-    "mounts": [
-        "source=pip-cache,target=/home/vscode/.cache/pip,type=volume"
-    ],
-    "postCreateCommand": "python -m pip install --upgrade pip && pip install -r requirements.txt",
-    "remoteUser": "vscode",
-    "portsAttributes": {
-        "5678": {
-            "label": "n8n"
-        },
-        "8080": {
-            "label": "weaviate"
-        },
-        "8000": {
-            "label": "fastapi"
-        }
-    }
+    "postCreateCommand": "sudo chown -R vscode:vscode /home/vscode/.cache/pip || true && python -m pip install --upgrade pip && pip install -r requirements.txt"
 }
