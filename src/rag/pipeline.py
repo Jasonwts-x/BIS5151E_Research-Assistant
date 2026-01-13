@@ -56,8 +56,7 @@ def _load_documents(data_dir: Path) -> List[Document]:
 
     for d in docs:
         meta = getattr(d, "meta", {}) or {}
-        src = meta.get("file_path") or meta.get(
-            "file_name") or meta.get("source")
+        src = meta.get("file_path") or meta.get("file_name") or meta.get("source")
         if src:
             meta["source"] = Path(src).name
         d.meta = meta
@@ -125,6 +124,7 @@ class RAGPipeline:
         # If an API key is configured (cloud), use auth_client_secret=AuthApiKey()
         if weav_cfg.api_key:
             from weaviate.auth import AuthApiKey
+
             store_kwargs["auth_client_secret"] = AuthApiKey(weav_cfg.api_key)
 
         store = WeaviateDocumentStore(**store_kwargs)
@@ -137,8 +137,7 @@ class RAGPipeline:
         )
         chunks = splitter.run(documents=docs)["documents"]
         logger.info(
-            "RAGPipeline: created %d chunks from %d docs", len(
-                chunks), len(docs)
+            "RAGPipeline: created %d chunks from %d docs", len(chunks), len(docs)
         )
 
         # Embed chunks and write them into Weaviate

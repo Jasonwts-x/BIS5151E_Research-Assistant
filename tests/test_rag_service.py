@@ -51,8 +51,7 @@ def test_rag_pipeline_builds_and_retrieves(tmp_path, monkeypatch) -> None:
 
     cfg = load_config()
     if not _weaviate_reachable_and_supported(cfg.weaviate.url):
-        pytest.skip(
-            f"Weaviate not reachable or unsupported at {cfg.weaviate.url}")
+        pytest.skip(f"Weaviate not reachable or unsupported at {cfg.weaviate.url}")
 
     # Ensure we always have at least one document to index
     (tmp_path / "sample.txt").write_text(
