@@ -16,10 +16,6 @@ __pycache__/
 .env
 .env.*
 
-# Allow .env templates
-!.env.example
-!.doker/env.example
-
 # Virtual environments
 .venv/
 
