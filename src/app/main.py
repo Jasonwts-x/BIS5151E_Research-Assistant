@@ -4,7 +4,7 @@ from ..utils.config import load_config
 
 
 def main() -> None:
-    """Simple CLI bootstrap to verify configuration & environment."""
+    """CLI bootstrap to verify configuration & environment."""
     cfg = load_config()
 
     print("✅ ResearchAssistantGPT bootstrap")
@@ -20,9 +20,11 @@ def main() -> None:
         },
     )
     print("\nUseful commands:")
-    print("- python -m src.rag.rag_mvp   # run simple RAG MVP")
-    print("- python -m src.rag.rag_embed # run embedding-based RAG experiment")
     print("- uvicorn src.app.server:app --reload --host 0.0.0.0 --port 8000")
+    print("- curl http://localhost:8000/health")
+    print(
+        '- curl -X POST http://localhost:8000/rag/query -H "Content-Type: application/json" -d \'{"query":"...", "language":"en"}\''
+    )
 
 
 if __name__ == "__main__":
