@@ -7,10 +7,11 @@
     "workspaceFolder": "/workspaces/BIS5151E_Research-Assistant",
     "shutdownAction": "stopCompose",
     "runServices": [
+        "devcontainer",
         "postgres",
         "weaviate",
         "n8n",
-        "devcontainer"
+        "api"
     ],
     "customizations": {
         "vscode": {
