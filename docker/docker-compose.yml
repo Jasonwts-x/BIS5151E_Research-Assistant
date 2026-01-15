@@ -13,13 +13,15 @@ services:
         condition: service_healthy
       weaviate:
         condition: service_healthy
+      ollama:
+        condition: service_healthy
       n8n:
-        condition: service_started
+        condition: service_healthy
     networks:
       - research_net
     environment:
       WEAVIATE_URL: http://weaviate:8080
-      OLLAMA_HOST: http://host.docker.internal:11434
+      OLLAMA_HOST: http://ollama:11434
       PYTHONPATH: /workspaces/BIS5151E_Research-Assistant
 
       HF_HOME: /workspaces/BIS5151E_Research-Assistant/.hf_cache
@@ -71,7 +73,7 @@ services:
       AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
       PERSISTENCE_DATA_PATH: "/var/lib/weaviate"
       DEFAULT_VECTORIZER_MODULE: "none"
-      ENABLE_MODULES: ""
+      ENABLE_MODULES: "text2vec-ollama, generative-ollama"
       CLUSTER_HOSTNAME: "node-1"
     volumes:
       - weaviate_data:/var/lib/weaviate
@@ -81,6 +83,42 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    networks:
+      - research_net
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+      OLLAMA_ORIGINS: "*"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: ollama-init # Alternative: ollama-setup, qwen-init, qwen-setup, qwen-llm, llm-qwen, llm-setup, llm-init
+    entrypoint: ["/bin/sh", "-c"]
+    depends_on:
+      ollama:
+        condition: service_healthy
+    networks:
+      - research_net
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    volumes:
+      - ollama_data:/root/.ollama
+    command: ["ollama pull qwen3:4b"]
+    restart: "no"
 
   n8n:
     image: n8nio/n8n:latest
@@ -96,7 +134,7 @@ services:
     env_file:
       - .env
     environment:
-      N8N_HOST: localhost
+      N8N_HOST: n8n
       N8N_PORT: 5678
       N8N_PROTOCOL: http
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-change-this-secret-key}
@@ -112,6 +150,8 @@ services:
     volumes:
       - n8n_data:/home/node/.n8n
       - ./workflows:/home/node/workflows
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:5678/healthz/readiness | grep -qi 'ok'"]
       start_period: 10s
@@ -134,11 +174,13 @@ services:
         condition: service_healthy
       weaviate:
         condition: service_healthy
+      ollama:
+        condition: service_healthy
     networks:
       - research_net
     environment:
       WEAVIATE_URL: http://weaviate:8080
-      OLLAMA_HOST: http://host.docker.internal:11434
+      OLLAMA_HOST: http://ollama:11434
       PYTHONPATH: /workspaces/BIS5151E_Research-Assistant
 
       HF_HOME: /workspaces/BIS5151E_Research-Assistant/.hf_cache
@@ -157,7 +199,6 @@ services:
       timeout: 5s
       retries: 5
 
-
 networks:
   research_net:
     name: research_net
@@ -165,4 +206,5 @@ networks:
 volumes:
   postgres_data:
   weaviate_data:
+  ollama_data:
   n8n_data:
