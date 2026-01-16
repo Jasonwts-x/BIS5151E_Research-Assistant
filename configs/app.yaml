@@ -1,7 +1,7 @@
 llm:
   provider: "ollama"
-  model: "llama3"
-  host: "http://host.docker.internal:11434"
+  model: "qwen3:4b"
+  host: "http://ollama:11434"
 
 rag:
   backend: "weaviate"
@@ -9,9 +9,9 @@ rag:
   chunk_overlap: 60
   top_k: 5
   weaviate:
-    url: "http://host.docker.internal:8080"
+    url: "http://weaviate:8080"
     api_key: "" # empty for local dev (no auth)
-    index_name: "research_assistant"
+    index_name: "research-assistant"
     text_key: "content"
     embedding_model: "sentence-transformers/all-MiniLM-L6-v2"
 
