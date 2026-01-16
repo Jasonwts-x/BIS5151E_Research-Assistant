@@ -7,6 +7,7 @@ from typing import Any
 class APITag(StrEnum):
     SYSTEM = "system"
     RAG = "rag"
+    OLLAMA = "ollama"
 
 
 def openapi_tags() -> list[dict[str, Any]]:
@@ -21,5 +22,9 @@ def openapi_tags() -> list[dict[str, Any]]:
         {
             "name": APITag.RAG,
             "description": "Retrieval-augmented generation endpoints.",
+        },
+        {
+            "name": APITag.OLLAMA,
+            "description": "Direct Ollama LLM access and model management.",
         },
     ]

@@ -5,6 +5,7 @@ import logging
 from fastapi import FastAPI
 
 from .openapi import openapi_tags
+from .routers.ollama import router as ollama_router
 from .routers.rag import router as rag_router
 from .routers.system import router as system_router
 
@@ -21,5 +22,6 @@ app = FastAPI(
     openapi_tags=openapi_tags(),
 )
 
-app.include_router(system_router)
+app.include_router(ollama_router)
 app.include_router(rag_router)
+app.include_router(system_router)
