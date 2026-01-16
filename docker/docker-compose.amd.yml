@@ -1,0 +1,32 @@
+# ============================================================================
+# AMD GPU (ROCm) Support for Ollama
+# ============================================================================
+#
+# Prerequisites:
+#   1. AMD GPU with ROCm support (check: https://rocm.docs.amd.com/projects/install-on-linux/en/latest/reference/system-requirements.html)
+#   2. ROCm drivers installed on host (version 5.4+ recommended)
+#   3. Docker configured with proper device access
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.amd.yml up
+#
+# Verify GPU is being used:
+#   docker compose exec ollama rocm-smi
+#
+# Note: ROCm support in Ollama may be limited compared to NVIDIA.
+# Check Ollama documentation for supported AMD GPUs.
+#
+# ============================================================================
+
+services:
+  ollama:
+    devices:
+      - /dev/kfd     # Kernel Fusion Driver (required)
+      - /dev/dri     # Direct Rendering Infrastructure
+    group_add:
+      - video        # Add container to video group for GPU access
+    
+    # Optional: Set ROCm-specific environment variables
+    # environment:
+    #   HIP_VISIBLE_DEVICES: "0"  # Use specific GPU
+    #   ROC_ENABLE_PRE_VEGA: "1"  # For older AMD GPUs
