@@ -17,6 +17,9 @@
 # Check Ollama documentation for supported AMD GPUs.
 #
 # ============================================================================
+# WE HAVE TO REWORK THIS FILE! 
+# ERROR: ls: /dev/kfd: No such file or directory
+# ============================================================================
 
 services:
   ollama:
