@@ -46,13 +46,13 @@ services:
     env_file:
       - .env
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-postgres}
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-n8n}
+      POSTGRES_USER: ${POSTGRES_USER:-n8n}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}  # NO DEFAULT - must be in .env
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-postgres}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-n8n} -d ${POSTGRES_DB:-n8n}"]
       start_period: 10s
       interval: 10s
       timeout: 5s
@@ -117,7 +117,7 @@ services:
       OLLAMA_HOST: http://ollama:11434
     volumes:
       - ollama_data:/root/.ollama
-    command: ["ollama pull qwen3:4b"]
+    command: ["ollama pull ${OLLAMA_MODEL:-qwen3:4b}"]
     restart: "no"
 
   n8n:
@@ -137,16 +137,16 @@ services:
       N8N_HOST: n8n
       N8N_PORT: 5678
       N8N_PROTOCOL: http
-      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-change-this-secret-key}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}  # NO DEFAULT - must be in .env
       GENERIC_TIMEZONE: Europe/Berlin
       WEBHOOK_URL: http://localhost:5678/
 
       DB_TYPE: postgresdb
       DB_POSTGRESDB_HOST: postgres
       DB_POSTGRESDB_PORT: 5432
-      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB:-postgres}
-      DB_POSTGRESDB_USER: ${POSTGRES_USER:-postgres} 
-      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB:-n8n}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER:-n8n} 
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}  # NO DEFAULT - must be in .env
     volumes:
       - n8n_data:/home/node/.n8n
       - ./workflows:/home/node/workflows
