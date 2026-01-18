@@ -179,15 +179,17 @@ services:
     networks:
       - research_net
     environment:
-      WEAVIATE_URL: http://weaviate:8080
-      OLLAMA_HOST: http://ollama:11434
       PYTHONPATH: /workspaces/BIS5151E_Research-Assistant
+      PIP_CACHE_DIR: /workspaces/BIS5151E_Research-Assistant/.pip_cache
+
+      LLM_MODEL: qwen3:4b
+      OLLAMA_HOST: http://ollama:11434
+
+      WEAVIATE_URL: http://weaviate:8080
 
       HF_HOME: /workspaces/BIS5151E_Research-Assistant/.hf_cache
       HF_HUB_CACHE: /workspaces/BIS5151E_Research-Assistant/.hf_cache/hub
       SENTENCE_TRANSFORMERS_HOME: /workspaces/BIS5151E_Research-Assistant/.hf_cache
-
-      PIP_CACHE_DIR: /workspaces/BIS5151E_Research-Assistant/.pip_cache
     volumes:
       - ..:/workspaces/BIS5151E_Research-Assistant:cached
     extra_hosts:

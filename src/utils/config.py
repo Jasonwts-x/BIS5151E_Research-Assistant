@@ -92,12 +92,18 @@ def load_config() -> AppConfig:
     eval_y = y.get("eval") or {}
 
     # ---------------- LLM ----------------
-    llm_model = os.getenv("LLM_MODEL", llm_y.get("model", "llama3"))
-    llm_host = os.getenv("OLLAMA_HOST", llm_y.get("host", "http://localhost:11434"))
+    # Read model name WITHOUT provider prefix
+    # Provider prefix will be added by CrewRunner when needed
+    llm_model = os.getenv("LLM_MODEL", llm_y.get("model", "qwen3:4b"))
+    # Remove "ollama/" prefix if present in env var
+    if llm_model.startswith("ollama/"):
+        llm_model = llm_model.replace("ollama/", "")
+    
+    llm_host = os.getenv("OLLAMA_HOST", llm_y.get("host", "http://ollama:11434"))
 
     llm = LLMConfig(
         provider=llm_y.get("provider", "ollama"),
-        model=llm_model,
+        model=llm_model,  # Just the model name, e.g. "qwen3:4b"
         host=llm_host,
     )
 

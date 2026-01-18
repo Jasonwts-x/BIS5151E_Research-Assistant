@@ -4,8 +4,8 @@ import logging
 from dataclasses import dataclass
 from typing import List
 
+from crewai import LLM
 from haystack.dataclasses import Document
-from langchain_ollama import ChatOllama
 
 from ..rag.pipeline import RAGPipeline
 from ..utils.config import load_config
@@ -45,13 +45,18 @@ class CrewRunner:
             )
             self.rag_pipeline = None
         
-        # Initialize LangChain Ollama LLM for CrewAI
-        self.llm = ChatOllama(
-            model=self.config.llm.model,
+        # Initialize CrewAI LLM for Ollama
+        # CrewAI's LLM class uses LiteLLM internally for provider abstraction
+        self.llm = LLM(
+            model=f"ollama/{self.config.llm.model}",  # LiteLLM format: "provider/model"
             base_url=self.config.llm.host,
             temperature=0.3,
         )
-        logger.info("LLM initialized: %s at %s", self.config.llm.model, self.config.llm.host)
+        logger.info(
+            "LLM initialized: ollama/%s at %s", 
+            self.config.llm.model, 
+            self.config.llm.host
+        )
 
     def retrieve_context(self, topic: str) -> tuple[str, List[Document]]:
         """
