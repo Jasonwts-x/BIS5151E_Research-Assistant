@@ -1,5 +1,5 @@
 {
-    "name": "ResearchAssistantGPT (compose devcontainer)",
+    "name": "Research-Assistant-Dev",
     "dockerComposeFile": [
         "../docker/docker-compose.yml"
     ],
@@ -11,6 +11,7 @@
         "postgres",
         "weaviate",
         "n8n",
+        "crewai",
         "api"
     ],
     "customizations": {
