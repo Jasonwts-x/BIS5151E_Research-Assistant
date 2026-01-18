@@ -1,8 +1,13 @@
 # ==============================================================================
 # ResearchAssistantGPT - Python Dependencies
 # ==============================================================================
-# Installation: pip install -r requirements.txt
+# Note: PyTorch and sentence-transformers installed in Dockerfile for caching
 # ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Dependency Resolution Fixes
+# ------------------------------------------------------------------------------
+tenacity==9.0.0  # Pin to avoid resolution loop with haystack/litellm/crewai
 
 # ------------------------------------------------------------------------------
 # AI Framework & Orchestration
@@ -18,14 +23,6 @@ langchain-ollama==1.0.1          # LangChain integration for Ollama
 ollama==0.6.0                    # Ollama Python client
 
 # ------------------------------------------------------------------------------
-# Machine Learning & Embeddings
-# ------------------------------------------------------------------------------
-# Note: PyTorch CPU-only version via custom index
---extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.9.1+cpu                 # PyTorch (CPU-only build)
-sentence-transformers==3.3.1     # Sentence embeddings for RAG
-
-# ------------------------------------------------------------------------------
 # Vector Database
 # ------------------------------------------------------------------------------
 weaviate-haystack==6.3.0         # Weaviate integration for Haystack
@@ -34,9 +31,9 @@ weaviate-haystack==6.3.0         # Weaviate integration for Haystack
 # Web Framework & API
 # ------------------------------------------------------------------------------
 fastapi                          # Modern web framework
-httpx==0.28.1                    # Async HTTP client (for service-to-service calls)
-pydantic                         # Data validation using Python type hints
-uvicorn[standard]                # ASGI server with websocket support
+httpx==0.28.1                    # Async HTTP client
+pydantic                         # Data validation
+uvicorn[standard]                # ASGI server
 
 # ------------------------------------------------------------------------------
 # Document Processing
@@ -60,8 +57,6 @@ black==25.9.0                    # Code formatter
 isort==7.0.0                     # Import sorter
 
 # ==============================================================================
-# Notes:
-# - torch uses CPU-only build to reduce image size
-# - litellm is required by CrewAI for LLM abstraction
-# - weaviate-haystack requires Weaviate >=1.27.0
+# NOTE: PyTorch (torch==2.9.1+cpu) and sentence-transformers==3.3.1
+#       are installed in Dockerfile for better layer caching
 # ==============================================================================
