@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from src.app.dependencies import get_rag_service
-from src.app.server import app
+from src.api.dependencies import get_rag_service
+from src.api.server import app
 
 
 class FakeResult:
