@@ -1,0 +1,68 @@
+# Task Configurations
+# These define what each agent should do
+
+write_draft:
+  description: >
+    Write a concise research summary on the topic: {topic}.
+    
+    Requirements:
+    - 5-8 sentences total
+    - Academic tone
+    - Use provided context from retrieved documents
+    - Include inline citations where appropriate (e.g., [1], [2])
+    - Do not fabricate information
+    
+    Context available:
+    {context}
+  expected_output: >
+    A well-written draft summary of 5-8 sentences with inline citations.
+
+review_draft:
+  description: >
+    Review and improve the following draft summary.
+    
+    Requirements:
+    - Improve clarity and coherence
+    - Fix grammar and sentence structure
+    - Ensure logical flow between sentences
+    - Keep the same meaning and claims
+    - Do not add new facts or remove citations
+    
+    Draft to review:
+    {draft}
+  expected_output: >
+    An improved version of the draft with better clarity and structure.
+
+check_facts:
+  description: >
+    Fact-check the following text and validate citations.
+    
+    Requirements:
+    - Verify all claims are supported by the provided context
+    - Ensure citations [1], [2], etc. are consistent
+    - Flag any unsupported or speculative claims
+    - Suggest hedging language if needed (e.g., "may", "suggests")
+    - Do not invent new sources
+    
+    Context for verification:
+    {context}
+    
+    Text to check:
+    {reviewed_text}
+  expected_output: >
+    A fact-checked version of the text with verified claims and consistent citations.
+
+translate_text:
+  description: >
+    Translate the following research summary into {target_language}.
+    
+    Requirements:
+    - Preserve all citations exactly as they appear [1], [2], etc.
+    - Maintain academic tone in the target language
+    - Keep the same meaning and structure
+    - Do not add or remove information
+    
+    Text to translate:
+    {final_text}
+  expected_output: >
+    A translated version of the text in {target_language} with preserved citations.
