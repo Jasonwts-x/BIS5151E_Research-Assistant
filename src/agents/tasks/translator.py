@@ -6,10 +6,10 @@ from crewai import Task
 def create_translator_task(agent, text: str, target_language: str) -> Task:
     """
     Create the translator task.
-    
+
     NOTE: This is a placeholder for Step H (DeepL integration).
     Currently not used in the workflow.
-    
+
     Args:
         agent: The Translator agent
         text: The fact-checked text to translate

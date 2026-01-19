@@ -1,13 +1,13 @@
 llm:
   provider: "ollama"
-  model: "qwen3:4b"
+  model: "qwen2.5:3b"
   host: "http://ollama:11434"
 
 rag:
   backend: "weaviate"
   chunk_size: 350
   chunk_overlap: 60
-  top_k: 5
+  top_k: 3
   weaviate:
     url: "http://weaviate:8080"
     api_key: "" # empty for local dev (no auth)

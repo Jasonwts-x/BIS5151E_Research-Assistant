@@ -6,7 +6,7 @@ from crewai import Task
 def create_writer_task(agent, topic: str, context: str) -> Task:
     """
     Create the writer task.
-    
+
     Args:
         agent: The Writer agent
         topic: Research topic/question

@@ -6,7 +6,7 @@ from crewai import Task
 def create_factchecker_task(agent, text: str, context: str) -> Task:
     """
     Create the fact-checker task.
-    
+
     Args:
         agent: The FactChecker agent
         text: The reviewed text to fact-check

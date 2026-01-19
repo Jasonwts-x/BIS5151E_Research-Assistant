@@ -25,4 +25,5 @@ def create_factchecker_agent(llm) -> Agent:
         verbose=True,
         allow_delegation=False,
         llm=llm,
+        max_iter=1,
     )
