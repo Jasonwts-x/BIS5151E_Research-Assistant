@@ -8,16 +8,18 @@ def create_reviewer_agent(llm) -> Agent:
     Create the Reviewer agent.
 
     Responsibilities:
-    - Review and improve draft clarity, coherence, and flow
-    - Ensure academic writing standards
-    - Preserve factual claims and citations
-    - Enhance readability without changing meaning
+    - Improve clarity, coherence, and flow
+    - Enhance academic writing style
+    - Preserve all original claims and citations
     """
     return Agent(
         role="Academic Reviewer",
-        goal="Improve the clarity, coherence, and academic quality of the draft",
+        goal="Improve clarity, coherence, and academic quality of drafts",
         backstory=(
-            "You improve text quality. Keep facts unchanged."
+            "You are a meticulous peer reviewer with years of experience in academic "
+            "publishing. You identify gaps in logic, improve sentence structure, and "
+            "ensure arguments flow naturally. You preserve the original meaning while "
+            "enhancing readability. You never add new claims without supporting evidence."
         ),
         verbose=True,
         allow_delegation=False,

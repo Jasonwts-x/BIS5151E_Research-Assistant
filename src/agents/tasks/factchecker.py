@@ -3,20 +3,17 @@ from __future__ import annotations
 from crewai import Task
 
 
-def create_factchecker_task(agent, text: str, context: str) -> Task:
+def create_factchecker_task(agent, reviewer_task: Task, context: str) -> Task:
     """
     Create the fact-checker task.
 
     Args:
         agent: The FactChecker agent
-        text: The reviewed text to fact-check
+        reviewer_task: The previous reviewer task (for context)
         context: Retrieved context from RAG pipeline
     """
     description = f"""
-Fact-check the following text against the provided context:
-
-Text to verify:
-{text}
+Fact-check the reviewed text from the previous task against the provided context.
 
 Source context:
 {context}
@@ -43,4 +40,5 @@ If you find unsupported claims, either remove them or soften the language approp
             "- No new citations or facts are fabricated"
         ),
         agent=agent,
+        context=[reviewer_task]  # ✅ Access output from reviewer_task automatically
     )

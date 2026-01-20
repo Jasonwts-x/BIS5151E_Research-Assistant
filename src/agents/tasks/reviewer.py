@@ -3,18 +3,16 @@ from __future__ import annotations
 from crewai import Task
 
 
-def create_reviewer_task(agent, draft: str) -> Task:
+def create_reviewer_task(agent, writer_task: Task) -> Task:
     """
     Create the reviewer task.
     
     Args:
         agent: The Reviewer agent
-        draft: The draft text to review
+        writer_task: The previous writer task (for context)
     """
-    description = f"""
-Review and improve the following draft summary:
-
-{draft}
+    description = """
+Review and improve the research summary from the previous writing task.
 
 Your responsibilities:
 - Improve clarity, coherence, and flow
@@ -35,4 +33,5 @@ Your task: Return an improved version that is clearer and more polished while pr
             "No new facts or citations should be added."
         ),
         agent=agent,
+        context=[writer_task]  # ✅ Access output from writer_task automatically
     )
