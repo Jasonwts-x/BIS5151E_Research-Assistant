@@ -20,21 +20,22 @@ CONFIG_FILE = ROOT / "configs" / "app.yaml"
 @dataclass
 class LLMConfig:
     provider: str = "ollama"
-    model: str = "llama3"
-    host: str = "http://localhost:11434"
+    model: str = "qwen2.5:3b"
+    host: str = "http://ollama:11434"
 
 
 @dataclass
 class RAGConfig:
-    backend: str = "weaviate"  # in-memory, weaviate, etc.
+    backend: str = "weaviate" 
     chunk_size: int = 350
     chunk_overlap: int = 60
     top_k: int = 5
+    allow_schema_reset: bool = False
 
 
 @dataclass
 class WeaviateConfig:
-    url: str = "http://localhost:8080"
+    url: str = "http://weaviate:8080"
     api_key: Optional[str] = None
     index_name: str = "research_assistant"
     text_key: str = "content"
@@ -119,11 +120,15 @@ def load_config() -> AppConfig:
     rag_chunk_overlap = max(0, rag_chunk_overlap)
     rag_top_k = max(1, rag_top_k)
 
+    allow_reset_env = os.getenv("ALLOW_SCHEMA_RESET", "").lower()
+    allow_reset = allow_reset_env in {"1", "true", "yes"}
+
     rag = RAGConfig(
         backend=rag_backend,
         chunk_size=rag_chunk_size,
         chunk_overlap=rag_chunk_overlap,
         top_k=rag_top_k,
+        allow_schema_reset=allow_reset,
     )
 
     # -------------- Weaviate -------------

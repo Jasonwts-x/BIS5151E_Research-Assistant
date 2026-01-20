@@ -1,6 +1,6 @@
 llm:
   provider: "ollama"
-  model: "qwen3:4b"
+  model: "qwen2.5:3b"
   host: "http://ollama:11434"
 
 rag:
@@ -8,9 +8,12 @@ rag:
   chunk_size: 350
   chunk_overlap: 60
   top_k: 5
+  
+  allow_schema_reset: false  # Set to true in .env for dev mode
+  
   weaviate:
     url: "http://weaviate:8080"
-    api_key: "" # empty for local dev (no auth)
+    api_key: ""  # empty for local dev (no auth)
     index_name: "research-assistant"
     text_key: "content"
     embedding_model: "sentence-transformers/all-MiniLM-L6-v2"

@@ -25,6 +25,11 @@ services:
       OLLAMA_HOST: http://ollama:11434
       PYTHONPATH: /workspaces/BIS5151E_Research-Assistant
 
+      RAG_CHUNK_SIZE: ${RAG_CHUNK_SIZE:-350}
+      RAG_CHUNK_OVERLAP: ${RAG_CHUNK_OVERLAP:-60}
+      RAG_TOP_K: ${RAG_TOP_K:-5}
+      ALLOW_SCHEMA_RESET: ${ALLOW_SCHEMA_RESET:-false}
+
       HF_HOME: /workspaces/BIS5151E_Research-Assistant/.hf_cache
       HF_HUB_CACHE: /workspaces/BIS5151E_Research-Assistant/.hf_cache/hub
       SENTENCE_TRANSFORMERS_HOME: /workspaces/BIS5151E_Research-Assistant/.hf_cache
@@ -107,7 +112,7 @@ services:
 
   ollama-init:
     image: ollama/ollama:latest
-    container_name: ollama-init # Alternative: ollama-setup, qwen-init, qwen-setup, qwen-llm, llm-qwen, llm-setup, llm-init
+    container_name: ollama-init # Alternative: ollama-setup, ollama-pull
     entrypoint: ["/bin/sh", "-c"]
     depends_on:
       ollama:
@@ -118,7 +123,9 @@ services:
       OLLAMA_HOST: http://ollama:11434
     volumes:
       - ollama_data:/root/.ollama
-    command: ["ollama pull ${OLLAMA_MODEL:-qwen3:4b}"]
+    command: ["ollama pull qwen3:4b && \
+          ollama pull qwen2.5:3b && \
+          ollama pull tinyllama:1.1b"] # CPU: qwen3:4b, qwen2:1.5b, tinyllama # GPU: llama3.2:3B, mistral:7B
     restart: "no"
 
   n8n:
@@ -182,10 +189,15 @@ services:
       PYTHONPATH: /workspaces/BIS5151E_Research-Assistant
       PIP_CACHE_DIR: /workspaces/BIS5151E_Research-Assistant/.pip_cache
 
-      LLM_MODEL: qwen3:4b
+      LLM_MODEL: qwen2.5:3b
       OLLAMA_HOST: http://ollama:11434
 
       WEAVIATE_URL: http://weaviate:8080
+
+      RAG_CHUNK_SIZE: ${RAG_CHUNK_SIZE:-350}
+      RAG_CHUNK_OVERLAP: ${RAG_CHUNK_OVERLAP:-60}
+      RAG_TOP_K: ${RAG_TOP_K:-5}
+      ALLOW_SCHEMA_RESET: ${ALLOW_SCHEMA_RESET:-false}
 
       HF_HOME: /workspaces/BIS5151E_Research-Assistant/.hf_cache
       HF_HUB_CACHE: /workspaces/BIS5151E_Research-Assistant/.hf_cache/hub
@@ -196,9 +208,9 @@ services:
       - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8100/health"]
-      start_period: 10s
+      start_period: 30s
       interval: 10s
-      timeout: 5s
+      timeout: 10s
       retries: 5
 
   api:
@@ -220,7 +232,7 @@ services:
       ollama:
         condition: service_healthy
       crewai:
-        condition: service_healthy 
+        condition: service_started
     networks:
       - research_net
     environment:
@@ -228,6 +240,11 @@ services:
       OLLAMA_HOST: http://ollama:11434
       CREWAI_URL: http://crewai:8100
       PYTHONPATH: /workspaces/BIS5151E_Research-Assistant
+
+      RAG_CHUNK_SIZE: ${RAG_CHUNK_SIZE:-350}
+      RAG_CHUNK_OVERLAP: ${RAG_CHUNK_OVERLAP:-60}
+      RAG_TOP_K: ${RAG_TOP_K:-5}
+      ALLOW_SCHEMA_RESET: ${ALLOW_SCHEMA_RESET:-false}
 
       HF_HOME: /workspaces/BIS5151E_Research-Assistant/.hf_cache
       HF_HUB_CACHE: /workspaces/BIS5151E_Research-Assistant/.hf_cache/hub
