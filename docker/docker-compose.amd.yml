@@ -24,12 +24,21 @@
 services:
   ollama:
     devices:
-      - /dev/kfd     # Kernel Fusion Driver (required)
-      - /dev/dri     # Direct Rendering Infrastructure
+      - "/dev/kfd:/dev/kfd"     # Kernel Fusion Driver (required)
+      - "/dev/dri:/dev/dri"     # Direct Rendering Infrastructure
+      # - /dev/kfd     # Kernel Fusion Driver (required)
+      # - /dev/dri     # Direct Rendering Infrastructure
+
     group_add:
       - video        # Add container to video group for GPU access
+      - render  # Add render group for newer ROCm versions
     
-    # Optional: Set ROCm-specific environment variables
-    # environment:
-    #   HIP_VISIBLE_DEVICES: "0"  # Use specific GPU
-    #   ROC_ENABLE_PRE_VEGA: "1"  # For older AMD GPUs
+    environment:
+      # ROCm-specific settings
+      # HSA_OVERRIDE_GFX_VERSION: "10.3.0"  # May need adjustment for your GPU
+      HSA_OVERRIDE_GFX_VERSION: "9.0.0"
+      HIP_VISIBLE_DEVICES: "0"             # Use first GPU
+      # ROCR_VISIBLE_DEVICES: "0"            # Alternate variable
+      # This forces your Vega 7 chip to act like a supported card
+      # HSA_OVERRIDE_GFX_VERSION: "9.0.0"
+      OLLAMA_HOST: "0.0.0.0"
