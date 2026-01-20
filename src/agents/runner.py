@@ -7,7 +7,7 @@ from typing import List
 from crewai import LLM
 from haystack.dataclasses import Document
 
-from ..rag.pipeline import RAGPipeline
+from ..rag.core import RAGPipeline
 from ..utils.config import load_config
 from .crews import ResearchCrew
 
@@ -37,7 +37,8 @@ class CrewRunner:
         
         # Initialize RAG pipeline for retrieval
         try:
-            self.rag_pipeline = RAGPipeline.from_config()
+            from ..rag.core import RAGPipeline
+            self.rag_pipeline = RAGPipeline.from_existing()
             logger.info("RAG pipeline initialized successfully")
         except Exception as e:
             logger.warning(
@@ -51,6 +52,7 @@ class CrewRunner:
             model=f"ollama/{self.config.llm.model}",  # LiteLLM format: "provider/model"
             base_url=self.config.llm.host,
             temperature=0.3,
+            timeout=900, # 15 minutes # TODO: Change to 300 (5 minutes)
         )
         logger.info(
             "LLM initialized: ollama/%s at %s", 

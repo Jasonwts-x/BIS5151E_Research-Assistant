@@ -4,7 +4,7 @@ import logging
 from functools import lru_cache
 from typing import Any
 
-from ..rag.service import RAGService
+from ..rag.core import RAGService
 from ..utils.config import AppConfig, load_config
 
 logger = logging.getLogger(__name__)
