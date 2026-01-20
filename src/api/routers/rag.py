@@ -1,17 +1,33 @@
+"""
+RAG API Router
+
+Endpoints for querying and managing the RAG system.
+"""
 from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 from typing import Annotated
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from ...rag.service import RAGService
+from ...rag.core import RAGService
+from ...rag.ingestion import IngestionEngine
+from ...rag.sources import ArXivSource, LocalFileSource
 from ..dependencies import get_rag_service
 from ..errors import internal_server_error
 from ..openapi import APITag
-from ..schemas.rag import RAGQueryRequest, RAGQueryResponse
+from ..schemas.rag import (
+    IngestArxivRequest,
+    IngestLocalRequest,
+    IngestionResponse,
+    RAGQueryRequest,
+    RAGQueryResponse,
+    RAGStatsResponse,
+    ResetIndexResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +35,15 @@ router = APIRouter(prefix="/rag", tags=[APITag.RAG])
 
 # CrewAI service URL (internal Docker network)
 CREWAI_URL = os.getenv("CREWAI_URL", "http://crewai:8100")
+
+# Data directory for local files
+ROOT = Path(__file__).resolve().parents[3]
+DATA_DIR = ROOT / "data" / "raw"
+
+
+# ============================================================================
+# Query Endpoints
+# ============================================================================
 
 
 @router.post(
@@ -56,8 +81,7 @@ async def rag_query(
         )
         
         # Forward to CrewAI service (which handles RAG retrieval internally)
-        # The CrewAI service will retrieve context and run the agent pipeline
-        async with httpx.AsyncClient(timeout=120.0) as client:  # Long timeout for LLM
+        async with httpx.AsyncClient(timeout=120.0) as client:
             response = await client.post(
                 f"{CREWAI_URL}/crew/run",
                 json={
@@ -75,7 +99,7 @@ async def rag_query(
                 query=payload.query,
                 language=payload.language,
                 answer=crew_result["answer"],
-                timings={},  # TODO: Get timings from crew service if needed
+                timings={},
             )
             
     except httpx.HTTPStatusError as e:
@@ -99,12 +123,221 @@ async def rag_query(
         ) from err
 
 
-# ---------------------------------------------------------------------------
-# Future endpoints (intentionally NOT implemented yet)
-# ---------------------------------------------------------------------------
-# 1) POST /rag/ingest
-#    - Add once we decide deterministic ingestion + stable IDs (Step E).
-#
-# 2) GET /rag/retrieve
-#    - Add if we want a RAG-only endpoint (retrieval without agents)
-#    - Useful for debugging or building custom workflows
+# ============================================================================
+# Ingestion Endpoints (New)
+# ============================================================================
+
+
+@router.post(
+    "/ingest/local",
+    response_model=IngestionResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Ingest documents from local filesystem (data/raw/).",
+)
+def ingest_local(payload: IngestLocalRequest) -> IngestionResponse:
+    """
+    Ingest documents from local filesystem.
+    
+    Files are loaded from `data/raw/` directory.
+    Supports: PDF, TXT files
+    
+    Workflow:
+    1. Load matching files from data/raw/
+    2. Chunk documents
+    3. Generate embeddings
+    4. Write to Weaviate (skip duplicates)
+    
+    Note: This is idempotent - re-ingesting same files will skip duplicates.
+    """
+    try:
+        logger.info("Ingesting local files with pattern: %s", payload.pattern)
+        
+        # Create ingestion engine
+        engine = IngestionEngine()
+        
+        # Ingest from local source
+        source = LocalFileSource(DATA_DIR)
+        result = engine.ingest_from_source(source, pattern=payload.pattern)
+        
+        logger.info(
+            "Local ingestion complete: %d docs, %d chunks ingested",
+            result.documents_loaded,
+            result.chunks_ingested,
+        )
+        
+        return IngestionResponse(
+            source=result.source_name,
+            documents_loaded=result.documents_loaded,
+            chunks_created=result.chunks_created,
+            chunks_ingested=result.chunks_ingested,
+            chunks_skipped=result.chunks_skipped,
+            errors=result.errors,
+            success=len(result.errors) == 0,
+        )
+        
+    except Exception as e:
+        logger.exception("Local ingestion failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ingestion failed: {str(e)}",
+        ) from e
+
+
+@router.post(
+    "/ingest/arxiv",
+    response_model=IngestionResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Fetch and ingest papers from ArXiv.",
+)
+def ingest_arxiv(payload: IngestArxivRequest) -> IngestionResponse:
+    """
+    Fetch papers from ArXiv and ingest into RAG system.
+    
+    Workflow:
+    1. Search ArXiv for relevant papers
+    2. Download PDFs to data/raw/
+    3. Extract metadata (authors, date, category, abstract)
+    4. Chunk and embed papers
+    5. Write to Weaviate (skip duplicates)
+    
+    Features:
+    - Automatic metadata enrichment
+    - Abstract extraction for better retrieval
+    - Idempotent (re-fetching same papers skips duplicates)
+    
+    Note: This may take 30-60 seconds for max_results=5 (downloading PDFs).
+    """
+    try:
+        logger.info(
+            "Ingesting from ArXiv: query='%s', max_results=%d",
+            payload.query,
+            payload.max_results,
+        )
+        
+        # Create ingestion engine
+        engine = IngestionEngine()
+        
+        # Ingest from ArXiv source
+        source = ArXivSource(download_dir=DATA_DIR)
+        result = engine.ingest_from_source(
+            source,
+            query=payload.query,
+            max_results=payload.max_results,
+        )
+        
+        logger.info(
+            "ArXiv ingestion complete: %d papers, %d chunks ingested",
+            result.documents_loaded,
+            result.chunks_ingested,
+        )
+        
+        return IngestionResponse(
+            source=result.source_name,
+            documents_loaded=result.documents_loaded,
+            chunks_created=result.chunks_created,
+            chunks_ingested=result.chunks_ingested,
+            chunks_skipped=result.chunks_skipped,
+            errors=result.errors,
+            success=len(result.errors) == 0,
+        )
+        
+    except Exception as e:
+        logger.exception("ArXiv ingestion failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"ArXiv ingestion failed: {str(e)}",
+        ) from e
+
+
+# ============================================================================
+# Admin Endpoints (New)
+# ============================================================================
+
+
+@router.get(
+    "/stats",
+    response_model=RAGStatsResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get RAG index statistics.",
+)
+def get_stats() -> RAGStatsResponse:
+    """
+    Get information about the RAG index.
+    
+    Returns:
+    - Collection name
+    - Schema version
+    - Number of indexed chunks
+    - Whether index exists
+    """
+    try:
+        engine = IngestionEngine()
+        stats = engine.get_stats()
+        
+        return RAGStatsResponse(**stats)
+        
+    except Exception as e:
+        logger.exception("Failed to get stats")
+        return RAGStatsResponse(
+            collection_name="unknown",
+            schema_version="unknown",
+            document_count=0,
+            exists=False,
+            error=str(e),
+        )
+
+
+@router.delete(
+    "/admin/reset-index",
+    response_model=ResetIndexResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Clear all documents from index (WARNING: DESTRUCTIVE).",
+)
+def reset_index() -> ResetIndexResponse:
+    """
+    Clear all documents from the RAG index.
+    
+    ⚠️  WARNING: This deletes ALL indexed documents!
+    
+    Use cases:
+    - Reset after schema changes
+    - Clean up test data
+    - Start fresh with new documents
+    
+    After reset, you must re-ingest documents:
+    - POST /rag/ingest/local
+    - POST /rag/ingest/arxiv
+    """
+    try:
+        logger.warning("Reset index requested - all documents will be deleted!")
+        
+        # Get current count
+        engine = IngestionEngine()
+        stats = engine.get_stats()
+        previous_count = stats.get("document_count", 0)
+        
+        # Clear index
+        engine.clear_index()
+        
+        logger.info("Index reset complete - %d documents deleted", previous_count)
+        
+        return ResetIndexResponse(
+            success=True,
+            message=f"Index cleared successfully. {previous_count} documents deleted.",
+            previous_document_count=previous_count,
+        )
+        
+    except Exception as e:
+        logger.exception("Failed to reset index")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to reset index: {str(e)}",
+        ) from e
+
+
+# ============================================================================
+# Future Endpoints (Placeholders)
+# ============================================================================
+# TODO (Step F): Add /rag/retrieve endpoint (retrieval without generation)
+# TODO (Step G): Add /rag/export endpoint (export index to file)
+# TODO (Step G): Add /rag/import endpoint (import index from file)
