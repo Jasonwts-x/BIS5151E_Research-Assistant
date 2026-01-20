@@ -65,26 +65,35 @@ def cmd_ingest_local(args):
     print()
     
     # Ingest
-    print("Ingesting...")
-    engine = IngestionEngine()
-    source = LocalFileSource(data_dir)
-    result = engine.ingest_from_source(source, pattern=pattern)
-    
-    print()
-    print("=" * 70)
-    print("INGESTION COMPLETE")
-    print("=" * 70)
-    print(f"Documents loaded: {result.documents_loaded}")
-    print(f"Chunks created: {result.chunks_created}")
-    print(f"Chunks ingested: {result.chunks_ingested}")
-    print(f"Chunks skipped (duplicates): {result.chunks_skipped}")
-    
-    if result.errors:
-        print(f"Errors: {len(result.errors)}")
-        for err in result.errors:
-            print(f"  - {err}")
-    
-    return 0
+    engine = None
+    try:
+        print("Ingesting...")
+        engine = IngestionEngine()
+        source = LocalFileSource(data_dir)
+        result = engine.ingest_from_source(source, pattern=pattern)
+        
+        print()
+        print("=" * 70)
+        print("INGESTION COMPLETE")
+        print("=" * 70)
+        print(f"Documents loaded: {result.documents_loaded}")
+        print(f"Chunks created: {result.chunks_created}")
+        print(f"Chunks ingested: {result.chunks_ingested}")
+        print(f"Chunks skipped (duplicates): {result.chunks_skipped}")
+        
+        if result.errors:
+            print(f"Errors: {len(result.errors)}")
+            for err in result.errors:
+                print(f"  - {err}")
+        
+        return 0
+        
+    finally:
+        if engine is not None and hasattr(engine, 'client'):
+            try:
+                engine.client.close()
+            except Exception:
+                pass
 
 
 def cmd_ingest_arxiv(args):
@@ -102,30 +111,45 @@ def cmd_ingest_arxiv(args):
     print()
     
     # Ingest
-    print("Fetching from ArXiv (this may take a minute)...")
-    engine = IngestionEngine()
-    source = ArXivSource(download_dir=ROOT / "data" / "raw")
-    result = engine.ingest_from_source(
-        source,
-        query=query,
-        max_results=max_results,
-    )
-    
-    print()
-    print("=" * 70)
-    print("INGESTION COMPLETE")
-    print("=" * 70)
-    print(f"Papers fetched: {result.documents_loaded}")
-    print(f"Chunks created: {result.chunks_created}")
-    print(f"Chunks ingested: {result.chunks_ingested}")
-    print(f"Chunks skipped (duplicates): {result.chunks_skipped}")
-    
-    if result.errors:
-        print(f"Errors: {len(result.errors)}")
-        for err in result.errors:
-            print(f"  - {err}")
-    
-    return 0
+    engine = None
+    try:
+        print("Fetching from ArXiv (this may take a minute)...")
+        engine = IngestionEngine()
+        source = ArXivSource(download_dir=ROOT / "data" / "raw")
+        result = engine.ingest_from_source(
+            source,
+            query=query,
+            max_results=max_results,
+        )
+        
+        print()
+        print("=" * 70)
+        print("INGESTION COMPLETE")
+        print("=" * 70)
+        print(f"Papers fetched: {result.documents_loaded}")
+        print(f"Chunks created: {result.chunks_created}")
+        print(f"Chunks ingested: {result.chunks_ingested}")
+        print(f"Chunks skipped (duplicates): {result.chunks_skipped}")
+        
+        if result.errors:
+            print(f"Errors: {len(result.errors)}")
+            for err in result.errors:
+                print(f"  - {err}")
+        
+        return 0
+        
+    except Exception as e:
+        print(f"❌ ArXiv ingestion failed: {e}")
+        logger.exception("ArXiv ingestion failed")
+        return 1
+        
+    finally:
+        # Properly close the Weaviate client
+        if engine is not None and hasattr(engine, 'client'):
+            try:
+                engine.client.close()
+            except Exception:
+                pass
 
 
 def cmd_query(args):
@@ -143,37 +167,56 @@ def cmd_query(args):
     print()
     
     # Connect to existing pipeline
+    pipeline = None
     try:
+        print("Connecting to RAG pipeline...")
         pipeline = RAGPipeline.from_existing()
-    except Exception as e:
-        print(f"❌ Failed to connect to RAG pipeline: {e}")
-        print()
-        print("Is the index built? Try:")
-        print("  python -m src.rag.cli ingest-local")
-        return 1
-    
-    # Retrieve
-    print("Retrieving...")
-    docs = pipeline.run(query=query, top_k=top_k)
-    
-    print()
-    print("=" * 70)
-    print(f"RETRIEVED {len(docs)} DOCUMENTS")
-    print("=" * 70)
-    print()
-    
-    for i, doc in enumerate(docs, 1):
-        meta = doc.meta or {}
-        source = meta.get("source", "unknown")
-        chunk_idx = meta.get("chunk_index", "?")
         
-        print(f"[{i}] {source} (chunk {chunk_idx})")
-        print("-" * 70)
-        content_preview = doc.content[:200].replace("\n", " ")
-        print(f"{content_preview}...")
+        # Retrieve
+        print(f"Retrieving top {top_k} documents...")
+        docs = pipeline.run(query=query, top_k=top_k)
+        
         print()
-    
-    return 0
+        print("=" * 70)
+        print(f"RETRIEVED {len(docs)} DOCUMENTS")
+        print("=" * 70)
+        print()
+        
+        if not docs:
+            print("⚠️  No documents found. Is the index empty?")
+            print("   Try: python -m src.rag.cli ingest-local")
+            return 0
+        
+        for i, doc in enumerate(docs, 1):
+            meta = doc.meta or {}
+            source = meta.get("source", "unknown")
+            chunk_idx = meta.get("chunk_index", "?")
+            
+            print(f"[{i}] {source} (chunk {chunk_idx})")
+            print("-" * 70)
+            content_preview = doc.content[:200].replace("\n", " ")
+            print(f"{content_preview}...")
+            print()
+        
+        return 0
+        
+    except RuntimeError as e:
+        # Collection doesn't exist
+        print(f"❌ {e}")
+        return 1
+        
+    except Exception as e:
+        print(f"❌ Query failed: {e}")
+        logger.exception("Query failed")
+        return 1
+        
+    finally:
+        # Properly close the pipeline client
+        if pipeline is not None and hasattr(pipeline, 'client'):
+            try:
+                pipeline.client.close()
+            except Exception:
+                pass
 
 
 def cmd_stats(args):
@@ -194,12 +237,20 @@ def cmd_stats(args):
         
         if stats.get('error'):
             print(f"Error: {stats['error']}")
+
+        return 0
         
     except Exception as e:
         print(f"❌ Failed to get stats: {e}")
         return 1
     
-    return 0
+    finally:
+        # Properly close the Weaviate client
+        if engine is not None and hasattr(engine, 'client'):
+            try:
+                engine.client.close()
+            except Exception:
+                pass  # Ignore errors during cleanup
 
 
 def cmd_reset_index(args):
@@ -217,6 +268,7 @@ def cmd_reset_index(args):
             print("Aborted.")
             return 0
     
+    engine = None
     try:
         engine = IngestionEngine()
         
@@ -237,12 +289,20 @@ def cmd_reset_index(args):
         print("  python -m src.rag.cli ingest-local")
         print("  python -m src.rag.cli ingest-arxiv <query>")
         
+        return 0
+        
     except Exception as e:
         print(f"❌ Failed to reset index: {e}")
+        logger.exception("Reset index failed")
         return 1
-    
-    return 0
-
+        
+    finally:
+        # Properly close the Weaviate client
+        if engine is not None and hasattr(engine, 'client'):
+            try:
+                engine.client.close()
+            except Exception:
+                pass 
 
 def cmd_verify_determinism(args):
     """Verify that index rebuild produces identical IDs."""
