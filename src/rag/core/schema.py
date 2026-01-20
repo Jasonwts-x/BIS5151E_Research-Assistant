@@ -251,7 +251,6 @@ class SchemaManager:
                 name=self.collection_name,
                 description=RESEARCH_DOCUMENT_SCHEMA["description"],
                 properties=properties,
-                vectorizer_config=Configure.Vectorizer.none(),
             )
             
             logger.info("✓ Created collection '%s'", self.collection_name)

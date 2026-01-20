@@ -19,6 +19,7 @@ from ..ingestion.engine import IngestionEngine
 from ..sources import ArXivSource, LocalFileSource
 
 logger = logging.getLogger(__name__)
+logging.getLogger("httpx").setLevel(logging.WARNING)  # Reduce httpx noise
 
 ROOT = Path(__file__).resolve().parents[3]
 DATA_DIR = ROOT / "data" / "raw"
@@ -225,15 +226,25 @@ class RAGPipeline:
         api_key = cfg.weaviate.api_key
         
         if api_key:
-            client = weaviate.connect_to_custom(
-                http_host=url.replace("http://", "").replace("https://", ""),
-                http_port=443,
-                http_secure=True,
+            # Cloud deployment with auth
+            client = weaviate.connect_to_weaviate_cloud(
+                cluster_url=url,
                 auth_credentials=Auth.api_key(api_key),
             )
         else:
+            # Local deployment without auth
+            # Parse host and port from URL
+            url_clean = url.replace("http://", "").replace("https://", "")
+            if ":" in url_clean:
+                host, port_str = url_clean.split(":")
+                port = int(port_str)
+            else:
+                host = url_clean
+                port = 8080
+            
             client = weaviate.connect_to_local(
-                host=url.replace("http://", ""),
+                host=host,
+                port=port,
             )
         
         return client
