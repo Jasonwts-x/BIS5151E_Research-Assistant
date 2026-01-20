@@ -33,3 +33,20 @@ docker/*.log
 
 # Readme Template
 readme-template.md
+
+# Data directories (keep structure, ignore content)
+data/raw/*
+!data/raw/.gitkeep
+
+data/processed/*
+!data/processed/.gitkeep
+
+data/external/*
+!data/external/.gitkeep
+
+# Outputs (keep structure, ignore generated files)
+outputs/*
+!outputs/.gitkeep
+
+# ArXiv PDFs
+*.pdf

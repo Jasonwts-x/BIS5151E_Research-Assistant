@@ -29,6 +29,7 @@ RUN python -m pip install --upgrade pip
 # Install PyTorch (HEAVY - 800MB - cache this separately!)
 RUN pip install --no-cache-dir \
     --index-url https://download.pytorch.org/whl/cpu \
+    # torch==2.5.1+cpu
     torch==2.9.1+cpu
 
 # Install other heavy ML packages (cache separately)
