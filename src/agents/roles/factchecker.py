@@ -22,7 +22,7 @@ def create_factchecker_agent(llm) -> Agent:
             "is properly attributed. You have zero tolerance for unsupported claims or fabricated "
             "citations. When sources don't fully support a claim, you suggest more cautious wording."
         ),
-        verbose=True,
+        verbose=True,           # TODO: Use True during development, switch to False for production
         allow_delegation=False,
         llm=llm,
     )

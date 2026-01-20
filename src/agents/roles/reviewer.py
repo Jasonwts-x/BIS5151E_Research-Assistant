@@ -22,7 +22,7 @@ def create_reviewer_agent(llm) -> Agent:
             "the integrity of the original content. You ensure that all claims are properly "
             "supported and that the writing meets high academic standards."
         ),
-        verbose=True,
+        verbose=True,           # TODO: Use True during development, switch to False for production
         allow_delegation=False,
         llm=llm,
     )

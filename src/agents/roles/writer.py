@@ -22,7 +22,7 @@ def create_writer_agent(llm) -> Agent:
             "clear, coherent summaries. You always maintain academic integrity by "
             "properly citing sources and avoiding speculation."
         ),
-        verbose=True,
+        verbose=True,           # TODO: Use True during development, switch to False for production
         allow_delegation=False,
         llm=llm,
     )
