@@ -52,7 +52,6 @@ class CrewRunner:
             model=f"ollama/{self.config.llm.model}",  # LiteLLM format: "provider/model"
             base_url=self.config.llm.host,
             temperature=0.3,
-            timeout=900, # 15 minutes # TODO: Change to 300 (5 minutes)
         )
         logger.info(
             "LLM initialized: ollama/%s at %s", 
