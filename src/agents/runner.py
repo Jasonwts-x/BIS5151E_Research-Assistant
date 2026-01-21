@@ -56,11 +56,10 @@ class CrewRunner:
             self.rag_pipeline = None
         
         # Initialize CrewAI LLM for Ollama
-        # CrewAI's LLM class uses LiteLLM internally for provider abstraction
         self.llm = LLM(
-            model=f"ollama/{self.config.llm.model}",  # LiteLLM format: "provider/model"
+            model=f"ollama/{self.config.llm.model}",
             base_url=self.config.llm.host,
-            temperature=0.3,
+            temperature=0.3,  # Lower temperature for more factual outputs
         )
         logger.info(
             "LLM initialized: ollama/%s at %s", 
@@ -97,14 +96,17 @@ class CrewRunner:
         
         logger.info("Retrieved %d documents for topic: %s", len(docs), topic)
         
-        # Format context for agents
+        # Format context for agents (with stricter formatting)
         context = self._format_context(docs)
         return context, docs
 
     @staticmethod
     def _format_context(docs: List[Document]) -> str:
         """
-        Format retrieved documents into context string with citations.
+        Format retrieved documents into context string with prominent citations.
+        
+        This formatting makes it VERY clear what sources are available and what
+        content belongs to each source.
         
         Args:
             docs: List of Haystack Documents
@@ -113,11 +115,17 @@ class CrewRunner:
             Formatted context string with [1], [2], etc. citations
         """
         if not docs:
-            return "No external context was retrieved."
+            return (
+                "⚠️ NO CONTEXT AVAILABLE ⚠️\\n"
+                "No documents were retrieved for this topic.\\n"
+                "You CANNOT write a summary without sources.\\n"
+                "Inform the user that no relevant documents were found."
+            )
         
         unique_sources = []
-        lines = []
+        context_blocks = []
         
+        # Group content by source
         for doc in docs:
             meta = getattr(doc, "meta", {}) or {}
             source = meta.get("source", "unknown")
@@ -127,13 +135,34 @@ class CrewRunner:
                 unique_sources.append(source)
             
             idx = unique_sources.index(source) + 1
-            lines.append(
-                f"[{idx}] {doc.content.strip() if doc.content else 'No content'}")
+            content = doc.content.strip() if doc.content else "[No content]"
+            
+            # Format each chunk with clear source marking
+            context_blocks.append(
+                f"═══════════════════════════════════════\\n"
+                f"SOURCE [{idx}]: {source}\\n"
+                f"═══════════════════════════════════════\\n"
+                f"{content}\\n"
+            )
         
-        context = "\n\n".join(lines)
-        source_map = "\n".join(f"[{i+1}] {s}" for i, s in enumerate(unique_sources))
+        # Build final context with clear sections
+        context_body = "\\n".join(context_blocks)
         
-        return f"{context}\n\nSources:\n{source_map}"
+        source_list = "\\n".join(
+            f"  [{i+1}] {s}" for i, s in enumerate(unique_sources)
+        )
+        
+        header = (
+            "╔═══════════════════════════════════════════════════════════════╗\\n"
+            "║   AVAILABLE SOURCES - USE ONLY THESE IN YOUR RESPONSE        ║\\n"
+            "╚═══════════════════════════════════════════════════════════════╝\\n"
+            f"\\n{source_list}\\n\\n"
+            "⚠️ CRITICAL: You may ONLY cite sources listed above.\\n"
+            "⚠️ Do NOT invent additional sources or citations.\\n"
+            "⚠️ Every factual claim must reference one of these sources.\\n\\n"
+        )
+        
+        return f"{header}{context_body}"
 
     def run(self, topic: str, language: str = "en") -> CrewResult:
         """
@@ -162,6 +191,14 @@ class CrewRunner:
         
         # Step 1: Retrieve context from RAG
         context, docs = self.retrieve_context(topic)
+        
+        # Log warning if no documents found
+        if not docs:
+            logger.warning(
+                "No documents retrieved for topic '%s'. "
+                "Consider running ArXiv ingestion first: POST /rag/ingest/arxiv",
+                topic
+            )
         
         # Step 2: Initialize crew with LLM
         crew = ResearchCrew(llm=self.llm)

@@ -14,15 +14,27 @@ def create_reviewer_task(agent, writer_task: Task) -> Task:
     description = """
 Review and improve the research summary from the previous writing task.
 
-Your responsibilities:
-- Improve clarity, coherence, and flow
-- Enhance academic writing style
-- Ensure logical structure
-- Maintain all factual claims and citations EXACTLY as written
-- Do NOT add new information or citations
-- Do NOT change the meaning of any statements
+⚠️ CRITICAL CONSTRAINTS:
+1. Improve ONLY clarity, grammar, and sentence structure
+2. Do NOT add any new facts, claims, or information
+3. Do NOT add or change any citations
+4. Do NOT expand the content
+5. Preserve the exact meaning of every statement
 
-Your task: Return an improved version that is clearer and more polished while preserving all original claims and citations.
+Your ONLY allowed changes:
+✓ Fix grammar and spelling
+✓ Improve sentence flow
+✓ Enhance readability
+✓ Adjust word choice for better clarity (without changing meaning)
+
+Your FORBIDDEN changes:
+✗ Adding new information
+✗ Adding new citations
+✗ Removing citations
+✗ Changing the meaning of any claim
+✗ Expanding on ideas
+
+Your task: Return an improved version that is clearer and more polished while preserving all original claims and citations EXACTLY.
 """
 
     return Task(
@@ -30,8 +42,9 @@ Your task: Return an improved version that is clearer and more polished while pr
         expected_output=(
             "An improved version of the draft with better clarity, coherence, and academic style. "
             "All original citations [1], [2], etc. must be preserved exactly. "
-            "No new facts or citations should be added."
+            "No new facts or citations should be added. "
+            "The meaning of every statement must remain unchanged."
         ),
         agent=agent,
-        context=[writer_task]  # ✅ Access output from writer_task automatically
+        context=[writer_task]
     )
