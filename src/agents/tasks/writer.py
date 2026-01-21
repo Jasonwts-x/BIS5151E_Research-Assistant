@@ -6,7 +6,7 @@ from crewai import Task
 def create_writer_task(agent, topic: str, context: str) -> Task:
     """
     Create the writer task.
-    
+
     Args:
         agent: The Writer agent
         topic: Research topic/question
@@ -16,7 +16,7 @@ def create_writer_task(agent, topic: str, context: str) -> Task:
 Write a concise literature-style summary on the topic: "{topic}"
 
 Guidelines:
-- Write 5-8 sentences
+- Write a 300 words short literature summary
 - Use a neutral, academic tone
 - Focus on key concepts and relationships
 - Use the provided context to support your points
@@ -31,7 +31,7 @@ Your task: Write a clear, well-structured summary that synthesizes the key ideas
     return Task(
         description=description,
         expected_output=(
-            "A 5-8 sentence academic summary with inline citations [1], [2], etc. "
+            "A 300-word academic summary with inline citations [1], [2], etc. "
             "that accurately represents the key concepts from the provided context."
         ),
         agent=agent,

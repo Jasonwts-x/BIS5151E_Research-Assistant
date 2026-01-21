@@ -7,6 +7,9 @@ from typing import List
 from crewai import LLM
 from haystack.dataclasses import Document
 
+
+from ..eval.guardrails import GuardrailsWrapper
+from ..eval.trulens import TruLensMonitor
 from ..rag.core import RAGPipeline
 from ..utils.config import load_config
 from .crews import ResearchCrew
@@ -31,8 +34,14 @@ class CrewRunner:
     This is the main entry point for running the agentic workflow.
     """
 
-    def __init__(self):
-        """Initialize runner with RAG pipeline and LLM."""
+    def __init__(self, enable_guardrails: bool = True, enable_monitoring: bool = False):
+        """
+        Initialize runner with RAG pipeline, LLM, and optional safety/monitoring.
+
+        Args:
+            enable_guardrails: Enable safety checks on inputs/outputs
+            enable_monitoring: Enable TruLens monitoring (requires trulens-eval)
+        """
         self.config = load_config()
         
         # Initialize RAG pipeline for retrieval
@@ -58,6 +67,16 @@ class CrewRunner:
             self.config.llm.model, 
             self.config.llm.host
         )
+
+        # Initialize safety guardrails
+        self.guardrails = GuardrailsWrapper() if enable_guardrails else None
+        if self.guardrails:
+            logger.info("Safety guardrails enabled")
+        else:
+            logger.info("Safety guardrails disabled")
+
+        # Initialize TruLens monitoring
+        self.monitor = TruLensMonitor(enabled=enable_monitoring)
 
     def retrieve_context(self, topic: str) -> tuple[str, List[Document]]:
         """
@@ -108,7 +127,8 @@ class CrewRunner:
                 unique_sources.append(source)
             
             idx = unique_sources.index(source) + 1
-            lines.append(f"[{idx}] {doc.content.strip()}")
+            lines.append(
+                f"[{idx}] {doc.content.strip() if doc.content else 'No content'}")
         
         context = "\n\n".join(lines)
         source_map = "\n".join(f"[{i+1}] {s}" for i, s in enumerate(unique_sources))
@@ -127,6 +147,18 @@ class CrewRunner:
             CrewResult with final output and metadata
         """
         logger.info("Starting crew run for topic: %s (language: %s)", topic, language)
+
+        # Safety check: Validate input
+        if self.guardrails:
+            is_safe, reason = self.guardrails.validate_input(topic)
+            if not is_safe:
+                logger.error("Input validation failed: %s", reason)
+                return CrewResult(
+                    topic=topic,
+                    language=language,
+                    final_output=f"⚠️ Safety check failed: {reason}",
+                    context_docs=[]
+                )
         
         # Step 1: Retrieve context from RAG
         context, docs = self.retrieve_context(topic)
@@ -136,17 +168,26 @@ class CrewRunner:
         
         # Step 3: Execute crew workflow
         logger.info("Executing crew workflow...")
-        final_output = crew.run(topic=topic, context=context)
+        final_output = crew.run(
+            topic=topic, context=context, language=language)
         
-        logger.info("Crew workflow completed. Output length: %d chars", len(final_output))
+        logger.info(
+            "Crew workflow completed. Output length: %d chars", len(final_output))
         
-        # TODO: Translation support for language != 'en'
-        # This will be added in Step H (DeepL integration)
-        if language.lower() != "en":
-            logger.warning(
-                "Translation not yet implemented. Returning English output. "
-                "Requested language: %s",
-                language,
+        # Safety check: Validate output
+        if self.guardrails:
+            is_safe, reason = self.guardrails.validate_output(final_output)
+            if not is_safe:
+                logger.error("Output validation failed: %s", reason)
+                final_output = f"⚠️ Response blocked due to safety policy: {reason}"
+
+        # Monitoring: Log interaction
+        if self.monitor:
+            self.monitor.log_interaction(
+                topic=topic,
+                context=context,
+                output=final_output,
+                language=language
             )
         
         return CrewResult(
