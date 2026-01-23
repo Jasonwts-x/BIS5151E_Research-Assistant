@@ -26,6 +26,7 @@ class ResearchCrew:
     Research Assistant Crew composition.
 
     Orchestrates Writer → Reviewer → FactChecker → (Translator) pipeline using CrewAI.
+    Supports both strict mode (with context) and fallback mode (without context).
     """
 
     def __init__(self, llm):
@@ -48,57 +49,151 @@ class ResearchCrew:
     def run(self, topic: str, context: str, language: str = "en") -> str:
         """
         Execute the research crew workflow.
+        
+        Detects whether context is available and adjusts workflow accordingly:
+        - WITH context: Full pipeline (Writer → Reviewer → FactChecker)
+        - WITHOUT context: Simplified pipeline (Writer only, general knowledge mode)
 
         Args:
             topic: Research topic/question
-            context: Retrieved context from RAG pipeline
-            language: Target language ('en', 'de', 'es', 'fr')
+            context: Retrieved RAG context (may be empty/unavailable message)
+            language: Target language (only 'en' currently supported)
 
         Returns:
-            Final summary (translated if language != 'en')
+            Final output string
         """
-        logger.info(
-            "Starting ResearchCrew workflow for topic: %s (language: %s)", topic, language)
+        logger.info("Starting crew run for topic: %s", topic)
 
-        # Create base tasks with proper context chaining
-        writer_task = create_writer_task(self.writer, topic, context)
-        reviewer_task = create_reviewer_task(self.reviewer, writer_task)
-        factchecker_task = create_factchecker_task(
-            self.factchecker,
-            reviewer_task,
-            context,
+        # Detect if we have actual context or not
+        has_context = self._has_valid_context(context)
+
+        if not has_context:
+            logger.warning("No valid context available - using fallback mode")
+            return self._run_fallback_mode(topic, language)
+        else:
+            logger.info("Valid context available - using strict mode")
+            return self._run_strict_mode(topic, context, language)
+
+    def _has_valid_context(self, context: str) -> bool:
+        """
+        Check if context contains actual documents or is just a placeholder.
+        
+        Args:
+            context: Context string from RAG retrieval
+            
+        Returns:
+            True if valid context exists, False otherwise
+        """
+        if not context:
+            return False
+        
+        # Check for common "no context" indicators
+        no_context_indicators = [
+            "NO CONTEXT AVAILABLE",
+            "No context available",
+            "No documents were retrieved",
+            "⚠️",
+        ]
+        
+        for indicator in no_context_indicators:
+            if indicator in context:
+                return False
+        
+        # Check if context is too short (likely just a message)
+        if len(context.strip()) < 100:
+            return False
+        
+        # Check if context contains source markers (indicating real documents)
+        if "SOURCE [" not in context:
+            return False
+        
+        return True
+
+    def _run_strict_mode(self, topic: str, context: str, language: str) -> str:
+        """
+        Run full pipeline with strict fact-checking against provided context.
+        
+        Args:
+            topic: Research topic
+            context: Retrieved context (guaranteed to be valid)
+            language: Target language
+            
+        Returns:
+            Fact-checked output
+        """
+        logger.info("Running STRICT MODE - will verify all claims against context")
+        
+        # Create tasks
+        writer_task = create_writer_task(
+            agent=self.writer,
+            topic=topic,
+            context=context,
+            mode="strict"
         )
-
-        # Base agents and tasks - use list() to satisfy type checker
-        agents: list = [self.writer, self.reviewer, self.factchecker]
-        tasks: list = [writer_task, reviewer_task, factchecker_task]
-
-        # Add translator if language is not English
-        if language.lower() != "en":
-            logger.info("Adding translator for language: %s", language)
-            translator_task = create_translator_task(
-                self.translator,
-                factchecker_task,
-                language
-            )
-            agents.append(self.translator)
-            tasks.append(translator_task)
-
-        # Create crew with sequential process
+        
+        reviewer_task = create_reviewer_task(
+            agent=self.reviewer,
+            writer_task=writer_task
+        )
+        
+        factchecker_task = create_factchecker_task(
+            agent=self.factchecker,
+            reviewer_task=reviewer_task,
+            context=context
+        )
+        
+        # Build crew
+        tasks = [writer_task, reviewer_task, factchecker_task]
+        
+        # Add translation if needed (future)
+        if language != "en":
+            logger.warning("Translation not yet implemented, using English")
+        
         crew = Crew(
-            agents=agents,
+            agents=[self.writer, self.reviewer, self.factchecker],
             tasks=tasks,
             process=Process.sequential,
             verbose=True,
         )
-
-        # Execute and return final output
-        logger.info("Executing crew workflow with %d agents", len(agents))
+        
+        # Execute
         result = crew.kickoff()
-        logger.info("Crew workflow completed successfully")
-
-        # CrewAI returns a CrewOutput object; get the final task output
+        
         return str(result)
+    
+    def _run_fallback_mode(self, topic: str, language: str) -> str:
+        """
+        Run simplified pipeline using general knowledge (no fact-checking).
+        
+        Args:
+            topic: Research topic
+            language: Target language
+            
+        Returns:
+            General knowledge summary
+        """
+        logger.info("Running FALLBACK MODE - using general knowledge")
+        
+        # Create fallback writer task
+        writer_task = create_writer_task(
+            agent=self.writer,
+            topic=topic,
+            context="",  # Empty context
+            mode="fallback"
+        )
+        
+        # Build simplified crew (writer only)
+        crew = Crew(
+            agents=[self.writer],
+            tasks=[writer_task],
+            process=Process.sequential,
+            verbose=True,
+        )
+        
+        # Execute
+        result = crew.kickoff()
+        
+        return str(result)    
 
 
 # ============================================================================
