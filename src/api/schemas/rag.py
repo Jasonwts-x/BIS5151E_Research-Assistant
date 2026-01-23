@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 
 
 # ============================================================================
-# Query Schemas (Existing)
+# Query Schemas
 # ============================================================================
 
 
@@ -31,7 +31,7 @@ class RAGQueryResponse(BaseModel):
 
 
 # ============================================================================
-# Ingestion Schemas (New)
+# Ingestion Schemas
 # ============================================================================
 
 
@@ -50,7 +50,8 @@ class IngestArxivRequest(BaseModel):
 
     query: str = Field(
         ...,
-        min_length=1,
+        min_length=3,
+        max_length=200,
         description="ArXiv search query",
         examples=[
             "machine learning",
@@ -64,6 +65,26 @@ class IngestArxivRequest(BaseModel):
         le=20,
         description="Maximum number of papers to fetch (1-20)",
     )
+    
+    @field_validator('query')
+    @classmethod
+    def validate_query(cls, v: str) -> str:
+        """Validate and clean query string."""
+        v = v.strip()
+        
+        # Check for invalid queries
+        if v == "=" or v == "":
+            raise ValueError('Query cannot be empty or just special characters')
+        
+        # Check minimum length after stripping
+        if len(v) < 3:
+            raise ValueError('Query must be at least 3 characters long')
+        
+        # Check if query is just numbers or special characters
+        if not any(c.isalnum() for c in v):
+            raise ValueError('Query must contain at least one alphanumeric character')
+        
+        return v
 
 
 class IngestionResponse(BaseModel):
@@ -82,10 +103,14 @@ class IngestionResponse(BaseModel):
         description="List of errors encountered (if any)",
     )
     success: bool = Field(..., description="Whether ingestion completed successfully")
+    papers: Optional[List[dict]] = Field(
+        None,
+        description="List of papers with metadata (ArXiv only)"
+    )
 
 
 # ============================================================================
-# Admin Schemas (New)
+# Admin Schemas
 # ============================================================================
 
 
