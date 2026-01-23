@@ -1,0 +1,29 @@
+Introduction to Machine Learning
+
+Machine learning is a method of data analysis that automates analytical model building. It is a branch of artificial intelligence based on the idea that systems can learn from data, identify patterns and make decisions with minimal human intervention.
+
+Types of Machine Learning
+
+There are three main types of machine learning:
+
+1. Supervised Learning
+Supervised learning algorithms learn from labeled training data. The algorithm learns to map input data to known outputs. Common examples include classification and regression problems.
+
+2. Unsupervised Learning
+Unsupervised learning works with unlabeled data. The algorithm tries to find hidden patterns or intrinsic structures in the input data. Clustering is a common example.
+
+3. Reinforcement Learning
+Reinforcement learning is about taking suitable action to maximize reward in a particular situation. The agent learns to achieve a goal through trial and error.
+
+Applications
+
+Machine learning has many applications including:
+- Image recognition
+- Natural language processing
+- Recommendation systems
+- Fraud detection
+- Medical diagnosis
+
+Conclusion
+
+Machine learning continues to advance rapidly, enabling new capabilities across many domains.

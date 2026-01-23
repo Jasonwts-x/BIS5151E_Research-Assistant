@@ -1,0 +1,21 @@
+Attention Is All You Need
+
+Abstract
+
+The dominant sequence transduction models are based on complex recurrent or convolutional neural networks that include an encoder and a decoder. The best performing models also connect the encoder and decoder through an attention mechanism. We propose a new simple network architecture, the Transformer, based solely on attention mechanisms, dispensing with recurrence and convolutions entirely.
+
+Introduction
+
+Recurrent neural networks, long short-term memory and gated recurrent neural networks in particular, have been firmly established as state of the art approaches in sequence modeling and transduction problems such as language modeling and machine translation. Numerous efforts have since continued to push the boundaries of recurrent language models and encoder-decoder architectures.
+
+The Transformer Model
+
+The Transformer follows this overall architecture using stacked self-attention and point-wise, fully connected layers for both the encoder and decoder. The encoder is composed of a stack of N = 6 identical layers. Each layer has two sub-layers. The first is a multi-head self-attention mechanism, and the second is a simple, position-wise fully connected feed-forward network.
+
+Multi-Head Attention
+
+Multi-head attention allows the model to jointly attend to information from different representation subspaces at different positions. The multi-head attention consists of several attention layers running in parallel.
+
+Conclusion
+
+We presented the Transformer, the first sequence transduction model based entirely on attention. The Transformer can be trained significantly faster than architectures based on recurrent or convolutional layers.

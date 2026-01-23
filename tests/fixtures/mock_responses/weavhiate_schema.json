@@ -1,0 +1,39 @@
+{
+    "classes": [
+        {
+            "class": "ResearchDocument",
+            "description": "Research document chunks with embeddings",
+            "vectorizer": "none",
+            "properties": [
+                {
+                    "name": "content",
+                    "dataType": [
+                        "text"
+                    ],
+                    "description": "Document content"
+                },
+                {
+                    "name": "source",
+                    "dataType": [
+                        "text"
+                    ],
+                    "description": "Source file path"
+                },
+                {
+                    "name": "chunk_index",
+                    "dataType": [
+                        "int"
+                    ],
+                    "description": "Chunk position in document"
+                },
+                {
+                    "name": "chunk_hash",
+                    "dataType": [
+                        "text"
+                    ],
+                    "description": "Content hash for deduplication"
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,56 @@
+{
+    "feed": {
+        "entry": [
+            {
+                "id": "http://arxiv.org/abs/2401.12345v1",
+                "title": "Advances in Neural Machine Translation",
+                "summary": "We present a comprehensive study of recent advances in neural machine translation...",
+                "author": [
+                    {
+                        "name": "John Doe"
+                    },
+                    {
+                        "name": "Jane Smith"
+                    }
+                ],
+                "published": "2024-01-15T00:00:00Z",
+                "category": [
+                    {
+                        "@term": "cs.CL"
+                    },
+                    {
+                        "@term": "cs.AI"
+                    }
+                ],
+                "link": [
+                    {
+                        "@title": "pdf",
+                        "@href": "http://arxiv.org/pdf/2401.12345v1"
+                    }
+                ]
+            },
+            {
+                "id": "http://arxiv.org/abs/2401.12346v1",
+                "title": "Attention Mechanisms in Deep Learning",
+                "summary": "This paper reviews attention mechanisms and their applications...",
+                "author": [
+                    {
+                        "name": "Alice Johnson"
+                    }
+                ],
+                "published": "2024-01-14T00:00:00Z",
+                "category": [
+                    {
+                        "@term": "cs.LG"
+                    }
+                ],
+                "link": [
+                    {
+                        "@title": "pdf",
+                        "@href": "http://arxiv.org/pdf/2401.12346v1"
+                    }
+                ]
+            }
+        ]
+    }
+}

@@ -1,0 +1,19 @@
+{
+    "models": [
+        {
+            "name": "qwen2.5:3b",
+            "modified_at": "2025-01-15T10:30:00Z",
+            "size": 1870000000,
+            "digest": "sha256:abc123...",
+            "details": {
+                "format": "gguf",
+                "family": "qwen2",
+                "families": [
+                    "qwen2"
+                ],
+                "parameter_size": "3B",
+                "quantization_level": "Q4_0"
+            }
+        }
+    ]
+}
