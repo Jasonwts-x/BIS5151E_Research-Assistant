@@ -132,7 +132,7 @@ async def rag_query(
 
 
 # ============================================================================
-# Ingestion Endpoints (New)
+# Ingestion Endpoints
 # ============================================================================
 
 
@@ -203,17 +203,19 @@ def ingest_arxiv(payload: IngestArxivRequest) -> IngestionResponse:
     
     Workflow:
     1. Search ArXiv for relevant papers
-    2. Download PDFs to data/raw/
-    3. Extract metadata (authors, date, category, abstract)
-    4. Chunk and embed papers
-    5. Write to Weaviate (skip duplicates)
+    2. Filter by relevance score
+    3. Download PDFs to data/raw/
+    4. Extract metadata (authors, date, category, abstract)
+    5. Chunk and embed papers
+    6. Write to Weaviate (skip duplicates)
     
     Features:
-    - Automatic metadata enrichment
+    - Automatic relevance filtering
+    - Metadata enrichment
     - Abstract extraction for better retrieval
     - Idempotent (re-fetching same papers skips duplicates)
     
-    Note: This may take 30-60 seconds for max_results=5 (downloading PDFs).
+    Note: This may take 30-90 seconds for max_results=5 (downloading PDFs).
     """
     engine = None
     try:
@@ -226,8 +228,11 @@ def ingest_arxiv(payload: IngestArxivRequest) -> IngestionResponse:
         # Create ingestion engine
         engine = IngestionEngine()
         
-        # Ingest from ArXiv source
-        source = ArXivSource(download_dir=DATA_DIR)
+        # Ingest from ArXiv source with relevance filtering
+        source = ArXivSource(
+            download_dir=DATA_DIR,
+            min_relevance_score=0.3  # Configurable threshold
+        )
         result = engine.ingest_from_source(
             source,
             query=payload.query,
@@ -239,6 +244,20 @@ def ingest_arxiv(payload: IngestArxivRequest) -> IngestionResponse:
             result.documents_loaded,
             result.chunks_ingested,
         )
+        
+        # Check if any papers were found
+        if result.documents_loaded == 0:
+            logger.warning("No relevant papers found for query: %s", payload.query)
+            return IngestionResponse(
+                source=result.source_name,
+                documents_loaded=0,
+                chunks_created=0,
+                chunks_ingested=0,
+                chunks_skipped=0,
+                errors=result.errors or ["No relevant papers found for this query"],
+                success=False,
+                papers=[]
+            )
         
         # Check if ingestion succeeded
         if result.errors:
@@ -260,6 +279,13 @@ def ingest_arxiv(payload: IngestArxivRequest) -> IngestionResponse:
         
     except HTTPException:
         raise
+    except ValueError as e:
+        # Validation error
+        logger.error("Invalid query: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
     except Exception as e:
         logger.exception("ArXiv ingestion failed")
         raise HTTPException(
@@ -277,7 +303,7 @@ def ingest_arxiv(payload: IngestArxivRequest) -> IngestionResponse:
 
 
 # ============================================================================
-# Admin Endpoints (New)
+# Admin Endpoints
 # ============================================================================
 
 
