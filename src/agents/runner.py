@@ -10,7 +10,6 @@ from haystack.dataclasses import Document
 
 from ..eval.guardrails import GuardrailsWrapper
 from ..eval.trulens import TruLensMonitor
-from ..rag.core import RAGPipeline
 from ..utils.config import load_config
 from .crews import ResearchCrew
 

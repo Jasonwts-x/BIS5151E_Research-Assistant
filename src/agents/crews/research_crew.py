@@ -3,10 +3,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from crewai import Crew, Process
-
-if TYPE_CHECKING:
-    from crewai import Agent, Task
+from crewai import Agent, Crew, Process, Task
 
 from ..roles import (
     create_factchecker_agent,

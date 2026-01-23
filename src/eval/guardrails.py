@@ -26,13 +26,13 @@ class GuardrailsWrapper:
             config: Optional configuration dictionary
         """
         self.config = config or self._default_config()
-        logger.info("Guardrails initialized")
+        logger.info("Guardrails initialized with config: %s", self.config)
 
     def _default_config(self) -> dict:
         """Default guardrails configuration."""
         return {
             "input_checks": ["jailbreak", "pii", "off_topic"],
-            "output_checks": ["harmful"],  # PII removed from output checks
+            "output_checks": ["harmful"],
             "strict_mode": False
         }
 
@@ -49,21 +49,22 @@ class GuardrailsWrapper:
         # Check for jailbreak attempts
         if "jailbreak" in self.config["input_checks"]:
             if self._is_jailbreak_attempt(text):
-                logger.warning("Jailbreak attempt detected in input")
+                logger.warning("GUARDRAILS BLOCKED: Jailbreak attempt detected in input")
                 return False, "Jailbreak attempt detected"
 
         # Check for PII
         if "pii" in self.config["input_checks"]:
             if self._contains_pii(text):
-                logger.warning("PII detected in input")
+                logger.warning("GUARDRAILS BLOCKED: PII detected in input")
                 return False, "Personal information detected"
 
         # Check if on-topic (research-related)
         if "off_topic" in self.config["input_checks"]:
             if not self._is_on_topic(text):
-                logger.warning("Off-topic query detected")
+                logger.warning("GUARDRAILS BLOCKED: Off-topic query detected")
                 return False, "Query is not research-related"
 
+        logger.debug("Input validation passed")
         return True, None
 
     def validate_output(self, text: str) -> tuple[bool, Optional[str]]:
@@ -79,15 +80,16 @@ class GuardrailsWrapper:
         # Check for PII in output (disabled by default for generated content)
         if "pii" in self.config["output_checks"]:
             if self._contains_pii(text):
-                logger.warning("PII detected in output")
+                logger.warning("GUARDRAILS BLOCKED: PII detected in output")
                 return False, "Output contains personal information"
 
         # Check for harmful content
         if "harmful" in self.config["output_checks"]:
             if self._is_harmful(text):
-                logger.warning("Harmful content detected in output")
+                logger.warning("GUARDRAILS BLOCKED: Harmful content detected in output")
                 return False, "Output contains harmful content"
 
+        logger.debug("Output validation passed")
         return True, None
 
     def _is_jailbreak_attempt(self, text: str) -> bool:
