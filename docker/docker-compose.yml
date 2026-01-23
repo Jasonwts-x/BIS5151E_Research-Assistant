@@ -236,6 +236,9 @@ services:
         condition: service_started
     networks:
       - research_net
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     environment:
       WEAVIATE_URL: http://weaviate:8080
       OLLAMA_HOST: http://ollama:11434
