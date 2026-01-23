@@ -1,5 +1,5 @@
 """
-RAG Pipeline - Refactored for Singleton Pattern
+RAG Pipeline - Singleton Pattern
 
 Separates index building (rare) from retrieval (frequent).
 Uses lazy singleton pattern for efficient query handling.
@@ -19,7 +19,7 @@ from ..ingestion.engine import IngestionEngine
 from ..sources import ArXivSource, LocalFileSource
 
 logger = logging.getLogger(__name__)
-logging.getLogger("httpx").setLevel(logging.WARNING)  # Reduce httpx noise
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 ROOT = Path(__file__).resolve().parents[3]
 DATA_DIR = ROOT / "data" / "raw"
@@ -37,10 +37,104 @@ class RAGPipeline:
     The query mode is used by the API/CrewAI and is cached as a singleton.
     """
 
-    client: any  # Weaviate client
-    retriever: any  # WeaviateHybridRetriever
+    client: any
+    retriever: any
     text_embedder: SentenceTransformersTextEmbedder
     collection_name: str
+
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+    
+    def __exit__(self):
+        """Context manager exit - cleanup resources."""
+        self.close()
+
+    def close(self):
+        """Close Weaviate client and cleanup resources"""
+        if hasattr(self, 'client') and self.client is not None:
+            try:
+                self.client.close()
+                logger.debug("Weaviate client closed")
+            except Exception as e:
+                logger.warning("Error closing Weaviate client: %s", e)
+
+    @classmethod
+    def from_existing(cls) -> "RAGPipeline":
+        """
+        Create pipeline connected to EXISTING Weaviate index.
+        
+        This is a QUERY operation - used frequently by API/CrewAI.
+        Does NOT rebuild index.
+        
+        Returns:
+            RAGPipeline instance ready for querying
+        """
+        cfg = load_config()
+
+        # Connect to existing Weaviate
+        client = cls._create_weaviate_client(cfg)
+
+        try:
+            # Get collection
+            from .schema import RESEARCH_DOCUMENT_SCHEMA
+            collection_name = RESEARCH_DOCUMENT_SCHEMA["class"]
+
+            # Check if collection exists
+            if not client.collections.exists(collection_name):
+                client.close()
+                raise RuntimeError(
+                    f"Collection '{collection_name}' does not exist in Weaviate!\n"
+                    f"Please build the index first:\n"
+                    f"  - python -m src.rag.cli ingest-local\n"
+                    f"  - python -m src.rag.cli ingest-arxiv <query>\n"
+                    f"  - POST /rag/ingest/local\n"
+                    f"  - POST /rag/ingest/arxiv"
+                )
+            
+            # Create retriever
+            try:
+                from haystack_integrations.components.retrievers.weaviate import (
+                    WeaviateHybridRetriever,
+                )
+                from haystack_integrations.document_stores.weaviate import (
+                    WeaviateDocumentStore,
+                )
+            except ImportError:
+                client.close()
+                raise RuntimeError(
+                    "weaviate-haystack not installed. "
+                    "Install it: pip install weaviate-haystack"
+                )
+            
+            # Documetn store
+            store_kwargs = {"url": cfg.weaviate.url}
+            if cfg.weaviate.api_key:
+                from weaviate.auth import AuthApiKey
+                store_kwargs["auth_client_secret"] = AuthApiKey(cfg.weaviate.api_key)
+
+            store = WeaviateDocumentStore(**store_kwargs)
+
+            # Hybrid retriever
+            retriever = WeaviateHybridRetriever(document_store=store)
+
+            # Text embedder (for queries)
+            embedding_model = cfg.weaviate.embedding_model
+            text_embedder = SentenceTransformersTextEmbedder(model=embedding_model)
+            text_embedder.warm_up()
+
+            logger.info("RAGPipeline connected to existing index (collection: %s)", collection_name)
+
+            return cls(
+                client=client,
+                retriever=retriever,
+                text_embedder=text_embedder,
+                collection_name=collection_name,
+            )
+        except Exception:
+            # Cleanup on error
+            client.close()
+            raise
 
     @classmethod
     def build_index_from_local(
@@ -221,32 +315,26 @@ class RAGPipeline:
         """Create Weaviate client from config."""
         import weaviate
         from weaviate.classes.init import Auth
+        from urllib.parse import urlparse
         
         url = cfg.weaviate.url
         api_key = cfg.weaviate.api_key
         
         if api_key:
-            # Cloud deployment with auth
             client = weaviate.connect_to_weaviate_cloud(
                 cluster_url=url,
                 auth_credentials=Auth.api_key(api_key),
             )
         else:
-            # Local deployment without auth
-            # Parse host and port from URL
-            url_clean = url.replace("http://", "").replace("https://", "")
-            if ":" in url_clean:
-                host, port_str = url_clean.split(":")
-                port = int(port_str)
-            else:
-                host = url_clean
-                port = 8080
-            
+            parsed = urlparse(url if url.startswith('http') else f'http://{url}')
+            host = parsed.hostname or 'localhost'
+            port = parsed.port or 8080
+
             client = weaviate.connect_to_local(
                 host=host,
                 port=port,
             )
-        
+            
         return client
 
 

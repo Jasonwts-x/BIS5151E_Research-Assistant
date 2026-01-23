@@ -225,7 +225,8 @@ class IngestionEngine:
         """Create Weaviate client from config."""
         import weaviate
         from weaviate.classes.init import Auth
-        
+        from urllib.parse import urlparse
+
         url = self.config.weaviate.url
         api_key = self.config.weaviate.api_key
         
@@ -237,23 +238,19 @@ class IngestionEngine:
             )
         else:
             # Local deployment without auth
-            # Parse host and port from URL
-            url_clean = url.replace("http://", "").replace("https://", "")
-            if ":" in url_clean:
-                host, port_str = url_clean.split(":")
-                port = int(port_str)
-            else:
-                host = url_clean
-                port = 8080
-            
+            parsed = urlparse(url if url.startswith('http') else f'http://{url}')
+            host = parsed.hostname or 'localhost'
+            port = parsed.port or 8080
+
+            logger.info("Connecting to Weaviate at %s:%d", host, port)
+
             client = weaviate.connect_to_local(
                 host=host,
                 port=port,
             )
-        
-        logger.info("Connected to Weaviate at %s", url)
-        
-        return client
+            
+            logger.info("Connected to Weaviate successfully")
+            return client
 
     def clear_index(self) -> None:
         """

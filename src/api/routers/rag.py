@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import logging
 import os
-from pathlib import Path
 from typing import Annotated
 
 import httpx
@@ -16,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from ...rag.core import RAGService
 from ...rag.ingestion import IngestionEngine
 from ...rag.sources import ArXivSource, LocalFileSource
+from ...utils.config import load_config
 from ..dependencies import get_rag_service
 from ..errors import internal_server_error
 from ..openapi import APITag
@@ -36,9 +36,17 @@ router = APIRouter(prefix="/rag", tags=[APITag.RAG])
 # CrewAI service URL (internal Docker network)
 CREWAI_URL = os.getenv("CREWAI_URL", "http://crewai:8100")
 
-# Data directory for local files
-ROOT = Path(__file__).resolve().parents[3]
-DATA_DIR = ROOT / "data" / "raw"
+# Get data directory from config
+def get_data_dir():
+    """Get data directory from config or environment."""
+    from pathlib import Path
+    data_dir_str = os.getenv("DATA_DIR")
+    if data_dir_str:
+        return Path(data_dir_str)
+    # Fallback to default
+    return Path("/workspaces/BIS5151E_Research-Assistant/data/raw")
+
+DATA_DIR = get_data_dir()
 
 
 # ============================================================================
@@ -207,6 +215,7 @@ def ingest_arxiv(payload: IngestArxivRequest) -> IngestionResponse:
     
     Note: This may take 30-60 seconds for max_results=5 (downloading PDFs).
     """
+    engine = None
     try:
         logger.info(
             "Ingesting from ArXiv: query='%s', max_results=%d",
@@ -231,6 +240,14 @@ def ingest_arxiv(payload: IngestArxivRequest) -> IngestionResponse:
             result.chunks_ingested,
         )
         
+        # Check if ingestion succeeded
+        if result.errors:
+            logger.error("Ingestion encountered errors: %s", result.errors)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Ingestion failed: {'; '.join(result.errors)}",
+            )
+
         return IngestionResponse(
             source=result.source_name,
             documents_loaded=result.documents_loaded,
@@ -238,15 +255,25 @@ def ingest_arxiv(payload: IngestArxivRequest) -> IngestionResponse:
             chunks_ingested=result.chunks_ingested,
             chunks_skipped=result.chunks_skipped,
             errors=result.errors,
-            success=len(result.errors) == 0,
+            success=len(result.errors) == 0 and result.chunks_ingested > 0,
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("ArXiv ingestion failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"ArXiv ingestion failed: {str(e)}",
         ) from e
+    finally:
+        # Properly close the Weaviate client
+        if engine is not None and hasattr(engine, 'client'):
+            try:
+                engine.client.close()
+                logger.debug("Weaviate client closed successfully.")
+            except Exception as e:
+                logger.warning("Failed to close Weaviate client: %s", str(e))
 
 
 # ============================================================================
