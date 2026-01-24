@@ -135,22 +135,30 @@ async def rag_query(
 # Ingestion Endpoints
 # ============================================================================
 
+from pathlib import Path
+
+DATA_RAW_DIR = Path(__file__).resolve().parents[3] / "data" / "raw"
+DATA_ARXIV_DIR = Path(__file__).resolve().parents[3] / "data" / "arxiv"
+DATA_DIRS = [DATA_RAW_DIR, DATA_ARXIV_DIR] 
 
 @router.post(
     "/ingest/local",
     response_model=IngestionResponse,
     status_code=status.HTTP_200_OK,
-    summary="Ingest documents from local filesystem (data/raw/).",
+    summary="Ingest documents from local filesystem.",
 )
 def ingest_local(payload: IngestLocalRequest) -> IngestionResponse:
     """
     Ingest documents from local filesystem.
     
-    Files are loaded from `data/raw/` directory.
+    Files are loaded from:
+    - data/raw/ (manually added documents)
+    - data/arxiv/ (downloaded ArXiv papers)
+    
     Supports: PDF, TXT files
     
     Workflow:
-    1. Load matching files from data/raw/
+    1. Load matching files from both directories
     2. Chunk documents
     3. Generate embeddings
     4. Write to Weaviate (skip duplicates)
@@ -164,7 +172,7 @@ def ingest_local(payload: IngestLocalRequest) -> IngestionResponse:
         engine = IngestionEngine()
         
         # Ingest from local source
-        source = LocalFileSource(DATA_DIR)
+        source = LocalFileSource(DATA_DIRS)
         result = engine.ingest_from_source(source, pattern=payload.pattern)
         
         logger.info(
@@ -204,7 +212,7 @@ def ingest_arxiv(payload: IngestArxivRequest) -> IngestionResponse:
     Workflow:
     1. Search ArXiv for relevant papers
     2. Filter by relevance score
-    3. Download PDFs to data/raw/
+    3. Download PDFs to data/arxiv/
     4. Extract metadata (authors, date, category, abstract)
     5. Chunk and embed papers
     6. Write to Weaviate (skip duplicates)
@@ -229,8 +237,9 @@ def ingest_arxiv(payload: IngestArxivRequest) -> IngestionResponse:
         engine = IngestionEngine()
         
         # Ingest from ArXiv source with relevance filtering
+        arxiv_dir = Path(__file__).resolve().parents[3] / "data" / "arxiv"
         source = ArXivSource(
-            download_dir=DATA_DIR,
+            download_dir=arxiv_dir,
             min_relevance_score=0.3  # Configurable threshold
         )
         result = engine.ingest_from_source(
