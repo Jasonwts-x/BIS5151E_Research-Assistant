@@ -17,7 +17,7 @@ logging.basicConfig(
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-DATA_RAW = ROOT / "data" / "raw"
+DATA_ARXIV = ROOT / "data" / "arxiv"
 
 
 def _slugify(text: str, max_len: int = 60) -> str:
@@ -47,7 +47,7 @@ def fetch_arxiv_pdfs(
 
     Returns a list of downloaded file paths.
     """
-    out_dir = out_dir or DATA_RAW
+    out_dir = out_dir or DATA_ARXIV
     out_dir.mkdir(parents=True, exist_ok=True)
 
     logger.info(

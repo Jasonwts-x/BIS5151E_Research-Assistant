@@ -40,13 +40,13 @@ class ArXivSource(DocumentSource):
         Initialize ArXiv source.
         
         Args:
-            download_dir: Where to save PDFs (default: data/raw)
+            download_dir: Where to save PDFs (default: data/arxiv)
             min_relevance_score: Minimum relevance threshold (0.0-1.0)
         """
         if download_dir is None:
             from ...utils.config import load_config
             root = Path(__file__).resolve().parents[3]
-            download_dir = root / "data" / "raw"
+            download_dir = root / "data" / "arxiv"
         
         self.download_dir = download_dir
         self.download_dir.mkdir(parents=True, exist_ok=True)
