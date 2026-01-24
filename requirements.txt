@@ -45,6 +45,7 @@ uvicorn[standard]                # ASGI server
 # ------------------------------------------------------------------------------
 arxiv==2.1.0                     # ArXiv paper fetching
 pypdf==5.1.0                     # PDF parsing
+reportlab>=4.0.0                 #
 
 # ------------------------------------------------------------------------------
 # Configuration & Utilities
