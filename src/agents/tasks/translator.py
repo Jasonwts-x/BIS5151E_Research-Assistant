@@ -14,34 +14,47 @@ def create_translator_task(agent, factchecker_task: Task, target_language: str) 
     """
     language_names = {
         'de': 'German',
-        'en': 'English',
-        'es': 'Spanish',
         'fr': 'French',
+        'es': 'Spanish',
+        'it': 'Italian',
+        'pt': 'Portuguese',
+        'nl': 'Dutch',
+        'pl': 'Polish',
+        'ru': 'Russian',
+        'ja': 'Japanese',
+        'zh': 'Chinese',
+        'ko': 'Korean',
     }
     
-    lang_name = language_names.get(target_language.lower(), target_language)
+    language_name = language_names.get(target_language.lower(), target_language)
     
     description = f"""
-Translate the fact-checked text from the previous task to {lang_name}.
+    Translate the fact-checked text from the previous task to {language_name}.
+  
+    ⚠️ CRITICAL TRANSLATION RULES:
+    1. Preserve ALL citations exactly as they appear: [1], [2], [3], etc.
+    2. Maintain academic tone appropriate for {language_name}
+    3. Keep the same meaning and structure
+    4. Do NOT add or remove information
+    5. Do NOT modify, remove, or relocate citations
+    6. Translate the "## References" section header but keep source names unchanged
 
-Your responsibilities:
-- Translate accurately while preserving academic tone
-- Keep all citations [1], [2], etc. EXACTLY as they are
-- Maintain paragraph structure and formatting
-- Ensure the translation reads naturally in {lang_name}
-- Do NOT add or remove any information
+    IMPORTANT:
+    - Citations like [1], [2] must appear in the EXACT same positions
+    - Academic terminology should use standard {language_name} conventions
+    - If a technical term has no direct translation, use the English term in italics
 
-Your task: Return a high-quality translation that preserves the meaning, tone, and citations.
-"""
+    Your task: Provide a faithful {language_name} translation that preserves 
+    all content, structure, and citations from the original.
+    """
 
     return Task(
         description=description,
         expected_output=(
-            f"A high-quality translation in {lang_name} that:\n"
-            "- Preserves all citations in their original format\n"
-            "- Maintains academic tone and style\n"
-            "- Reads naturally in the target language\n"
-            "- Keeps the same structure and formatting"
+            f"A complete {language_name} translation of the fact-checked summary. "
+            "All citations [1], [2], etc. must be preserved in their exact positions. "
+            "Academic tone and terminology appropriate for the target language. "
+            "No content added or removed."
         ),
         agent=agent,
         context=[factchecker_task]
