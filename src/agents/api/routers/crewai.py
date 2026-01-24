@@ -41,9 +41,8 @@ def run_crew(request: CrewRunRequest) -> CrewRunResponse:
     2. Run Writer agent to draft summary
     3. Run Reviewer agent to improve clarity
     4. Run FactChecker agent to verify claims
-    5. Return final output
-    
-    Note: Translation (if language != 'en') is not yet implemented (Step H).
+    5. Save outputs to outputs/ directory
+    6. Return final output
     """
     try:
         logger.info(
@@ -54,6 +53,13 @@ def run_crew(request: CrewRunRequest) -> CrewRunResponse:
         
         # Execute crew workflow
         result = runner.run(topic=request.topic, language=request.language)
+
+        # Save outputs to files
+        try:
+            saved_paths = runner.save_output(result)
+            logger.info("Outputs saved: %s", list(saved_paths.keys()))
+        except Exception as e:
+            logger.warning("Failed to save outputs: %s", e)
         
         return CrewRunResponse(
             topic=result.topic,
