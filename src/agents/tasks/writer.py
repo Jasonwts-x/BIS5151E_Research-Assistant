@@ -25,33 +25,37 @@ def create_writer_task(agent, topic: str, context: str, mode: str = "strict") ->
     3. Focus on well-established concepts and definitions
     4. DO NOT invent specific citations or paper references
     5. Be educational and informative while being honest about limitations
+    6. Use your training knowledge to provide accurate, helpful information
 
     Guidelines:
     - Write 250-300 words
     - Use neutral, academic tone
     - Structure: Introduction → Key concepts → Current understanding
     - NO fake citations like [1], [2], etc.
-    - DO NOT mention specific papers, authors, or years
+    - DO NOT mention specific papers, authors, or years unless they are foundational/historical
+    - Focus on explaining concepts clearly and accurately
 
     MANDATORY OUTPUT FORMAT:
 
     [Your educational summary without fake citations]
 
     ## Note
-    This summary is based on general academic knowledge. No specific research papers were retrieved from the database for this query. For more detailed or recent information, consider:
-    - Broadening your search terms
-    - Checking ArXiv.org directly with different keywords
-    - Consulting specialized academic databases in this field
+    This summary is based on general academic knowledge. No specific research papers were retrieved from the database for this query. To find relevant research papers, try:
+    - Using more specific search terms related to your topic
+    - Searching ArXiv.org directly with targeted keywords
+    - Consulting specialized academic databases in your field of interest
 
-    Remember: Be helpful and educational, but honest about the lack of specific sources.
+    Remember: Provide genuinely helpful educational content based on established knowledge.
     """
         
         expected_output = (
-            "An educational summary of 250-300 words based on general knowledge. "
+            "An educational summary of 250-300 words based on general academic knowledge. "
             "NO citations or references to specific papers. "
-            "Must include a disclaimer about the lack of specific sources."
+            "Must include an informative note about the lack of specific sources. "
+            "Content should be factually accurate and helpful."
         )
     
+
     else:  # strict mode
         description = f"""Write a concise literature-style summary on the topic: "{topic}"
 
