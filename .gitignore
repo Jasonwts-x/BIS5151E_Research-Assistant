@@ -62,15 +62,15 @@ docker/.env
 # -----------------------------------------------------------------------------
 data/raw/*
 !data/raw/.gitkeep
-data/processed/*
-!data/processed/.gitkeep
 data/external/*
 !data/external/.gitkeep
 data/arxiv/*
 !data/arxiv/.gitkeep
+data/arxiv/**/*.pdf
 
 # Output Directories
 # -----------------------------------------------------------------------------
+outputs/
 outputs/*
 !outputs/.gitkeep
 outputs/**/*.md
