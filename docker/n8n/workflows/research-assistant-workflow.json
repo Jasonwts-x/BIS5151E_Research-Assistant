@@ -1,5 +1,5 @@
 {
-    "name": "Research Assistant - ArXiv Ingestion + CrewAI",
+    "name": "Research Assistant - ArXiv + CrewAI",
     "nodes": [
         {
             "parameters": {
@@ -13,44 +13,41 @@
                             "fieldType": "text",
                             "requiredField": true,
                             "fieldOptions": {
-                                "placeholder": "e.g., 'machine learning for healthcare'"
+                                "placeholder": "e.g., machine learning for healthcare"
                             }
                         }
                     ]
-                }
+                },
+                "options": {}
             },
+            "id": "a1b2c3d4-1234-5678-9012-form00000001",
             "name": "Research Topic Form",
             "type": "n8n-nodes-base.form",
-            "typeVersion": 1,
+            "typeVersion": 2,
             "position": [
                 250,
                 300
-            ]
+            ],
+            "webhookId": "research-assistant-form"
         },
         {
             "parameters": {
-                "url": "=http://api:8000/rag/ingest/arxiv",
-                "method": "POST",
+                "url": "http://api:8000/rag/ingest/arxiv",
+                "authentication": "none",
+                "requestMethod": "POST",
+                "sendQuery": false,
+                "sendHeaders": false,
                 "sendBody": true,
-                "bodyParameters": {
-                    "parameters": [
-                        {
-                            "name": "query",
-                            "value": "={{ $json.data['Research Topic'] }}"
-                        },
-                        {
-                            "name": "max_results",
-                            "value": 5
-                        }
-                    ]
-                },
+                "specifyBody": "json",
+                "jsonBody": "={\n  \"query\": \"{{ $json['Research Topic'] }}\",\n  \"max_results\": 5\n}",
                 "options": {
                     "timeout": 120000
                 }
             },
-            "name": "Ingest ArXiv Papers",
+            "id": "b2c3d4e5-2345-6789-0123-http00000001",
+            "name": "HTTP Request - Ingest ArXiv",
             "type": "n8n-nodes-base.httpRequest",
-            "typeVersion": 4.1,
+            "typeVersion": 4.2,
             "position": [
                 470,
                 300
@@ -58,8 +55,9 @@
         },
         {
             "parameters": {
-                "jsCode": "// Validate RAG ingestion response\nconst ragResponse = $input.item.json;\nconst topic = items[0].json.data['Research Topic'];\n\n// Log the response\nconsole.log('RAG Response:', JSON.stringify(ragResponse, null, 2));\n\n// Check if ingestion was successful\nif (ragResponse.success === false || ragResponse.documents_loaded === 0) {\n  console.warn('Warning: No relevant papers found or ingestion failed');\n  console.warn('Errors:', ragResponse.errors);\n  \n  // Continue anyway - CrewAI will use fallback mode\n  return [{\n    json: {\n      topic: topic,\n      ragSuccess: false,\n      documentsLoaded: 0,\n      message: 'No relevant papers found - will use general knowledge'\n    }\n  }];\n}\n\n// Success - papers were loaded\nconsole.log(`Successfully loaded ${ragResponse.documents_loaded} papers`);\n\nreturn [{\n  json: {\n    topic: topic,\n    ragSuccess: true,\n    documentsLoaded: ragResponse.documents_loaded,\n    chunksIngested: ragResponse.chunks_ingested\n  }\n}];"
+                "jsCode": "// Validate RAG ingestion response\nconst items = $input.all();\nconst ragResponse = items[0].json;\n\n// Get topic from form\nconst topic = ragResponse.query || 'Unknown topic';\n\n// Log the response\nconsole.log('RAG Response:', JSON.stringify(ragResponse, null, 2));\n\n// Check if ingestion was successful\nif (ragResponse.success === false || ragResponse.documents_loaded === 0) {\n  console.warn('Warning: No relevant papers found or ingestion failed');\n  console.warn('Documents loaded:', ragResponse.documents_loaded);\n  console.warn('Errors:', ragResponse.errors);\n  \n  // Continue anyway - CrewAI will use fallback mode\n  return [{\n    json: {\n      topic: topic,\n      ragSuccess: false,\n      documentsLoaded: 0,\n      message: 'No relevant papers found - will use general knowledge'\n    }\n  }];\n}\n\n// Success - papers were loaded\nconsole.log(`Successfully loaded ${ragResponse.documents_loaded} papers`);\n\nreturn [{\n  json: {\n    topic: topic,\n    ragSuccess: true,\n    documentsLoaded: ragResponse.documents_loaded,\n    chunksIngested: ragResponse.chunks_ingested\n  }\n}];"
             },
+            "id": "c3d4e5f6-3456-7890-1234-code00000001",
             "name": "Validate RAG Response",
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
@@ -70,28 +68,30 @@
         },
         {
             "parameters": {
-                "url": "=http://api:8000/crewai/run",
-                "method": "POST",
-                "sendBody": true,
-                "bodyParameters": {
+                "url": "http://api:8000/crewai/run",
+                "authentication": "none",
+                "requestMethod": "POST",
+                "sendQuery": false,
+                "sendHeaders": true,
+                "headerParameters": {
                     "parameters": [
                         {
-                            "name": "topic",
-                            "value": "={{ $json.topic }}"
-                        },
-                        {
-                            "name": "language",
-                            "value": "en"
+                            "name": "Content-Type",
+                            "value": "application/json"
                         }
                     ]
                 },
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={\n  \"topic\": \"{{ $json.topic }}\",\n  \"language\": \"en\"\n}",
                 "options": {
-                    "timeout": 300000
+                    "timeout": 600000
                 }
             },
-            "name": "Run CrewAI Workflow",
+            "id": "d4e5f6g7-4567-8901-2345-http00000002",
+            "name": "HTTP Request - Run CrewAI",
             "type": "n8n-nodes-base.httpRequest",
-            "typeVersion": 4.1,
+            "typeVersion": 4.2,
             "position": [
                 910,
                 300
@@ -100,12 +100,13 @@
         {
             "parameters": {
                 "respondWith": "text",
-                "responseBody": "=# Research Summary\n\nTopic: {{ $json.topic }}\n\n---\n\n{{ $json.answer }}\n\n---\n\n**Generated by Research Assistant** | Powered by ArXiv + CrewAI",
+                "responseBody": "=# Research Summary\\n\\nTopic: {{ $json.topic }}\\n\\n---\\n\\n{{ $json.answer }}\\n\\n---\\n\\n**Generated by Research Assistant** | Powered by ArXiv + CrewAI",
                 "options": {}
             },
+            "id": "e5f6g7h8-5678-9012-3456-respond00001",
             "name": "Return Summary",
             "type": "n8n-nodes-base.respondToWebhook",
-            "typeVersion": 1,
+            "typeVersion": 1.1,
             "position": [
                 1130,
                 300
@@ -117,14 +118,14 @@
             "main": [
                 [
                     {
-                        "node": "Ingest ArXiv Papers",
+                        "node": "HTTP Request - Ingest ArXiv",
                         "type": "main",
                         "index": 0
                     }
                 ]
             ]
         },
-        "Ingest ArXiv Papers": {
+        "HTTP Request - Ingest ArXiv": {
             "main": [
                 [
                     {
@@ -139,14 +140,14 @@
             "main": [
                 [
                     {
-                        "node": "Run CrewAI Workflow",
+                        "node": "HTTP Request - Run CrewAI",
                         "type": "main",
                         "index": 0
                     }
                 ]
             ]
         },
-        "Run CrewAI Workflow": {
+        "HTTP Request - Run CrewAI": {
             "main": [
                 [
                     {
@@ -158,7 +159,13 @@
             ]
         }
     },
+    "pinData": {},
     "settings": {
         "executionOrder": "v1"
-    }
+    },
+    "staticData": null,
+    "tags": [],
+    "triggerCount": 0,
+    "updatedAt": "2026-01-23T16:00:00.000Z",
+    "versionId": "1"
 }
