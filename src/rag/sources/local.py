@@ -21,7 +21,7 @@ class LocalFileSource(DocumentSource):
     """
     Loads documents from local filesystem.
     
-    Supports: PDF, TXT files
+    Supports: PDF, TXT files from multiple directories
     """
 
     def __init__(self, data_dir: Path):
@@ -29,9 +29,12 @@ class LocalFileSource(DocumentSource):
         Initialize local file source.
         
         Args:
-            data_dir: Path to directory containing documents
+            data_dirs: Single directory or list of directories containing documents
         """
-        self.data_dir = data_dir
+        if isinstance(data_dirs, Path):
+            self.data_dirs = [data_dirs]
+        else:
+            self.data_dirs = data_dirs
 
     def fetch(self, pattern: str = "*") -> List[Document]:
         """
@@ -45,21 +48,38 @@ class LocalFileSource(DocumentSource):
         """
         docs: List[Document] = []
         
-        # Find files
-        pdfs = sorted(self.data_dir.glob(f"{pattern}.pdf"))
-        txts = sorted(self.data_dir.glob(f"{pattern}.txt"))
+        # Collect files from all directories
+        all_pdfs = []
+        all_txts = []
+        
+        for data_dir in self.data_dirs:
+            if not data_dir.exists():
+                logger.warning("Directory does not exist: %s", data_dir)
+                continue
+                
+            pdfs = sorted(data_dir.glob(f"{pattern}.pdf"))
+            txts = sorted(data_dir.glob(f"{pattern}.txt"))
+            
+            all_pdfs.extend(pdfs)
+            all_txts.extend(txts)
+            
+            logger.info(
+                "Found %d PDFs and %d TXT files in %s",
+                len(pdfs),
+                len(txts),
+                data_dir,
+            )
         
         logger.info(
-            "Found %d PDFs and %d TXT files in %s",
-            len(pdfs),
-            len(txts),
-            self.data_dir,
+            "Total: Found %d PDFs and %d TXT files across all directories",
+            len(all_pdfs),
+            len(all_txts),
         )
         
         # Load PDFs
         if pdfs:
             pdf_conv = PyPDFToDocument()
-            for pdf in pdfs:
+            for pdf in all_pdfs:
                 try:
                     result = pdf_conv.run(sources=[str(pdf)])
                     docs.extend(result["documents"])
@@ -67,9 +87,9 @@ class LocalFileSource(DocumentSource):
                     logger.warning("Failed to load PDF %s: %s", pdf.name, e)
         
         # Load TXT files
-        if txts:
+        if all_txts:
             txt_conv = TextFileToDocument(encoding="utf-8")
-            for txt in txts:
+            for txt in all_txts:
                 try:
                     result = txt_conv.run(sources=[str(txt)])
                     docs.extend(result["documents"])
@@ -98,4 +118,5 @@ class LocalFileSource(DocumentSource):
         doc.meta = meta
 
     def get_source_name(self) -> str:
-        return f"LocalFiles({self.data_dir})"
+        dir_names = ", ".join(str(d) for d in self.data_dirs)
+        return f"LocalFiles({dir_names})"
