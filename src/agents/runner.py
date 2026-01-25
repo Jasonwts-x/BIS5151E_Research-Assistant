@@ -11,10 +11,6 @@ from pathlib import Path
 from datetime import datetime
 import json
 
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet
-
 from ..eval.guardrails import GuardrailsWrapper
 from ..eval.trulens import TruLensMonitor
 from ..utils.config import load_config
@@ -82,6 +78,14 @@ class CrewRunner:
 
         # Initialize TruLens monitoring
         self.monitor = TruLensMonitor(enabled=enable_monitoring)
+
+    def __del__(self):
+        """Cleanup: Close Weaviate connection if it exists."""
+        if self.rag_pipeline is not None:
+            try:
+                self.rag_pipeline.close()
+            except Exception:
+                pass
 
     def retrieve_context(self, topic: str) -> tuple[str, List[Document]]:
         """
