@@ -89,24 +89,27 @@ class ResearchCrew:
         
         # Check for common "no context" indicators
         no_context_indicators = [
-            "NO CONTEXT AVAILABLE",
+            "⚠️ NO CONTEXT AVAILABLE ⚠️",
             "No context available",
             "No documents were retrieved",
-            "⚠️",
         ]
         
         for indicator in no_context_indicators:
             if indicator in context:
+                logger.debug("Context rejected: contains '%s'", indicator)
                 return False
         
         # Check if context is too short (likely just a message)
         if len(context.strip()) < 100:
+            logger.debug("Context rejected: too short (%d chars)", len(context.strip()))
             return False
         
         # Check if context contains source markers (indicating real documents)
         if "SOURCE [" not in context:
+            logger.debug("Context rejected: no SOURCE markers found")
             return False
         
+        logger.debug("Context validated: contains %d chars with SOURCE markers", len(context))
         return True
 
     def _run_strict_mode(self, topic: str, context: str, language: str) -> str:
