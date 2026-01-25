@@ -13,23 +13,54 @@ def create_factchecker_task(agent, reviewer_task: Task, context: str) -> Task:
         context: Retrieved context from RAG pipeline (GROUND TRUTH)
     """
     
-    # Validate that context is actually provided
+    # Check if we're in fallback mode (no context available)
     if not context or "NO CONTEXT AVAILABLE" in context:
-        # If no context, create a simplified task that just returns the reviewed text
         description = """
-    NOTICE: No context documents were available for fact-checking.
-
-    Since this summary was generated in fallback mode (using general knowledge),
-    you should:
-    1. Return the reviewed text AS-IS without modifications
-    2. Do NOT add fake citations
-    3. Do NOT remove the disclaimer note if present
-
-    Simply return the complete reviewed text.
+    ⚠️ FALLBACK MODE FACT-CHECKING
+    
+    Since no specific research documents are available, your role is to:
+    
+    1. **Verify Claim Reasonableness**:
+       - Check that all claims are well-established academic knowledge
+       - Flag any claims that seem speculative or controversial
+       - Ensure proper use of hedging language ("may", "typically", "generally")
+    
+    2. **Check for Inappropriate Definitiveness**:
+       - Remove any overly confident statements about cutting-edge research
+       - Flag claims about specific papers, authors, or years (none should exist)
+       - Ensure no fake citations like [1], [2], etc. are present
+    
+    3. **Verify Academic Standards**:
+       - Check that the summary maintains neutral, academic tone
+       - Ensure concepts are explained clearly and accurately
+       - Verify that uncertainty is acknowledged appropriately
+    
+    4. **Ensure Proper Disclaimer**:
+       - Confirm the "Note" section is present and accurate
+       - The note should clearly state this is based on general knowledge
+       - It should suggest ways to find specific research papers
+    
+    5. **Quality Standards**:
+       - Content should be educational and informative
+       - No invented information or misleading statements
+       - Proper structure (Introduction → Key concepts → Current understanding)
+    
+    ⚠️ CRITICAL: If you find ANY specific citations [1], [2], invented paper 
+    references, or claims that seem too specific to be general knowledge, 
+    you MUST remove or soften them.
+    
+    Return the complete, verified text ready for the user.
     """
+        
         return Task(
             description=description,
-            expected_output="The reviewed text returned unchanged (fallback mode).",
+            expected_output=(
+                "The reviewed text with quality checks applied. "
+                "All claims verified to be reasonable general knowledge. "
+                "No fake citations or overly specific claims. "
+                "Proper disclaimer included. "
+                "Maintains educational value while being honest about limitations."
+            ),
             agent=agent,
             context=[reviewer_task]
         )
@@ -68,20 +99,21 @@ def create_factchecker_task(agent, reviewer_task: Task, context: str) -> Task:
     These systems include large language models that process natural language [2]."
 
     Example of INCORRECT output:
-    "I verified the claims and found that..." ❌
-    "A fact-checked version where..." ❌
+    "I verified the claims and found that..."
+    "I've reviewed the text and found 3 claims that need revision..." 
+    "A fact-checked version where..."
+    (This is a meta-description, NOT the actual output we need!)
+
+    Remember: Return the FULL TEXT of the fact-checked summary, not a description of your work.
     """
 
     return Task(
         description=description,
         expected_output=(
-            "The COMPLETE fact-checked text where:\\n"
-            "- EVERY claim is verified against the provided context\\n"
-            "- EVERY citation [1], [2], etc. is accurate and matches the sources\\n"
-            "- ALL unsupported claims have been removed or softened\\n"
-            "- NO invented sources or citations remain\\n"
-            "- Text may be shorter than input if claims couldn't be verified\\n\\n"
-            "OUTPUT MUST BE THE ACTUAL TEXT, NOT A DESCRIPTION."
+            "The complete fact-checked summary text with all claims verified against sources. "
+            "All citations accurate and properly formatted. "
+            "Any unsupported claims removed or softened. "
+            "Ready to be presented to the user."
         ),
         agent=agent,
         context=[reviewer_task]

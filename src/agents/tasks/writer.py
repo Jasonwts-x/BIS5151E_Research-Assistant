@@ -17,44 +17,68 @@ def create_writer_task(agent, topic: str, context: str, mode: str = "strict") ->
     if mode == "fallback":
         description = f"""Write a concise educational summary on the topic: "{topic}"
 
-    ⚠️ NOTICE: No specific research documents were found in the database for this topic.
+    ⚠️ FALLBACK MODE: No specific research documents were found in the database.
 
-    FALLBACK MODE INSTRUCTIONS:
-    1. Provide a general overview based on established academic knowledge
-    2. Use cautious, academic language: "generally", "typically", "commonly"
-    3. Focus on well-established concepts and definitions
-    4. DO NOT invent specific citations or paper references
-    5. Be educational and informative while being honest about limitations
-    6. Use your training knowledge to provide accurate, helpful information
+    This summary will be reviewed and fact-checked, so focus on quality.
 
-    Guidelines:
-    - Write 250-300 words
-    - Use neutral, academic tone
-    - Structure: Introduction → Key concepts → Current understanding
-    - NO fake citations like [1], [2], etc.
-    - DO NOT mention specific papers, authors, or years unless they are foundational/historical
-    - Focus on explaining concepts clearly and accurately
+    INSTRUCTIONS:
+    1. **Use Established Academic Knowledge**:
+       - Draw from widely accepted theories, principles, and concepts
+       - Focus on foundational knowledge that appears in textbooks and courses
+       - Avoid cutting-edge or controversial topics without proper hedging
+    
+    2. **Use Cautious, Academic Language**:
+       - "generally", "typically", "commonly", "often"
+       - "may", "can", "tends to", "is believed to"
+       - Avoid absolute statements unless discussing fundamental definitions
+    
+    3. **Structure and Content**:
+       - Introduction: Define key terms and provide context
+       - Main body: Explain core concepts and their relationships
+       - Conclusion: Summarize current understanding and limitations
+    
+    4. **What NOT to Do**:
+       - ❌ DO NOT invent citations like [1], [2], etc.
+       - ❌ DO NOT mention specific papers, authors, or years (unless foundational/historical)
+       - ❌ DO NOT make overly specific claims about recent research
+       - ❌ DO NOT present speculation as fact
+    
+    5. **Quality Standards**:
+       - 250-300 words
+       - Clear, accessible explanations
+       - Neutral, objective tone
+       - Educational value for readers
+    
+    6. **Honesty About Limitations**:
+       - Acknowledge when concepts are complex or debated
+       - Be clear about the level of certainty in different claims
+       - Don't oversimplify when it would be misleading
 
     MANDATORY OUTPUT FORMAT:
 
-    [Your educational summary without fake citations]
+    [Your educational summary - 250-300 words, no citations]
 
     ## Note
-    This summary is based on general academic knowledge. No specific research papers were retrieved from the database for this query. To find relevant research papers, try:
+    This summary is based on general academic knowledge. No specific research papers 
+    were retrieved from the database for this query. To find relevant research papers, 
+    consider:
     - Using more specific search terms related to your topic
-    - Searching ArXiv.org directly with targeted keywords
+    - Searching ArXiv.org, Google Scholar, or Semantic Scholar directly
     - Consulting specialized academic databases in your field of interest
+    - Checking review papers or survey articles on this topic
 
-    Remember: Provide genuinely helpful educational content based on established knowledge.
+    IMPORTANT: This text will be reviewed for clarity and fact-checked for 
+    accuracy. Focus on providing genuinely helpful, well-structured educational 
+    content based on established knowledge.
     """
         
         expected_output = (
             "An educational summary of 250-300 words based on general academic knowledge. "
             "NO citations or references to specific papers. "
             "Must include an informative note about the lack of specific sources. "
-            "Content should be factually accurate and helpful."
+            "Content should be factually accurate, well-structured, and helpful. "
+            "Uses cautious language and acknowledges uncertainty where appropriate."
         )
-    
 
     else:  # strict mode
         description = f"""Write a concise literature-style summary on the topic: "{topic}"
@@ -97,13 +121,14 @@ def create_writer_task(agent, topic: str, context: str, mode: str = "strict") ->
     """
         
         expected_output = (
-            "A well-structured academic summary with inline citations [1], [2], etc. "
-            "Must include a '## References' section listing ALL sources from the context. "
-            "Every claim must be supported by the provided context."
+            "A concise literature summary (max 300 words) with inline citations [1], [2], etc. "
+            "Must include a '## References' section at the end listing all sources. "
+            "Every factual claim must be cited. "
+            "Only information from the provided context."
         )
-    
+
     return Task(
         description=description,
         expected_output=expected_output,
-        agent=agent,
+        agent=agent
     )
