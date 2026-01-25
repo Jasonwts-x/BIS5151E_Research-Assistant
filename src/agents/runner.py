@@ -126,9 +126,9 @@ class CrewRunner:
         """
         if not docs:
             return (
-                "⚠️ NO CONTEXT AVAILABLE ⚠️\\n"
-                "No documents were retrieved for this topic.\\n"
-                "You CANNOT write a summary without sources.\\n"
+                "⚠️ NO CONTEXT AVAILABLE ⚠️\n"
+                "No documents were retrieved for this topic.\n"
+                "You CANNOT write a summary without sources.\n"
                 "Inform the user that no relevant documents were found."
             )
         
@@ -149,27 +149,27 @@ class CrewRunner:
             
             # Format each chunk with clear source marking
             context_blocks.append(
-                f"═══════════════════════════════════════\\n"
-                f"SOURCE [{idx}]: {source}\\n"
-                f"═══════════════════════════════════════\\n"
-                f"{content}\\n"
+                f"═══════════════════════════════════════\n"
+                f"SOURCE [{idx}]: {source}\n"
+                f"═══════════════════════════════════════\n"
+                f"{content}\n"
             )
         
         # Build final context with clear sections
-        context_body = "\\n".join(context_blocks)
+        context_body = "\n".join(context_blocks)
         
-        source_list = "\\n".join(
+        source_list = "\n".join(
             f"  [{i+1}] {s}" for i, s in enumerate(unique_sources)
         )
         
         header = (
-            "╔═══════════════════════════════════════════════════════════════╗\\n"
-            "║   AVAILABLE SOURCES - USE ONLY THESE IN YOUR RESPONSE        ║\\n"
-            "╚═══════════════════════════════════════════════════════════════╝\\n"
-            f"\\n{source_list}\\n\\n"
-            "⚠️ CRITICAL: You may ONLY cite sources listed above.\\n"
-            "⚠️ Do NOT invent additional sources or citations.\\n"
-            "⚠️ Every factual claim must reference one of these sources.\\n\\n"
+            "╔═══════════════════════════════════════════════════════════════╗\n"
+            "║   AVAILABLE SOURCES - USE ONLY THESE IN YOUR RESPONSE         ║\n"
+            "╚═══════════════════════════════════════════════════════════════╝\n"
+            f"\n{source_list}\n\n"
+            "⚠️ CRITICAL: You may ONLY cite sources listed above.\n"
+            "⚠️ Do NOT invent additional sources or citations.\n"
+            "⚠️ Every factual claim must reference one of these sources.\n\n"
         )
         
         return f"{header}{context_body}"
@@ -246,24 +246,40 @@ class CrewRunner:
 
     def save_output(self, result: CrewResult, output_base_dir: Path = None) -> dict[str, Path]:
         """
-        Save crew output to organized subdirectories in outputs/.
+        Save crew output to multiple formats.
 
         Args:
             result: CrewResult from crew execution
+            output_base_dir: Base directory for outputs (default: project outputs/)
             
         Returns:
-            Dictionary with paths to saved files
+            Dictionary mapping format names to file paths
         """
         import hashlib
         from datetime import datetime
         from pathlib import Path
+        import re
 
-        # Generate unique filename based on topic + timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Generate folder name with keywords from topic
+        timestamp = datetime.now().strftime("%Y%m%d")
         topic_hash = hashlib.md5(result.topic.encode()).hexdigest()[:8]
-        base_name = f"{timestamp}_{topic_hash}"
 
-        output_dir = Path("/workspaces/BIS5151E_Research-Assistant/outputs") / base_name
+        # Extract keywords from topic (max 3 words, alphanumeric only)
+        # Remove common words and keep meaningful ones
+        stop_words = {'what', 'are', 'is', 'the', 'how', 'why', 'when', 'where', 
+                      'who', 'which', 'in', 'on', 'at', 'to', 'for', 'of', 'a', 'an'}
+
+        words = re.findall(r'\w+', result.topic.lower())
+        keywords = [w for w in words if w not in stop_words and len(w) > 2][:3]
+        keyword_str = '-'.join(keywords) if keywords else 'query'
+
+        folder_name = f"{timestamp}_{keyword_str}_{topic_hash}"
+
+        # Determine output directory
+        if output_base_dir is None:
+            output_base_dir = Path("/workspaces/BIS5151E_Research-Assistant/outputs")
+
+        output_dir = output_base_dir / folder_name
         output_dir.mkdir(parents=True, exist_ok=True)
     
         saved_files = {}
@@ -273,12 +289,12 @@ class CrewRunner:
         with open(md_path, "w", encoding="utf-8") as f:
             f.write(f"# Research Summary: {result.topic}\n\n")
             f.write(f"**Language:** {result.language}\n")
-            f.write(f"**Generated:** {timestamp}\n\n")
+            f.write(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
             f.write("---\n\n")
             f.write(result.final_output)
         saved_files["markdown"] = md_path
         logger.info("Saved markdown: %s", md_path)
-
+    
         # Save JSON
         json_path = output_dir / "summary.json"
         import json
@@ -286,8 +302,9 @@ class CrewRunner:
             json.dump({
                 "topic": result.topic,
                 "language": result.language,
-                "timestamp": timestamp,
+                "timestamp": datetime.now().isoformat(),
                 "output": result.final_output,
+                "sources": [doc.meta.get('source', 'unknown') for doc in result.context_docs],
             }, f, indent=2, ensure_ascii=False)
         saved_files["json"] = json_path
         logger.info("Saved JSON: %s", json_path)
@@ -298,7 +315,7 @@ class CrewRunner:
             f.write(result.final_output)
         saved_files["text"] = txt_path
         logger.info("Saved text: %s", txt_path)
-
+    
         # Save PDF (optional - requires reportlab)
         try:
             from reportlab.lib.pagesizes import letter
@@ -325,7 +342,7 @@ class CrewRunner:
             story.append(Spacer(1, 0.2*inch))
         
             # Metadata
-            meta_text = f"<b>Language:</b> {result.language}<br/><b>Generated:</b> {timestamp}"
+            meta_text = f"<b>Language:</b> {result.language}<br/><b>Generated:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
             meta = Paragraph(meta_text, styles['Normal'])
             story.append(meta)
             story.append(Spacer(1, 0.3*inch))
