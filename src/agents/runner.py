@@ -247,223 +247,106 @@ class CrewRunner:
     def save_output(self, result: CrewResult, output_base_dir: Path = None) -> dict[str, Path]:
         """
         Save crew output to organized subdirectories in outputs/.
-        
-        Structure:
-        outputs/
-        ├── md/YYYYMMDD_HHMMSS_topic/summary.md
-        ├── json/YYYYMMDD_HHMMSS_topic/summary.json
-        ├── txt/YYYYMMDD_HHMMSS_topic/summary.txt
-        └── pdf/YYYYMMDD_HHMMSS_topic/summary.pdf
-        
+
         Args:
             result: CrewResult from crew execution
-            output_base_dir: Base output directory (default: outputs/)
             
         Returns:
             Dictionary with paths to saved files
         """
-        if output_base_dir is None:
-            output_base_dir = Path(__file__).resolve().parents[3] / "outputs"
-        
-        # Create timestamp-based filename
+        import hashlib
+        from datetime import datetime
+        from pathlib import Path
+
+        # Generate unique filename based on topic + timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        topic_slug = result.topic[:50].replace(" ", "_").replace("/", "-").replace("\\", "-")
-        run_name = f"{timestamp}_{topic_slug}"
-        
+        topic_hash = hashlib.md5(result.topic.encode()).hexdigest()[:8]
+        base_name = f"{timestamp}_{topic_hash}"
+
+        output_dir = Path("/workspaces/BIS5151E_Research-Assistant/outputs") / base_name
+        output_dir.mkdir(parents=True, exist_ok=True)
+    
         saved_files = {}
         
-        # Common header for all formats
-        header_lines = [
-            f"Topic: {result.topic}",
-            f"Language: {result.language}",
-            f"Generated: {timestamp}",
-            f"Number of sources: {len(result.context_docs)}",
-        ]
-        
-        # 1. Save as Markdown
-        md_dir = output_base_dir / "md" / run_name
-        md_dir.mkdir(parents=True, exist_ok=True)
-        md_path = md_dir / "summary.md"
-        
+        # Save markdown
+        md_path = output_dir / "summary.md"
         with open(md_path, "w", encoding="utf-8") as f:
-            f.write(f"# {result.topic}\n\n")
-            for line in header_lines:
-                f.write(f"**{line.split(':')[0]}**: {':'.join(line.split(':')[1:]).strip()}\n")
-            f.write("\n---\n\n")
+            f.write(f"# Research Summary: {result.topic}\n\n")
+            f.write(f"**Language:** {result.language}\n")
+            f.write(f"**Generated:** {timestamp}\n\n")
+            f.write("---\n\n")
             f.write(result.final_output)
-            
-            # Add source documents section
-            if result.context_docs:
-                f.write("\n\n---\n\n## Source Documents\n\n")
-                for i, doc in enumerate(result.context_docs, 1):
-                    source = doc.meta.get("source", "Unknown") if doc.meta else "Unknown"
-                    f.write(f"### [{i}] {source}\n\n")
-                    preview = doc.content[:300] + "..." if len(doc.content) > 300 else doc.content
-                    f.write(f"{preview}\n\n")
-        
         saved_files["markdown"] = md_path
-        logger.info("Saved markdown to: %s", md_path)
-        
-        # 2. Save as JSON
-        json_dir = output_base_dir / "json" / run_name
-        json_dir.mkdir(parents=True, exist_ok=True)
-        json_path = json_dir / "summary.json"
-        
-        json_data = {
-            "topic": result.topic,
-            "language": result.language,
-            "timestamp": timestamp,
-            "output": result.final_output,
-            "metadata": {
-                "num_sources": len(result.context_docs),
-                "output_length_chars": len(result.final_output),
-                "output_length_words": len(result.final_output.split()),
-            },
-            "source_documents": [
-                {
-                    "index": i,
-                    "source": doc.meta.get("source", "Unknown") if doc.meta else "Unknown",
-                    "content_preview": doc.content[:500] + "..." if len(doc.content) > 500 else doc.content,
-                    "metadata": doc.meta or {}
-                }
-                for i, doc in enumerate(result.context_docs, 1)
-            ]
-        }
-        
+        logger.info("Saved markdown: %s", md_path)
+
+        # Save JSON
+        json_path = output_dir / "summary.json"
+        import json
         with open(json_path, "w", encoding="utf-8") as f:
-            json.dump(json_data, f, indent=2, ensure_ascii=False)
-        
+            json.dump({
+                "topic": result.topic,
+                "language": result.language,
+                "timestamp": timestamp,
+                "output": result.final_output,
+            }, f, indent=2, ensure_ascii=False)
         saved_files["json"] = json_path
-        logger.info("Saved JSON to: %s", json_path)
-        
-        # 3. Save as TXT (plain text)
-        txt_dir = output_base_dir / "txt" / run_name
-        txt_dir.mkdir(parents=True, exist_ok=True)
-        txt_path = txt_dir / "summary.txt"
-        
+        logger.info("Saved JSON: %s", json_path)
+    
+        # Save plain text
+        txt_path = output_dir / "summary.txt"
         with open(txt_path, "w", encoding="utf-8") as f:
-            for line in header_lines:
-                f.write(f"{line}\n")
-            f.write("=" * 80 + "\n\n")
             f.write(result.final_output)
-            
-            # Add source documents
-            if result.context_docs:
-                f.write("\n\n" + "=" * 80 + "\n")
-                f.write("SOURCE DOCUMENTS\n")
-                f.write("=" * 80 + "\n\n")
-                for i, doc in enumerate(result.context_docs, 1):
-                    source = doc.meta.get("source", "Unknown") if doc.meta else "Unknown"
-                    f.write(f"[{i}] {source}\n")
-                    f.write("-" * 80 + "\n")
-                    preview = doc.content[:300] + "..." if len(doc.content) > 300 else doc.content
-                    f.write(f"{preview}\n\n")
-        
         saved_files["text"] = txt_path
-        logger.info("Saved text to: %s", txt_path)
-        
-        # 4. Save as PDF (simple version using reportlab)
+        logger.info("Saved text: %s", txt_path)
+
+        # Save PDF (optional - requires reportlab)
         try:
             from reportlab.lib.pagesizes import letter
             from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
             from reportlab.lib.units import inch
-            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
-            from reportlab.lib.enums import TA_LEFT, TA_CENTER
-            
-            pdf_dir = output_base_dir / "pdf" / run_name
-            pdf_dir.mkdir(parents=True, exist_ok=True)
-            pdf_path = pdf_dir / "summary.pdf"
-            
-            doc = SimpleDocTemplate(
-                str(pdf_path),
-                pagesize=letter,
-                rightMargin=72,
-                leftMargin=72,
-                topMargin=72,
-                bottomMargin=18,
-            )
-            
-            story = []
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+        
+            pdf_path = output_dir / "summary.pdf"
+            doc = SimpleDocTemplate(str(pdf_path), pagesize=letter)
+        
             styles = getSampleStyleSheet()
-            
-            # Title
             title_style = ParagraphStyle(
                 'CustomTitle',
                 parent=styles['Heading1'],
-                fontSize=18,
-                textColor='#1a1a1a',
+                fontSize=24,
                 spaceAfter=30,
-                alignment=TA_CENTER
             )
-            story.append(Paragraph(result.topic, title_style))
-            story.append(Spacer(1, 0.2 * inch))
-            
+        
+            story = []
+        
+            # Title
+            title = Paragraph(f"Research Summary: {result.topic}", title_style)
+            story.append(title)
+            story.append(Spacer(1, 0.2*inch))
+        
             # Metadata
-            meta_style = ParagraphStyle(
-                'Metadata',
-                parent=styles['Normal'],
-                fontSize=10,
-                textColor='#666666',
-                spaceAfter=6
-            )
-            for line in header_lines:
-                story.append(Paragraph(line, meta_style))
-            
-            story.append(Spacer(1, 0.3 * inch))
-            
-            # Main content
-            body_style = ParagraphStyle(
-                'Body',
-                parent=styles['Normal'],
-                fontSize=11,
-                leading=14,
-                spaceAfter=12,
-                alignment=TA_LEFT
-            )
-            
-            # Split output into paragraphs
-            paragraphs = result.final_output.split('\n\n')
-            for para in paragraphs:
-                if para.strip():
-                    # Handle markdown headers
-                    if para.startswith('##'):
-                        header_text = para.replace('##', '').strip()
-                        story.append(Paragraph(header_text, styles['Heading2']))
-                    else:
-                        story.append(Paragraph(para, body_style))
-            
-            # Source documents (if any)
-            if result.context_docs:
-                story.append(PageBreak())
-                story.append(Paragraph("Source Documents", styles['Heading2']))
-                story.append(Spacer(1, 0.2 * inch))
-                
-                source_style = ParagraphStyle(
-                    'Source',
-                    parent=styles['Normal'],
-                    fontSize=9,
-                    leading=11,
-                    leftIndent=20,
-                    spaceAfter=15
-                )
-                
-                for i, doc in enumerate(result.context_docs, 1):
-                    source = doc.meta.get("source", "Unknown") if doc.meta else "Unknown"
-                    story.append(Paragraph(f"<b>[{i}] {source}</b>", styles['Heading3']))
-                    preview = doc.content[:400] + "..." if len(doc.content) > 400 else doc.content
-                    story.append(Paragraph(preview, source_style))
-            
+            meta_text = f"<b>Language:</b> {result.language}<br/><b>Generated:</b> {timestamp}"
+            meta = Paragraph(meta_text, styles['Normal'])
+            story.append(meta)
+            story.append(Spacer(1, 0.3*inch))
+        
+            # Content
+            for paragraph in result.final_output.split('\n\n'):
+                if paragraph.strip():
+                    p = Paragraph(paragraph.strip(), styles['Normal'])
+                    story.append(p)
+                    story.append(Spacer(1, 0.1*inch))
+        
             doc.build(story)
             saved_files["pdf"] = pdf_path
-            logger.info("Saved PDF to: %s", pdf_path)
-            
-        except ImportError:
-            logger.warning("reportlab not installed - skipping PDF generation")
-            logger.info("Install with: pip install reportlab")
-        except Exception as e:
-            logger.warning("Failed to generate PDF: %s", e)
+            logger.info("Saved PDF: %s", pdf_path)
         
-        logger.info("All outputs saved to subdirectories under: %s", output_base_dir)
+        except ImportError:
+            logger.info("reportlab not installed - skipping PDF generation")
+            logger.info("Install with: pip install --break-system-packages reportlab")
+        except Exception as e:
+            logger.error("Failed to generate PDF: %s", e, exc_info=True)
+    
         return saved_files
     
 
