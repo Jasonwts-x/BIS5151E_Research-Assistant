@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-
 import logging
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 
-from ....api.openapi import APITag
 from ....api.schemas.crewai import (
     CrewAsyncRunResponse,
     CrewRunRequest,
@@ -13,11 +11,11 @@ from ....api.schemas.crewai import (
     CrewStatusResponse,
 )
 from ..jobs import get_job_manager
-from ...runner import get_crew_runner #?
+from ...runner import get_crew_runner
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/crewai", tags=[APITag.CREWAI])
+router = APIRouter()
 
 # Initialize crew runner (singleton for this service)
 runner = get_crew_runner()
@@ -45,7 +43,7 @@ def run_crew_sync(request: CrewRunRequest) -> CrewRunResponse:
     
     **WARNING: This endpoint blocks for 30-60 seconds during execution.**
     
-    For non-blocking execution, use POST /crew/run/async instead.
+    For non-blocking execution, use POST /run/async instead.
     
     Steps:
     1. Retrieve relevant context from RAG pipeline
@@ -101,7 +99,7 @@ async def run_crew_async(
     
     **This endpoint returns immediately with a job_id.**
     
-    Use GET /crew/status/{job_id} to check progress and retrieve results.
+    Use GET /status/{job_id} to check progress and retrieve results.
     
     Ideal for:
     - Web UIs (show progress indicators)

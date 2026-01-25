@@ -63,23 +63,23 @@ class RAGPipeline:
     def from_existing(cls) -> "RAGPipeline":
         """
         Connect to existing Weaviate index for querying.
-    
+
         This is a QUERY operation - used frequently by API/CrewAI.
         Does NOT rebuild index.
-    
+
         Returns:
-        RAGPipeline instance ready for querying
+            RAGPipeline instance ready for querying
         """
         cfg = load_config()
-
+    
         # Connect to existing Weaviate
         client = cls._create_weaviate_client(cfg)
-
+    
         try:
             # Get collection
             from .schema import RESEARCH_DOCUMENT_SCHEMA
             collection_name = RESEARCH_DOCUMENT_SCHEMA["class"]
-
+        
             # Check if collection exists
             if not client.collections.exists(collection_name):
                 client.close()
@@ -91,46 +91,17 @@ class RAGPipeline:
                     f"  - POST /rag/ingest/local\n"
                     f"  - POST /rag/ingest/arxiv"
                 )
-            
-            # Create retriever
-            try:
-                from haystack_integrations.components.retrievers.weaviate import (
-                    WeaviateHybridRetriever,
-                )
-                from haystack_integrations.document_stores.weaviate import (
-                    WeaviateDocumentStore,
-                )
-            except ImportError:
-                client.close()
-                raise RuntimeError(
-                    "weaviate-haystack not installed. "
-                    "Install it: pip install weaviate-haystack"
-                )
-            
-            # Document store
-            store = WeaviateDocumentStore(
-                url=cfg.weaviate.url,
-                collection_settings={
-                    "class": collection_name,
-                }
-            )
-
-            # Hybrid retriever with alpha parameter
-            retriever = WeaviateHybridRetriever(
-                document_store=store,
-                alpha=0.75,
-            )
-
+        
             # Text embedder (for queries)
             embedding_model = cfg.weaviate.embedding_model
             text_embedder = SentenceTransformersTextEmbedder(model=embedding_model)
             text_embedder.warm_up()
-
+        
             logger.info("RAGPipeline connected to existing index (collection: %s)", collection_name)
-
+        
             return cls(
                 client=client,
-                retriever=retriever,
+                retriever=None,  # We'll use raw Weaviate client instead
                 text_embedder=text_embedder,
                 collection_name=collection_name,
             )
@@ -212,108 +183,66 @@ class RAGPipeline:
         if result.errors:
             logger.warning("Errors during ingestion: %s", result.errors)
 
-    @classmethod
-    def from_existing(cls) -> "RAGPipeline":
-        """
-        Create pipeline connected to EXISTING Weaviate index.
-        
-        This is a QUERY operation - used frequently by API/CrewAI.
-        Does NOT rebuild index.
-        
-        Returns:
-            RAGPipeline instance ready for querying
-        """
-        cfg = load_config()
-        
-        # Connect to existing Weaviate
-        client = cls._create_weaviate_client(cfg)
-        
-        # Get collection
-        from .schema import RESEARCH_DOCUMENT_SCHEMA
-        collection_name = RESEARCH_DOCUMENT_SCHEMA["class"]
-        
-        # Check if collection exists
-        if not client.collections.exists(collection_name):
-            raise RuntimeError(
-                f"Collection '{collection_name}' does not exist in Weaviate!\n"
-                f"Please build the index first:\n"
-                f"  - python -m src.rag.cli ingest-local\n"
-                f"  - python -m src.rag.cli ingest-arxiv <query>\n"
-                f"  - POST /rag/ingest/local\n"
-                f"  - POST /rag/ingest/arxiv"
-            )
-        
-        # Create retriever
-        try:
-            from haystack_integrations.components.retrievers.weaviate import (
-                WeaviateHybridRetriever,
-            )
-            from haystack_integrations.document_stores.weaviate import (
-                WeaviateDocumentStore,
-            )
-        except ImportError:
-            raise RuntimeError(
-                "weaviate-haystack not installed. "
-                "Install it: pip install weaviate-haystack"
-            )
-        
-        # Document store
-        store_kwargs = {"url": cfg.weaviate.url}
-        if cfg.weaviate.api_key:
-            from weaviate.auth import AuthApiKey
-            store_kwargs["auth_client_secret"] = AuthApiKey(cfg.weaviate.api_key)
-        
-        store = WeaviateDocumentStore(**store_kwargs)
-        
-        # Hybrid retriever
-        retriever = WeaviateHybridRetriever(
-            document_store=store,
-            alpha=0.75
-        )
-        
-        # Text embedder (for queries)
-        embedding_model = cfg.weaviate.embedding_model
-        text_embedder = SentenceTransformersTextEmbedder(model=embedding_model)
-        text_embedder.warm_up()
-        
-        logger.info("RAGPipeline connected to existing index (collection: %s)", collection_name)
-        
-        return cls(
-            client=client,
-            retriever=retriever,
-            text_embedder=text_embedder,
-            collection_name=collection_name,
-        )
-
     def run(self, query: str, top_k: int = 5) -> List[Document]:
         """
-        Retrieve relevant documents for query.
-        
-        This is FAST - just searches existing index.
-        
+        Retrieve relevant documents for query using raw Weaviate client.
+    
+        This bypasses WeaviateDocumentStore which doesn't connect to existing
+        collections properly. Instead, we use the raw Weaviate client's hybrid
+        search directly.
+    
         Args:
             query: Search query
             top_k: Number of results to return
-            
+        
         Returns:
             List of relevant documents
         """
         logger.info("Retrieving top_k=%d for query='%s'", top_k, query)
-        
+    
         # Embed query
         emb_result = self.text_embedder.run(text=query)
         query_embedding = emb_result["embedding"]
-        
-        # Hybrid search
-        result = self.retriever.run(
+    
+        # Get collection
+        collection = self.client.collections.get(self.collection_name)
+    
+        # Hybrid search using raw Weaviate client
+        # alpha=0.75 favors vector search (semantic) over BM25 (keyword)
+        response = collection.query.hybrid(
             query=query,
-            query_embedding=query_embedding,
-            top_k=top_k,
+            vector=query_embedding,
+            alpha=0.75,  # 0=BM25 only, 1=vector only, 0.75=favor semantic
+            limit=top_k,
+            return_metadata=['score'],  # Return relevance scores
         )
+    
+        # Convert Weaviate objects to Haystack Documents
+        docs = []
+        for obj in response.objects:
+            props = obj.properties
         
-        docs = result.get("documents", [])
+            # Create Haystack Document
+            doc = Document(
+                content=props.get('content', ''),
+                meta={
+                    'source': props.get('source', ''),
+                    'document_id': props.get('document_id', ''),
+                    'chunk_index': props.get('chunk_index', 0),
+                    'chunk_hash': props.get('chunk_hash', ''),
+                    'total_chunks': props.get('total_chunks', 0),
+                    'authors': props.get('authors', []),
+                    'publication_date': props.get('publication_date', ''),
+                    'arxiv_id': props.get('arxiv_id', ''),
+                    'arxiv_category': props.get('arxiv_category', ''),
+                    'abstract': props.get('abstract', ''),
+                },
+                score=obj.metadata.score if obj.metadata and hasattr(obj.metadata, 'score') else None,
+            )
+            docs.append(doc)
+    
         logger.info("Retrieved %d documents", len(docs))
-        
+    
         return docs
 
     @staticmethod
