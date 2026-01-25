@@ -136,6 +136,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+        restart: true
     ports:
       - "5678:5678"
     networks:
@@ -163,7 +164,7 @@ services:
       - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:5678/healthz/readiness | grep -qi 'ok'"]
-      start_period: 10s
+      start_period: 45s
       interval: 10s
       timeout: 5s
       retries: 10
@@ -261,7 +262,7 @@ services:
       - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
-      start_period: 10s
+      start_period: 30s
       interval: 10s
       timeout: 5s
       retries: 5
