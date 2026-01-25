@@ -62,13 +62,13 @@ class RAGPipeline:
     @classmethod
     def from_existing(cls) -> "RAGPipeline":
         """
-        Create pipeline connected to EXISTING Weaviate index.
-        
+        Connect to existing Weaviate index for querying.
+    
         This is a QUERY operation - used frequently by API/CrewAI.
         Does NOT rebuild index.
-        
+    
         Returns:
-            RAGPipeline instance ready for querying
+        RAGPipeline instance ready for querying
         """
         cfg = load_config()
 
@@ -107,16 +107,19 @@ class RAGPipeline:
                     "Install it: pip install weaviate-haystack"
                 )
             
-            # Documetn store
-            store_kwargs = {"url": cfg.weaviate.url}
-            if cfg.weaviate.api_key:
-                from weaviate.auth import AuthApiKey
-                store_kwargs["auth_client_secret"] = AuthApiKey(cfg.weaviate.api_key)
+            # Document store
+            store = WeaviateDocumentStore(
+                url=cfg.weaviate.url,
+                collection_settings={
+                    "class": collection_name,
+                }
+            )
 
-            store = WeaviateDocumentStore(**store_kwargs)
-
-            # Hybrid retriever
-            retriever = WeaviateHybridRetriever(document_store=store)
+            # Hybrid retriever with alpha parameter
+            retriever = WeaviateHybridRetriever(
+                document_store=store,
+                alpha=0.75,
+            )
 
             # Text embedder (for queries)
             embedding_model = cfg.weaviate.embedding_model
@@ -263,7 +266,10 @@ class RAGPipeline:
         store = WeaviateDocumentStore(**store_kwargs)
         
         # Hybrid retriever
-        retriever = WeaviateHybridRetriever(document_store=store)
+        retriever = WeaviateHybridRetriever(
+            document_store=store,
+            alpha=0.75
+        )
         
         # Text embedder (for queries)
         embedding_model = cfg.weaviate.embedding_model
