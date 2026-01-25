@@ -1,15 +1,15 @@
 from __future__ import annotations
 
+import hashlib
 import logging
+import re
 from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
 from typing import List
 
 from crewai import LLM
 from haystack.dataclasses import Document
-
-from pathlib import Path
-from datetime import datetime
-import json
 
 from ..eval.guardrails import GuardrailsWrapper
 from ..eval.trulens import TruLensMonitor
@@ -108,6 +108,17 @@ class CrewRunner:
         
         # Format context for agents (with stricter formatting)
         context = self._format_context(docs)
+        
+        # CRITICAL DEBUG: Log context validation markers
+        logger.info("=" * 70)
+        logger.info("CONTEXT DEBUG INFO")
+        logger.info("=" * 70)
+        logger.info("Context length: %d characters", len(context))
+        logger.info("Contains 'SOURCE [': %s", "SOURCE [" in context)
+        logger.info("First 300 chars of context:")
+        logger.info("%s", context[:300] if context else "[empty]")
+        logger.info("=" * 70)
+        
         return context, docs
 
     @staticmethod
@@ -164,15 +175,23 @@ class CrewRunner:
         
         header = (
             "╔═══════════════════════════════════════════════════════════════╗\n"
-            "║   AVAILABLE SOURCES - USE ONLY THESE IN YOUR RESPONSE         ║\n"
+            "║   AVAILABLE SOURCES - USE ONLY THESE IN YOUR RESPONSE        ║\n"
             "╚═══════════════════════════════════════════════════════════════╝\n"
             f"\n{source_list}\n\n"
             "⚠️ CRITICAL: You may ONLY cite sources listed above.\n"
             "⚠️ Do NOT invent additional sources or citations.\n"
             "⚠️ Every factual claim must reference one of these sources.\n\n"
         )
+
+        final_context = f"{header}{context_body}"
+    
+        # Log what we're returning
+        logger.info("Formatted context for %d documents from %d unique sources", 
+                    len(docs), len(unique_sources))
+        logger.info("Context validation check: 'SOURCE [' in context = %s", 
+                    "SOURCE [" in final_context)
         
-        return f"{header}{context_body}"
+        return final_context
 
     def run(self, topic: str, language: str = "en") -> CrewResult:
         """
@@ -180,7 +199,7 @@ class CrewRunner:
         
         Args:
             topic: Research topic/question
-            language: Target language (currently only 'en' supported)
+            language: Target language
             
         Returns:
             CrewResult with final output and metadata
@@ -246,8 +265,8 @@ class CrewRunner:
 
     def save_output(self, result: CrewResult, output_base_dir: Path = None) -> dict[str, Path]:
         """
-        Save crew output to multiple formats.
-
+        Save crew output to multiple formats with keyword-based folder naming.
+        
         Args:
             result: CrewResult from crew execution
             output_base_dir: Base directory for outputs (default: project outputs/)
@@ -255,33 +274,29 @@ class CrewRunner:
         Returns:
             Dictionary mapping format names to file paths
         """
-        import hashlib
-        from datetime import datetime
-        from pathlib import Path
-        import re
-
         # Generate folder name with keywords from topic
         timestamp = datetime.now().strftime("%Y%m%d")
         topic_hash = hashlib.md5(result.topic.encode()).hexdigest()[:8]
-
+        
         # Extract keywords from topic (max 3 words, alphanumeric only)
         # Remove common words and keep meaningful ones
         stop_words = {'what', 'are', 'is', 'the', 'how', 'why', 'when', 'where', 
-                      'who', 'which', 'in', 'on', 'at', 'to', 'for', 'of', 'a', 'an'}
-
+                      'who', 'which', 'in', 'on', 'at', 'to', 'for', 'of', 'a', 'an',
+                      'do', 'does', 'can', 'will', 'would', 'should', 'could'}
+        
         words = re.findall(r'\w+', result.topic.lower())
         keywords = [w for w in words if w not in stop_words and len(w) > 2][:3]
         keyword_str = '-'.join(keywords) if keywords else 'query'
-
+        
         folder_name = f"{timestamp}_{keyword_str}_{topic_hash}"
-
+        
         # Determine output directory
         if output_base_dir is None:
             output_base_dir = Path("/workspaces/BIS5151E_Research-Assistant/outputs")
-
+        
         output_dir = output_base_dir / folder_name
         output_dir.mkdir(parents=True, exist_ok=True)
-    
+        
         saved_files = {}
         
         # Save markdown
@@ -294,7 +309,7 @@ class CrewRunner:
             f.write(result.final_output)
         saved_files["markdown"] = md_path
         logger.info("Saved markdown: %s", md_path)
-    
+        
         # Save JSON
         json_path = output_dir / "summary.json"
         import json
@@ -308,24 +323,24 @@ class CrewRunner:
             }, f, indent=2, ensure_ascii=False)
         saved_files["json"] = json_path
         logger.info("Saved JSON: %s", json_path)
-    
+        
         # Save plain text
         txt_path = output_dir / "summary.txt"
         with open(txt_path, "w", encoding="utf-8") as f:
             f.write(result.final_output)
         saved_files["text"] = txt_path
         logger.info("Saved text: %s", txt_path)
-    
+        
         # Save PDF (optional - requires reportlab)
         try:
             from reportlab.lib.pagesizes import letter
             from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
             from reportlab.lib.units import inch
             from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-        
+            
             pdf_path = output_dir / "summary.pdf"
             doc = SimpleDocTemplate(str(pdf_path), pagesize=letter)
-        
+            
             styles = getSampleStyleSheet()
             title_style = ParagraphStyle(
                 'CustomTitle',
@@ -333,39 +348,39 @@ class CrewRunner:
                 fontSize=24,
                 spaceAfter=30,
             )
-        
+            
             story = []
-        
+            
             # Title
             title = Paragraph(f"Research Summary: {result.topic}", title_style)
             story.append(title)
             story.append(Spacer(1, 0.2*inch))
-        
+            
             # Metadata
             meta_text = f"<b>Language:</b> {result.language}<br/><b>Generated:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
             meta = Paragraph(meta_text, styles['Normal'])
             story.append(meta)
             story.append(Spacer(1, 0.3*inch))
-        
+            
             # Content
             for paragraph in result.final_output.split('\n\n'):
                 if paragraph.strip():
                     p = Paragraph(paragraph.strip(), styles['Normal'])
                     story.append(p)
                     story.append(Spacer(1, 0.1*inch))
-        
+            
             doc.build(story)
             saved_files["pdf"] = pdf_path
             logger.info("Saved PDF: %s", pdf_path)
-        
+            
         except ImportError:
             logger.info("reportlab not installed - skipping PDF generation")
             logger.info("Install with: pip install --break-system-packages reportlab")
         except Exception as e:
             logger.error("Failed to generate PDF: %s", e, exc_info=True)
-    
+        
         return saved_files
-    
+
 
 def get_crew_runner() -> CrewRunner:
     """Factory function for dependency injection."""
