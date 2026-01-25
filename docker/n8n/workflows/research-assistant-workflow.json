@@ -1,157 +1,238 @@
 {
-    "name": "Research Assistant - ArXiv + CrewAI",
+    "name": "Research Assistant Workflow",
     "nodes": [
         {
-            "parameters": {
-                "formTitle": "Research Topic",
-                "formDescription": "Enter your research topic to find relevant papers and generate a summary",
-                "formSubmittedText": "Processing your request... This may take 1-2 minutes.",
-                "formFields": {
-                    "values": [
-                        {
-                            "fieldLabel": "Research Topic",
-                            "fieldType": "text",
-                            "requiredField": true,
-                            "fieldOptions": {
-                                "placeholder": "e.g., machine learning for healthcare"
-                            }
-                        }
-                    ]
-                },
-                "options": {}
-            },
-            "id": "a1b2c3d4-1234-5678-9012-form00000001",
-            "name": "Research Topic Form",
-            "type": "n8n-nodes-base.form",
-            "typeVersion": 2,
+            "parameters": {},
+            "id": "webhook-trigger",
+            "name": "When Called",
+            "type": "n8n-nodes-base.manualTrigger",
+            "typeVersion": 1,
             "position": [
                 250,
                 300
-            ],
-            "webhookId": "research-assistant-form"
+            ]
         },
         {
             "parameters": {
-                "url": "http://api:8000/rag/ingest/arxiv",
-                "authentication": "none",
-                "requestMethod": "POST",
-                "sendQuery": false,
-                "sendHeaders": false,
-                "sendBody": true,
-                "specifyBody": "json",
-                "jsonBody": "={\n  \"query\": \"{{ $json['Research Topic'] }}\",\n  \"max_results\": 5\n}",
-                "options": {
-                    "timeout": 120000
+                "values": {
+                    "string": [
+                        {
+                            "name": "topic",
+                            "value": "={{ $json.topic || 'What are transformer architectures in deep learning?' }}"
+                        },
+                        {
+                            "name": "language",
+                            "value": "={{ $json.language || 'en' }}"
+                        }
+                    ]
                 }
             },
-            "id": "b2c3d4e5-2345-6789-0123-http00000001",
-            "name": "HTTP Request - Ingest ArXiv",
-            "type": "n8n-nodes-base.httpRequest",
-            "typeVersion": 4.2,
+            "id": "set-params",
+            "name": "Set Parameters",
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 1,
             "position": [
-                470,
+                450,
                 300
             ]
         },
         {
             "parameters": {
-                "jsCode": "// Validate RAG ingestion response\nconst items = $input.all();\nconst ragResponse = items[0].json;\n\n// Get topic from form\nconst topic = ragResponse.query || 'Unknown topic';\n\n// Log the response\nconsole.log('RAG Response:', JSON.stringify(ragResponse, null, 2));\n\n// Check if ingestion was successful\nif (ragResponse.success === false || ragResponse.documents_loaded === 0) {\n  console.warn('Warning: No relevant papers found or ingestion failed');\n  console.warn('Documents loaded:', ragResponse.documents_loaded);\n  console.warn('Errors:', ragResponse.errors);\n  \n  // Continue anyway - CrewAI will use fallback mode\n  return [{\n    json: {\n      topic: topic,\n      ragSuccess: false,\n      documentsLoaded: 0,\n      message: 'No relevant papers found - will use general knowledge'\n    }\n  }];\n}\n\n// Success - papers were loaded\nconsole.log(`Successfully loaded ${ragResponse.documents_loaded} papers`);\n\nreturn [{\n  json: {\n    topic: topic,\n    ragSuccess: true,\n    documentsLoaded: ragResponse.documents_loaded,\n    chunksIngested: ragResponse.chunks_ingested\n  }\n}];"
-            },
-            "id": "c3d4e5f6-3456-7890-1234-code00000001",
-            "name": "Validate RAG Response",
-            "type": "n8n-nodes-base.code",
-            "typeVersion": 2,
-            "position": [
-                690,
-                300
-            ]
-        },
-        {
-            "parameters": {
-                "url": "http://api:8000/crewai/run",
-                "authentication": "none",
-                "requestMethod": "POST",
-                "sendQuery": false,
-                "sendHeaders": true,
-                "headerParameters": {
+                "url": "=http://api:8000/crewai/run/async",
+                "method": "POST",
+                "sendBody": true,
+                "bodyParameters": {
                     "parameters": [
                         {
-                            "name": "Content-Type",
-                            "value": "application/json"
+                            "name": "topic",
+                            "value": "={{ $json.topic }}"
+                        },
+                        {
+                            "name": "language",
+                            "value": "={{ $json.language }}"
                         }
                     ]
                 },
-                "sendBody": true,
-                "specifyBody": "json",
-                "jsonBody": "={\n  \"topic\": \"{{ $json.topic }}\",\n  \"language\": \"en\"\n}",
-                "options": {
-                    "timeout": 600000
-                }
+                "options": {}
             },
-            "id": "d4e5f6g7-4567-8901-2345-http00000002",
-            "name": "HTTP Request - Run CrewAI",
+            "id": "submit-job",
+            "name": "Submit Async Job",
             "type": "n8n-nodes-base.httpRequest",
-            "typeVersion": 4.2,
+            "typeVersion": 3,
             "position": [
-                910,
+                650,
                 300
             ]
         },
         {
             "parameters": {
-                "respondWith": "text",
-                "responseBody": "=# Research Summary\\n\\nTopic: {{ $json.topic }}\\n\\n---\\n\\n{{ $json.answer }}\\n\\n---\\n\\n**Generated by Research Assistant** | Powered by ArXiv + CrewAI",
+                "amount": 5,
+                "unit": "seconds"
+            },
+            "id": "wait-5s",
+            "name": "Wait 5 Seconds",
+            "type": "n8n-nodes-base.wait",
+            "typeVersion": 1,
+            "position": [
+                850,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "url": "=http://api:8000/crewai/status/{{ $('Submit Async Job').item.json.job_id }}",
+                "method": "GET",
                 "options": {}
             },
-            "id": "e5f6g7h8-5678-9012-3456-respond00001",
-            "name": "Return Summary",
-            "type": "n8n-nodes-base.respondToWebhook",
-            "typeVersion": 1.1,
+            "id": "check-status",
+            "name": "Check Job Status",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 3,
             "position": [
-                1130,
+                1050,
                 300
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "string": [
+                        {
+                            "value1": "={{ $json.status }}",
+                            "operation": "equals",
+                            "value2": "completed"
+                        }
+                    ]
+                }
+            },
+            "id": "is-completed",
+            "name": "Is Completed?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 1,
+            "position": [
+                1250,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "values": {
+                    "string": [
+                        {
+                            "name": "result",
+                            "value": "={{ $json.result }}"
+                        },
+                        {
+                            "name": "topic",
+                            "value": "={{ $json.topic }}"
+                        },
+                        {
+                            "name": "status",
+                            "value": "={{ $json.status }}"
+                        }
+                    ]
+                }
+            },
+            "id": "format-result",
+            "name": "Format Result",
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 1,
+            "position": [
+                1450,
+                200
+            ]
+        },
+        {
+            "parameters": {},
+            "id": "loop-back",
+            "name": "Loop Back",
+            "type": "n8n-nodes-base.noOp",
+            "typeVersion": 1,
+            "position": [
+                1450,
+                400
             ]
         }
     ],
     "connections": {
-        "Research Topic Form": {
+        "When Called": {
             "main": [
                 [
                     {
-                        "node": "HTTP Request - Ingest ArXiv",
+                        "node": "Set Parameters",
                         "type": "main",
                         "index": 0
                     }
                 ]
             ]
         },
-        "HTTP Request - Ingest ArXiv": {
+        "Set Parameters": {
             "main": [
                 [
                     {
-                        "node": "Validate RAG Response",
+                        "node": "Submit Async Job",
                         "type": "main",
                         "index": 0
                     }
                 ]
             ]
         },
-        "Validate RAG Response": {
+        "Submit Async Job": {
             "main": [
                 [
                     {
-                        "node": "HTTP Request - Run CrewAI",
+                        "node": "Wait 5 Seconds",
                         "type": "main",
                         "index": 0
                     }
                 ]
             ]
         },
-        "HTTP Request - Run CrewAI": {
+        "Wait 5 Seconds": {
             "main": [
                 [
                     {
-                        "node": "Return Summary",
+                        "node": "Check Job Status",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Check Job Status": {
+            "main": [
+                [
+                    {
+                        "node": "Is Completed?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Is Completed?": {
+            "main": [
+                [
+                    {
+                        "node": "Format Result",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Loop Back",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Loop Back": {
+            "main": [
+                [
+                    {
+                        "node": "Wait 5 Seconds",
                         "type": "main",
                         "index": 0
                     }
@@ -159,13 +240,8 @@
             ]
         }
     },
-    "pinData": {},
-    "settings": {
-        "executionOrder": "v1"
-    },
+    "settings": {},
     "staticData": null,
-    "tags": [],
-    "triggerCount": 0,
-    "updatedAt": "2026-01-23T16:00:00.000Z",
+    "pinData": {},
     "versionId": "1"
 }
