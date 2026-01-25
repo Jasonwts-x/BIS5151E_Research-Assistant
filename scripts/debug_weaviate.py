@@ -9,7 +9,6 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-import weaviate
 from src.utils.config import load_config
 
 
@@ -22,9 +21,21 @@ def main():
     # Load config
     cfg = load_config()
     
-    # Connect to Weaviate
+    # Import here to use config
+    import weaviate
+    
+    # Connect to Weaviate using config
     print(f"Connecting to Weaviate at {cfg.weaviate.url}...")
-    client = weaviate.connect_to_local(host="localhost", port=8080)
+    
+    # CRITICAL: Use weaviate hostname (Docker network) not localhost
+    # Parse URL to get host and port
+    from urllib.parse import urlparse
+    parsed = urlparse(cfg.weaviate.url if cfg.weaviate.url.startswith('http') else f'http://{cfg.weaviate.url}')
+    host = parsed.hostname or 'weaviate'
+    port = parsed.port or 8080
+    
+    print(f"Connecting to {host}:{port}...")
+    client = weaviate.connect_to_local(host=host, port=port)
     
     try:
         # Check if collection exists
@@ -71,12 +82,12 @@ def main():
         print()
         
         # Test hybrid search
-        print("🔍 Testing hybrid search for 'transformers'...")
+        print("🔍 Testing hybrid search for 'transformer'...")
         
         from src.rag.core.pipeline import RAGPipeline
         
         pipeline = RAGPipeline.from_existing()
-        docs = pipeline.run(query="transformers", top_k=3)
+        docs = pipeline.run(query="transformer", top_k=3)
         
         print(f"✅ Retrieved {len(docs)} documents")
         
@@ -84,8 +95,8 @@ def main():
             meta = doc.meta or {}
             print(f"\n{i}. Retrieved Document:")
             print(f"   Source: {meta.get('source', 'N/A')}")
-            print(f"   Score: {doc.score if hasattr(doc, 'score') else 'N/A'}")
-            print(f"   Content: {doc.content[:150]}...")
+            print(f"   Score: {doc.score if hasattr(doc, 'score') and doc.score else 'N/A'}")
+            print(f"   Content: {doc.content[:150] if doc.content else '[No content]'}...")
         
         print()
         print("=" * 70)
