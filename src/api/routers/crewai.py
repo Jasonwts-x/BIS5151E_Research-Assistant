@@ -19,8 +19,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/crewai", tags=[APITag.CREWAI])
 
-# CrewAI service URL (internal Docker network)
-# Can be overridden via CREWAI_URL environment variable
 CREWAI_URL = os.getenv("CREWAI_URL", "http://crewai:8100")
 
 
@@ -51,16 +49,16 @@ async def crewai_run(payload: CrewRunRequest) -> CrewRunResponse:
     """
     try:
         logger.info(
-            "Proxying crewai run request to %s/crew/run: topic='%s', language='%s'",
+            "Proxying crewai run request to %s/run: topic='%s', language='%s'",
             CREWAI_URL,
             payload.topic,
             payload.language,
         )
         
         # Forward request to crewai service
-        async with httpx.AsyncClient(timeout=120.0) as client:  # Long timeout for LLM
+        async with httpx.AsyncClient(timeout=300.0) as client:
             response = await client.post(
-                f"{CREWAI_URL}/crew/run",
+                f"{CREWAI_URL}/run",
                 json=payload.model_dump(),
             )
             response.raise_for_status()
@@ -113,7 +111,7 @@ async def crewai_run_async(payload: CrewRunRequest) -> CrewAsyncRunResponse:
     """
     try:
         logger.info(
-            "Proxying async crewai run to %s/crew/run/async: topic='%s', language='%s'",
+            "Proxying async crewai run to %s/run/async: topic='%s', language='%s'",
             CREWAI_URL,
             payload.topic,
             payload.language,
@@ -122,7 +120,7 @@ async def crewai_run_async(payload: CrewRunRequest) -> CrewAsyncRunResponse:
         # Forward request to crewai service
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(
-                f"{CREWAI_URL}/crew/run/async",
+                f"{CREWAI_URL}/run/async",  # Internal service has no prefix
                 json=payload.model_dump(),
             )
             response.raise_for_status()
@@ -177,7 +175,7 @@ async def get_crew_status(
     """
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(f"{CREWAI_URL}/crew/status/{job_id}")
+            response = await client.get(f"{CREWAI_URL}/status/{job_id}")  # No prefix
             response.raise_for_status()
             return CrewStatusResponse(**response.json())
             
@@ -224,7 +222,7 @@ async def list_crew_jobs(limit: int = 20) -> list[CrewStatusResponse]:
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.get(
-                f"{CREWAI_URL}/crew/jobs",
+                f"{CREWAI_URL}/jobs",  # No prefix
                 params={"limit": limit}
             )
             response.raise_for_status()
