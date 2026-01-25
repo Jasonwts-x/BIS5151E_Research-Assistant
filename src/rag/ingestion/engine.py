@@ -196,17 +196,32 @@ class IngestionEngine:
         
         ingested = 0
         skipped = 0
+
+        # Check existing UUIDs first
+        existing_uuids = set()
+        for chunk in chunks:
+            uuid = generate_uuid5(chunk.id)
+            try:
+                # Try to fetch - if it exists, it will return an object
+                obj = collection.query.fetch_object_by_id(uuid)
+                if obj:
+                    existing_uuids.add(uuid)
+                    skipped += 1
+            except Exception:
+                # Doesn't exist, will insert
+                pass
+
+        logger.info("Found %d existing chunks, will skip them", len(existing_uuids))
         
         # Batch insert
         with collection.batch.dynamic() as batch:
             for chunk in chunks:
+                uuid = generate_uuid5(chunk.id)
+                    
+                if uuid in existing_uuids:
+                        continue
+
                 try:
-                    # Use content hash as UUID (deterministic)
-                    uuid = generate_uuid5(chunk.id)
-                    
-                    # Check if exists (optional - batch will skip duplicates anyway)
-                    # For performance, we rely on Weaviate's UUID uniqueness
-                    
                     batch.add_object(
                         properties=chunk.properties,
                         uuid=uuid,
@@ -219,7 +234,7 @@ class IngestionEngine:
                     logger.warning("Failed to insert chunk %s: %s", chunk.id, e)
                     skipped += 1
         
-        return ingested, skipped
+            return ingested, skipped
 
     def _create_weaviate_client(self):
         """Create Weaviate client from config."""
