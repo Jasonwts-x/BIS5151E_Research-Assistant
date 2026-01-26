@@ -166,6 +166,9 @@ services:
       HF_HOME: /workspaces/BIS5151E_Research-Assistant/.hf_cache
       HF_HUB_CACHE: /workspaces/BIS5151E_Research-Assistant/.hf_cache/hub
       SENTENCE_TRANSFORMERS_HOME: /workspaces/BIS5151E_Research-Assistant/.hf_cache
+
+      TRANSFORMERS_OFFLINE: "1"   # TODO: REVIEW
+      HF_HUB_OFFLINE: "1"         # TODO: REVIEW
     volumes:
       - ..:/workspaces/BIS5151E_Research-Assistant:cached
     extra_hosts:

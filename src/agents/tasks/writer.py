@@ -1,134 +1,170 @@
 from __future__ import annotations
-
+ 
+from typing import List, Optional
+from pydantic import BaseModel, Field
+ 
 from crewai import Task
-
-
+ 
+ 
+class SummaryOutput(BaseModel):
+    """Structured output for the Writer task with mandatory citations."""
+    content: str = Field(
+        ...,
+        description="The main summary text with inline citations like [1], [2], [3]"
+    )
+    references: List[str] = Field(
+        ...,
+        description="List of source references, each starting with [1], [2], etc."
+    )
+ 
+ 
 def create_writer_task(agent, topic: str, context: str, mode: str = "strict") -> Task:
     """
     Create the writer task with appropriate instructions based on mode.
-    
+   
     Args:
         agent: The Writer agent
         topic: Research topic
         context: Retrieved context (may be empty in fallback mode)
         mode: "strict" (with context) or "fallback" (without context)
     """
-
+ 
     if mode == "fallback":
+        # ===================================================================
+        # FALLBACK MODE: No context available, general knowledge only
+        # ===================================================================
         description = f"""Write a concise educational summary on the topic: "{topic}"
-
-    ⚠️ FALLBACK MODE: No specific research documents were found in the database.
-
-    This summary will be reviewed and fact-checked, so focus on quality.
-
-    INSTRUCTIONS:
-    1. **Use Established Academic Knowledge**:
-       - Draw from widely accepted theories, principles, and concepts
-       - Focus on foundational knowledge that appears in textbooks and courses
-       - Avoid cutting-edge or controversial topics without proper hedging
-    
-    2. **Use Cautious, Academic Language**:
-       - "generally", "typically", "commonly", "often"
-       - "may", "can", "tends to", "is believed to"
-       - Avoid absolute statements unless discussing fundamental definitions
-    
-    3. **Structure and Content**:
-       - Introduction: Define key terms and provide context
-       - Main body: Explain core concepts and their relationships
-       - Conclusion: Summarize current understanding and limitations
-    
-    4. **What NOT to Do**:
-       - ❌ DO NOT invent citations like [1], [2], etc.
-       - ❌ DO NOT mention specific papers, authors, or years (unless foundational/historical)
-       - ❌ DO NOT make overly specific claims about recent research
-       - ❌ DO NOT present speculation as fact
-    
-    5. **Quality Standards**:
-       - 250-300 words
-       - Clear, accessible explanations
-       - Neutral, objective tone
-       - Educational value for readers
-    
-    6. **Honesty About Limitations**:
-       - Acknowledge when concepts are complex or debated
-       - Be clear about the level of certainty in different claims
-       - Don't oversimplify when it would be misleading
-
-    MANDATORY OUTPUT FORMAT:
-
-    [Your educational summary - 250-300 words, no citations]
-
-    ## Note
-    This summary is based on general academic knowledge. No specific research papers 
-    were retrieved from the database for this query. To find relevant research papers, 
-    consider:
-    - Using more specific search terms related to your topic
-    - Searching ArXiv.org, Google Scholar, or Semantic Scholar directly
-    - Consulting specialized academic databases in your field of interest
-    - Checking review papers or survey articles on this topic
-
-    IMPORTANT: This text will be reviewed for clarity and fact-checked for 
-    accuracy. Focus on providing genuinely helpful, well-structured educational 
-    content based on established knowledge.
-    """
-        
+ 
+⚠️ FALLBACK MODE: No specific research documents were found.
+ 
+INSTRUCTIONS:
+1. Use established academic knowledge
+2. Use cautious language: "generally", "typically", "may", "tends to"
+3. 250-300 words
+4. DO NOT invent citations or references
+5. Be clear about limitations
+ 
+OUTPUT FORMAT:
+Write your summary as plain text (250-300 words).
+Do NOT include citations like [1], [2].
+End with a note explaining no specific sources were found.
+"""
+       
         expected_output = (
-            "An educational summary of 250-300 words based on general academic knowledge. "
-            "NO citations or references to specific papers. "
-            "Must include an informative note about the lack of specific sources. "
-            "Content should be factually accurate, well-structured, and helpful. "
-            "Uses cautious language and acknowledges uncertainty where appropriate."
+            "An educational summary of 250-300 words based on general knowledge. "
+            "NO citations. Clear, factual, with cautious language."
         )
-
-    else:  # strict mode
-        description = f"""Write a concise literature-style summary on the topic: "{topic}"
-
-    ⚠️ CRITICAL RULES - VIOLATION WILL RESULT IN REJECTION:
-    1. Use ONLY information from the context below
-    2. NEVER invent citations, sources, or facts
-    3. If the context doesn't cover something, DON'T mention it
-    4. Every factual claim MUST have a citation [1], [2], etc.
-    5. If uncertain, use cautious language: "may", "suggests", "appears to"
-    6. You MUST list all sources at the end under "## References"
-
-    AVAILABLE CONTEXT (Your ONLY source of information):
-    {context}
-
-    Guidelines:
-    - Write 300 words maximum
-    - Use neutral, academic tone
-    - Focus on what the context ACTUALLY says
-    - Include inline citations for every claim: [1], [2], etc.
-    - Structure: Introduction → Key concepts → Conclusion
-    - END with a "## References" section listing ALL sources from the context
-
-    MANDATORY OUTPUT FORMAT:
-
-    [Your summary text with citations [1], [2], etc.]
-
-    ## References
-    [1] First source from context
-    [2] Second source from context
-    [3] Third source from context
-    ...
-
-    ⚠️ IMPORTANT:
-    - Every source in the context must appear in References
-    - Every claim must be cited
-    - Do NOT add information not in the context
-
-    REMEMBER: The context above is your ONLY source. Do not add anything not explicitly stated there.
-    """
-        
+       
+        # Don't use Pydantic for fallback - simpler text output
+        return Task(
+            description=description,
+            expected_output=expected_output,
+            agent=agent
+        )
+ 
+    else:  # STRICT MODE
+        # ===================================================================
+        # STRICT MODE: Context available, citations MANDATORY
+        # ===================================================================
+       
+        # Extract sources from context for explicit listing
+        sources = _extract_sources_from_context(context)
+        source_list = "\n".join(f"[{i+1}] {src}" for i, src in enumerate(sources))
+       
+        description = f"""Write a research summary on: "{topic}"
+ 
+═══════════════════════════════════════════════════════════════
+⚠️ CRITICAL: YOU MUST INCLUDE CITATIONS IN EVERY SENTENCE ⚠️
+═══════════════════════════════════════════════════════════════
+ 
+MANDATORY RULES (FAILURE = REJECTION):
+ 
+1. CITATIONS ARE REQUIRED
+   - Every factual sentence MUST end with [1] or [2] etc.
+   - Example: "Machine learning uses data to improve performance [1]."
+   - Multiple sources: "Deep learning has many applications [1][2]."
+   - You MUST include at least 10 citations in your summary
+ 
+2. USE ONLY THESE SOURCES
+{source_list}
+ 
+3. NEVER invent sources not listed above
+4. NEVER write a sentence without a citation
+ 
+AVAILABLE CONTEXT:
+{context}
+ 
+OUTPUT REQUIREMENTS:
+ 
+Write your summary in this EXACT format:
+ 
+[Write 4-6 sentences about the topic. EVERY sentence must have [1], [2] etc.]
+ 
+## References
+[1] First source name
+[2] Second source name
+[3] Third source name
+ 
+EXAMPLE OUTPUT:
+Machine learning is a subset of artificial intelligence [1]. It enables computers to learn from data [1][2]. Neural networks are commonly used in deep learning [2]. These systems can recognize patterns in images and text [2][3].
+ 
+## References
+[1] arxiv-2104.05314-machine-learning.pdf
+[2] arxiv-1601.03642-deep-learning.pdf
+[3] arxiv-2201.12345-neural-networks.pdf
+ 
+═══════════════════════════════════════════════════════════════
+⚠️ REMEMBER: If you submit text without [1], [2] etc., it will be REJECTED
+═══════════════════════════════════════════════════════════════
+"""
+       
         expected_output = (
-            "A concise literature summary (max 300 words) with inline citations [1], [2], etc. "
-            "Must include a '## References' section at the end listing all sources. "
-            "Every factual claim must be cited. "
-            "Only information from the provided context."
+            "A summary with inline citations [1], [2] in EVERY sentence. "
+            "Followed by a ## References section listing all sources. "
+            "Minimum 10 citations total."
         )
-
-    return Task(
-        description=description,
-        expected_output=expected_output,
-        agent=agent
-    )
+       
+        # Try WITHOUT Pydantic first - direct text output
+        return Task(
+            description=description,
+            expected_output=expected_output,
+            agent=agent
+            # NO output_pydantic - let agent return plain text
+        )
+ 
+ 
+def _extract_sources_from_context(context: str) -> List[str]:
+    """
+    Extract source names from formatted context.
+   
+    Args:
+        context: Formatted context string with SOURCE markers
+       
+    Returns:
+        List of source names (e.g., ["arxiv-123.pdf", "paper.pdf"])
+    """
+    import re
+   
+    # Find all lines matching: [1] source-name.pdf or SOURCE [1]: source-name
+    sources = []
+   
+    # Pattern 1: "[1] filename.pdf" at start of line
+    pattern1 = re.findall(r'^\s*\[(\d+)\]\s+(.+?)(?:\n|$)', context, re.MULTILINE)
+    for num, source in pattern1:
+        sources.append(source.strip())
+   
+    # Pattern 2: "SOURCE [1]: filename.pdf"
+    pattern2 = re.findall(r'SOURCE\s*\[(\d+)\]:\s*(.+?)(?:\n|$)', context, re.MULTILINE)
+    for num, source in pattern2:
+        if source.strip() not in sources:
+            sources.append(source.strip())
+   
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_sources = []
+    for src in sources:
+        if src not in seen:
+            seen.add(src)
+            unique_sources.append(src)
+   
+    return unique_sources if unique_sources else ["Context provided"]

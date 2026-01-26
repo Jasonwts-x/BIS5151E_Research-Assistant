@@ -11,6 +11,7 @@ from ..roles import (
     create_translator_agent,
     create_writer_agent,
 )
+
 from ..tasks import (
     create_factchecker_task,
     create_reviewer_task,
@@ -90,6 +91,7 @@ class ResearchCrew:
         # Check for common "no context" indicators
         no_context_indicators = [
             "⚠️ NO CONTEXT AVAILABLE ⚠️",
+            "NO CONTEXT AVAILABLE",
             "No context available",
             "No documents were retrieved",
         ]
@@ -124,7 +126,7 @@ class ResearchCrew:
             language: Target language
             
         Returns:
-            Fact-checked output
+            Fact-checked output with citations and references in Markdown format
         """
         logger.info("Running STRICT MODE - will verify all claims against context")
         
@@ -150,7 +152,7 @@ class ResearchCrew:
         # Build crew
         tasks = [writer_task, reviewer_task, factchecker_task]
         
-        # Add translation if needed (future) TODO
+        # Add translation if needed (future enhancement) TODO
         if language != "en":
             logger.warning("Translation not yet implemented, using English")
         
@@ -162,9 +164,13 @@ class ResearchCrew:
         )
         
         # Execute
+        logger.info("Executing crew with %d tasks", len(tasks))
         result = crew.kickoff()
+
+        formatted_output = self._format_output(result, mode="strict")
         
-        return str(result)
+        logger.info("Crew execution completed. Output length: %d chars", len(formatted_output))
+        return formatted_output
     
     def _run_fallback_mode(self, topic: str, language: str) -> str:
         """
@@ -218,10 +224,82 @@ class ResearchCrew:
         )
         
         # Execute
+        logger.info("Executing fallback crew with %d tasks", len(tasks))
         result = crew.kickoff()
-        
-        return str(result)    
 
+        formatted_output = self._format_output(result, mode="fallback")
+
+        logger.info("Fallback crew execution completed. Output length: %d chars", len(formatted_output))
+        return formatted_output
+
+    def _format_output(self, result, mode: str = "strict") -> str:
+        """
+        Format crew output correctly, preserving citations and references.
+       
+        Args:
+            result: CrewAI task result
+            mode: "strict" or "fallback"
+           
+        Returns:
+            Formatted Markdown output with citations and references
+        """
+        logger.debug("Formatting output (mode: %s, result type: %s)", mode, type(result))
+       
+        # Try to extract Pydantic output (SummaryOutput model)
+        try:
+            # Check if result has pydantic attribute
+            if hasattr(result, 'pydantic') and result.pydantic is not None:
+                summary_output = result.pydantic
+                logger.info("✅ Found Pydantic SummaryOutput with %d references",
+                           len(summary_output.references) if hasattr(summary_output, 'references') else 0)
+               
+                # Format as Markdown with citations preserved
+                formatted = f"{summary_output.content}\n\n"
+               
+                if hasattr(summary_output, 'references') and summary_output.references:
+                    formatted += "## References\n"
+                    for ref in summary_output.references:
+                        # Ensure reference is formatted correctly
+                        if not ref.startswith('['):
+                            formatted += f"{ref}\n"
+                        else:
+                            formatted += f"{ref}\n"
+                   
+                    logger.info("✅ Formatted output with %d references and citations",
+                               len(summary_output.references))
+                else:
+                    logger.warning("⚠️ Pydantic output found but no references field")
+               
+                return formatted
+           
+            # Fallback: Try to access output directly
+            elif hasattr(result, 'output') and result.output:
+                logger.warning("⚠️ Using result.output (no Pydantic found)")
+                return str(result.output)
+           
+            # Last resort: String conversion
+            else:
+                logger.warning("⚠️ Using str(result) fallback - citations may be lost!")
+                return str(result)
+               
+        except Exception as e:
+            logger.error("❌ Error formatting output: %s. Using fallback.", e, exc_info=True)
+            return str(result)
+ 
+    def _extract_citations_count(self, text: str) -> int:
+        """
+        Count inline citations in text for debugging.
+       
+        Args:
+            text: Text to analyze
+           
+        Returns:
+            Number of citations found (e.g., [1], [2], etc.)
+        """
+        import re
+        citations = re.findall(r'\[\d+\]', text)
+        return len(citations)
+ 
 
 # ============================================================================
 # TODO (Step F): Add agent memory support
