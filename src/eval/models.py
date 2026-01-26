@@ -89,27 +89,27 @@ class QualityMetrics(Base):
     timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
     # ROUGE scores
-    rouge_1 = Column(Float)
-    rouge_2 = Column(Float)
-    rouge_l = Column(Float)
+    rouge_1 = Column(Float)                     # MISSING DESCRIPTION
+    rouge_2 = Column(Float)                     # MISSING DESCRIPTION
+    rouge_l = Column(Float)                     # MISSING DESCRIPTION
 
     # BLEU score
-    bleu_score = Column(Float)
+    bleu_score = Column(Float)                  # MISSING DESCRIPTION
 
     # Semantic similarity
-    semantic_similarity = Column(Float)
+    semantic_similarity = Column(Float)         # MISSING DESCRIPTION
 
     # Factuality
-    factuality_score = Column(Float)
-    factuality_issues = Column(ARRAY(Text))
+    factuality_score = Column(Float)            # Overall factuality score
+    factuality_issues = Column(ARRAY(Text))     # List of identified factuality issues
 
     # Citation metrics
-    citation_count = Column(Integer)
-    citation_quality = Column(Float)
+    citation_count = Column(Integer)            # Number of citations in the answer
+    citation_quality = Column(Float)            # Quality score of citations
 
     # Answer metrics
-    answer_length = Column(Integer)
-    sentence_count = Column(Integer)
+    answer_length = Column(Integer)             # Length of the answer in characters
+    sentence_count = Column(Integer)            # Number of sentences in the answer
 
     # Consistency metrics
     consistency_runs = Column(Integer)          # Number of runs for consistency check

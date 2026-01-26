@@ -140,6 +140,38 @@ def render_quality():
         st.write("- Harmful Content: 0")
     
     st.markdown("---")
+
+    # Advanced Metrics Section
+    st.markdown("### Advanced Quality Metrics")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("#### Consistency")
+        st.metric(
+            label="Consistency Score",
+            value="N/A",
+            help="Standard deviation across 3 runs (lower is better)"
+        )
+        st.write("- Threshold: < 0.15")
+        st.write("- Runs: N/A")
+
+    with col2:
+        st.markdown("#### Paraphrase Stability")
+        st.metric(
+            label="Stability Score",
+            value="N/A",
+            help="Maximum score difference across paraphrased queries (lower is better)"
+        )
+        st.write("- Threshold: < 0.20")
+        st.write("- Variations Tested: N/A")
+
+    st.info("""
+    **Note:** Consistency and Paraphrase Stability are advanced metrics 
+    typically run manually during benchmarking, not for every query.
+    """)
+
+    st.markdown("---")
     
     # Quality distribution
     st.markdown("### Quality Score Distribution")
