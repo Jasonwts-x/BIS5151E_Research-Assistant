@@ -1,0 +1,84 @@
+"""
+Database Connection
+PostgreSQL connection management for evaluation storage.
+"""
+from __future__ import annotations
+
+import logging
+import os
+from typing import Optional
+
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session, sessionmaker
+
+from .models import Base
+
+logger = logging.getLogger(__name__)
+
+
+class EvaluationDatabase:
+    """Manages PostgreSQL connection for evaluation data."""
+
+    def __init__(self, database_url: Optional[str] = None):
+        """
+        Initialize database connection.
+
+        Args:
+            database_url: PostgreSQL connection string
+        """
+        if database_url is None:
+            database_url = os.getenv(
+                "DATABASE_URL", "postgresql://postgres:postgres@postgres:5432/trulens"
+            )
+
+        self.database_url = database_url
+        self.engine = None
+        self.SessionLocal = None
+
+        try:
+            self._connect()
+            logger.info("Database connection established")
+        except Exception as e:
+            logger.warning("Database connection failed: %s", e)
+
+    def _connect(self):
+        """Establish database connection."""
+        self.engine = create_engine(
+            self.database_url,
+            pool_pre_ping=True,  # Verify connections before using
+            pool_size=5,
+            max_overflow=10,
+        )
+        self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
+
+        # Create tables if they don't exist
+        Base.metadata.create_all(bind=self.engine)
+        logger.info("Database tables initialized")
+
+    def get_session(self) -> Session:
+        """Get database session."""
+        if self.SessionLocal is None:
+            raise RuntimeError("Database not connected")
+        return self.SessionLocal()
+
+    def health_check(self) -> bool:
+        """Check if database is accessible."""
+        try:
+            with self.get_session() as session:
+                session.execute(text("SELECT 1"))
+            return True
+        except Exception as e:
+            logger.error("Database health check failed: %s", e)
+            return False
+
+
+# Singleton
+_db = None
+
+
+def get_database() -> EvaluationDatabase:
+    """Get singleton database instance."""
+    global _db
+    if _db is None:
+        _db = EvaluationDatabase()
+    return _db
