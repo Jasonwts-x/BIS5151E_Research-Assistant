@@ -17,7 +17,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Initialize crew runner (singleton for this service)
 runner = get_crew_runner()
 
 
@@ -48,10 +47,11 @@ def run_crew_sync(request: CrewRunRequest) -> CrewRunResponse:
     Steps:
     1. Retrieve relevant context from RAG pipeline
     2. Run Writer agent to draft summary
-    3. Run Reviewer agent to improve clarity
-    4. Run FactChecker agent to verify claims
-    5. Save outputs to outputs/ directory
-    6. Return final output
+    3. Run Reviewer agent to improve clarity and coherence
+    4. Run FactChecker agent to verify all claims and citations
+    5. Evaluate output (TruLens + Guardrails + Performance)
+    6. Save outputs to outputs/ directory
+    7. Return final output with evaluation metrics
     """
     try:
         logger.info(
@@ -74,6 +74,7 @@ def run_crew_sync(request: CrewRunRequest) -> CrewRunResponse:
             topic=result.topic,
             language=result.language,
             answer=result.final_output,
+            evaluation=result.evaluation,
         )
         
     except Exception as e:
@@ -101,10 +102,11 @@ async def run_crew_async(
     
     Use GET /status/{job_id} to check progress and retrieve results.
     
-    Ideal for:
-    - Web UIs (show progress indicators)
-    - N8N workflows (wait/poll pattern)
-    - Batch processing (submit many, collect later)
+    Steps:
+    1. Create job and return job_id immediately
+    2. Execute workflow in background
+    3. Poll GET /status/{job_id} to check completion
+    4. Retrieve results when status=completed
     """
     try:
         logger.info(
@@ -114,27 +116,33 @@ async def run_crew_async(
         )
         
         # Get job manager
-        manager = get_job_manager()
+        job_manager = get_job_manager()
         
         # Create job
-        job_id = manager.create_job(topic=request.topic, language=request.language)
+        job_id = job_manager.create_job(
+            topic=request.topic,
+            language=request.language,
+        )
         
         # Schedule background execution
-        background_tasks.add_task(manager.execute_job, job_id)
+        background_tasks.add_task(
+            job_manager.execute_job,
+            job_id,
+        )
         
-        logger.info("Job %s queued for background execution", job_id)
+        logger.info("Async job created: %s", job_id)
         
         return CrewAsyncRunResponse(
             job_id=job_id,
             status="pending",
-            message=f"Job {job_id} created and queued for execution",
+            message=f"Job {job_id} created. Use GET /status/{job_id} to check progress.",
         )
         
     except Exception as e:
         logger.exception("Failed to create async job")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create job: {str(e)}",
+            detail=f"Failed to create async job: {str(e)}",
         ) from e
 
 
@@ -142,28 +150,31 @@ async def run_crew_async(
     "/status/{job_id}",
     response_model=CrewStatusResponse,
     status_code=status.HTTP_200_OK,
-    summary="Check async crew job status",
+    summary="Get status of async crew job",
 )
-def get_crew_status(job_id: str) -> CrewStatusResponse:
+def get_job_status(job_id: str) -> CrewStatusResponse:
     """
-    Check the status of an async crew job.
+    Get the status of an async crew job.
     
-    Job statuses:
-    - **pending**: Job queued, not started yet
-    - **running**: Job currently executing
+    Status values:
+    - **pending**: Job created but not started
+    - **running**: Job is currently executing
     - **completed**: Job finished successfully (result available)
-    - **failed**: Job failed with error
-    
-    Poll this endpoint to monitor progress.
+    - **failed**: Job failed (error message available)
     """
     try:
-        manager = get_job_manager()
-        job = manager.get_job(job_id)
+        logger.info("Status check requested for job: %s", job_id)
         
-        if not job:
+        # Get job manager
+        job_manager = get_job_manager()
+        
+        # Get job
+        job = job_manager.get_job(job_id)
+        
+        if job is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Job {job_id} not found",
+                detail=f"Job not found: {job_id}",
             )
         
         # Build response
@@ -180,6 +191,9 @@ def get_crew_status(job_id: str) -> CrewStatusResponse:
             error=job.error,
         )
         
+        if job.result and job.result.evaluation:
+            response.evaluation = job.result.evaluation
+        
         return response
         
     except HTTPException:
@@ -188,47 +202,5 @@ def get_crew_status(job_id: str) -> CrewStatusResponse:
         logger.exception("Failed to get job status")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get status: {str(e)}",
+            detail=f"Failed to get job status: {str(e)}",
         ) from e
-
-
-@router.get(
-    "/jobs",
-    response_model=list[CrewStatusResponse],
-    status_code=status.HTTP_200_OK,
-    summary="List recent crew jobs",
-)
-def list_jobs(limit: int = 20) -> list[CrewStatusResponse]:
-    """
-    List recent crew jobs.
-    
-    Returns up to {limit} most recent jobs, sorted by creation time (newest first).
-    """
-    try:
-        manager = get_job_manager()
-        jobs = manager.list_jobs(limit=limit)
-        
-        return [
-            CrewStatusResponse(
-                job_id=job.job_id,
-                status=job.status.value,
-                topic=job.topic,
-                language=job.language,
-                progress=job.progress,
-                created_at=job.created_at.isoformat(),
-                started_at=job.started_at.isoformat() if job.started_at else None,
-                completed_at=job.completed_at.isoformat() if job.completed_at else None,
-                result=job.result.final_output if job.result else None,
-                error=job.error,
-            )
-            for job in jobs
-        ]
-        
-    except Exception as e:
-        logger.exception("Failed to list jobs")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list jobs: {str(e)}",
-        ) from e
-    
-# TODO (Step H): Add translation endpoint if needed

@@ -1,13 +1,16 @@
+"""
+CrewAI Router - API Gateway Proxy
+
+Proxies requests to the CrewAI service.
+"""
 from __future__ import annotations
 
 import logging
 import os
-from typing import Annotated
 
 import httpx
-from fastapi import APIRouter, HTTPException, Path, status
+from fastapi import APIRouter, HTTPException, status
 
-from ..openapi import APITag
 from ..schemas.crewai import (
     CrewAsyncRunResponse,
     CrewRunRequest,
@@ -17,56 +20,57 @@ from ..schemas.crewai import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/crewai", tags=[APITag.CREWAI])
+router = APIRouter(prefix="/rag", tags=["crewai"])
 
+# Get CrewAI service URL from environment
 CREWAI_URL = os.getenv("CREWAI_URL", "http://crewai:8100")
 
 
 @router.post(
-    "/run",
+    "/query",
     response_model=CrewRunResponse,
     status_code=status.HTTP_200_OK,
-    summary="Execute CrewAI workflow synchronously (BLOCKS until complete)",
+    summary="Query research assistant (synchronous)",
 )
 async def crewai_run(payload: CrewRunRequest) -> CrewRunResponse:
     """
-    Execute the CrewAI research workflow via the crewai service.
+    Execute research query using CrewAI multi-agent workflow.
     
-    **WARNING: This endpoint blocks for 30-60 seconds while crew executes.**
+    **This is a synchronous endpoint that blocks until completion (30-60s).**
     
-    For non-blocking execution, use POST /crewai/run/async instead.
+    For async execution, use POST /rag/query/async instead.
     
-    This endpoint acts as a gateway/proxy to the internal crewai service.
+    The workflow:
+    1. Retrieves relevant context from vector database
+    2. Runs multi-agent pipeline (Writer → Reviewer → FactChecker)
+    3. Evaluates output quality (TruLens + Guardrails)
+    4. Returns fact-checked summary with evaluation metrics
     
-    Workflow:
-    1. Retrieve relevant context from RAG pipeline
-    2. Writer agent drafts initial summary
-    3. Reviewer agent improves clarity and coherence
-    4. FactChecker agent verifies all claims and citations
-    5. (Future: Translator agent for non-English output)
-    
-    The crewai service runs independently and can be scaled separately.
+    Example:
+        POST /rag/query
+        {
+            "topic": "What are the benefits of retrieval-augmented generation?",
+            "language": "en"
+        }
     """
     try:
         logger.info(
-            "Proxying crewai run request to %s/run: topic='%s', language='%s'",
+            "Proxying crew run request to %s: topic='%s'",
             CREWAI_URL,
             payload.topic,
-            payload.language,
         )
         
-        # Forward request to crewai service
-        async with httpx.AsyncClient(timeout=600.0) as client:
+        async with httpx.AsyncClient(timeout=300.0) as client:
             response = await client.post(
                 f"{CREWAI_URL}/run",
                 json=payload.model_dump(),
             )
             response.raise_for_status()
             
-            data = response.json()
-            logger.info("CrewAI service returned successfully")
+            result = CrewRunResponse(**response.json())
             
-            return CrewRunResponse(**data)
+            logger.info("Crew run completed successfully")
+            return result
             
     except httpx.HTTPStatusError as e:
         logger.error("CrewAI service returned error: %s", e.response.text)
@@ -74,16 +78,14 @@ async def crewai_run(payload: CrewRunRequest) -> CrewRunResponse:
             status_code=e.response.status_code,
             detail=f"CrewAI service error: {e.response.text}",
         ) from e
-        
     except httpx.RequestError as e:
-        logger.error("Failed to reach CrewAI service: %s", e)
+        logger.error("Failed to connect to CrewAI service: %s", e)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"CrewAI service unavailable: {str(e)}",
         ) from e
-        
     except Exception as e:
-        logger.exception("Unexpected error in crewai proxy")
+        logger.exception("Unexpected error in crew run")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Internal error: {str(e)}",
@@ -91,44 +93,51 @@ async def crewai_run(payload: CrewRunRequest) -> CrewRunResponse:
 
 
 @router.post(
-    "/run/async",
+    "/query/async",
     response_model=CrewAsyncRunResponse,
     status_code=status.HTTP_202_ACCEPTED,
-    summary="Execute CrewAI workflow asynchronously (returns immediately)",
+    summary="Query research assistant (asynchronous)",
 )
 async def crewai_run_async(payload: CrewRunRequest) -> CrewAsyncRunResponse:
     """
-    Execute the CrewAI research workflow asynchronously.
+    Execute research query asynchronously.
     
     **This endpoint returns immediately with a job_id.**
     
-    Use GET /crewai/status/{job_id} to check progress and retrieve results.
+    Use GET /rag/query/status/{job_id} to check progress.
     
-    Ideal for:
-    - Web UIs (can show progress indicators)
-    - N8N workflows (wait/poll pattern)
-    - Batch processing (submit many jobs, collect later)
+    Example:
+        POST /rag/query/async
+        {
+            "topic": "Explain transformer architecture",
+            "language": "en"
+        }
+        
+        Response:
+        {
+            "job_id": "550e8400-e29b-41d4-a716-446655440000",
+            "status": "pending",
+            "message": "Job created..."
+        }
     """
     try:
         logger.info(
-            "Proxying async crewai run to %s/run/async: topic='%s', language='%s'",
+            "Proxying async crew run request to %s: topic='%s'",
             CREWAI_URL,
             payload.topic,
-            payload.language,
         )
         
-        # Forward request to crewai service
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
                 f"{CREWAI_URL}/run/async",
                 json=payload.model_dump(),
             )
             response.raise_for_status()
             
-            data = response.json()
-            logger.info("Async job created: %s", data.get("job_id"))
+            result = CrewAsyncRunResponse(**response.json())
             
-            return CrewAsyncRunResponse(**data)
+            logger.info("Async crew job created: %s", result.job_id)
+            return result
             
     except httpx.HTTPStatusError as e:
         logger.error("CrewAI service returned error: %s", e.response.text)
@@ -136,108 +145,57 @@ async def crewai_run_async(payload: CrewRunRequest) -> CrewAsyncRunResponse:
             status_code=e.response.status_code,
             detail=f"CrewAI service error: {e.response.text}",
         ) from e
-        
     except httpx.RequestError as e:
-        logger.error("Failed to reach CrewAI service: %s", e)
+        logger.error("Failed to connect to CrewAI service: %s", e)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"CrewAI service unavailable: {str(e)}",
         ) from e
-        
-    except Exception as e:
-        logger.exception("Unexpected error in crewai async proxy")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Internal error: {str(e)}",
-        ) from e
 
 
 @router.get(
-    "/status/{job_id}",
+    "/query/status/{job_id}",
     response_model=CrewStatusResponse,
     status_code=status.HTTP_200_OK,
-    summary="Check crew job status",
+    summary="Get async job status",
 )
-async def get_crew_status(
-    job_id: Annotated[str, Path(..., description="Job ID from async execution")]
-) -> CrewStatusResponse:
+async def get_query_status(job_id: str) -> CrewStatusResponse:
     """
-    Check the status of an async crew job.
+    Get the status of an async research query job.
     
-    Job statuses:
-    - **pending**: Job queued, not started yet
-    - **running**: Job currently executing
-    - **completed**: Job finished successfully (result available)
-    - **failed**: Job failed with error
+    Poll this endpoint to check if your job is complete.
     
-    Poll this endpoint to monitor job progress. When status is 'completed',
-    the 'result' field contains the final summary.
+    Status values:
+    - **pending**: Job queued
+    - **running**: Job executing
+    - **completed**: Job done (result available)
+    - **failed**: Job failed (error available)
     """
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        logger.info("Proxying status check to %s for job: %s", CREWAI_URL, job_id)
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.get(f"{CREWAI_URL}/status/{job_id}")
             response.raise_for_status()
-            return CrewStatusResponse(**response.json())
+            
+            result = CrewStatusResponse(**response.json())
+            
+            return result
             
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 404:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Job {job_id} not found",
+                detail=f"Job not found: {job_id}",
             ) from e
-        logger.error("CrewAI service error: %s", e.response.text)
+        logger.error("CrewAI service returned error: %s", e.response.text)
         raise HTTPException(
             status_code=e.response.status_code,
             detail=f"CrewAI service error: {e.response.text}",
         ) from e
-        
     except httpx.RequestError as e:
-        logger.error("Failed to reach CrewAI service: %s", e)
+        logger.error("Failed to connect to CrewAI service: %s", e)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"CrewAI service unavailable: {str(e)}",
-        ) from e
-        
-    except Exception as e:
-        logger.exception("Unexpected error getting job status")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get status: {str(e)}",
-        ) from e
-
-
-@router.get(
-    "/jobs",
-    response_model=list[CrewStatusResponse],
-    status_code=status.HTTP_200_OK,
-    summary="List recent crew jobs",
-)
-async def list_crew_jobs(limit: int = 20) -> list[CrewStatusResponse]:
-    """
-    List recent crew jobs.
-    
-    Returns up to {limit} most recent jobs, sorted by creation time (newest first).
-    Useful for monitoring and debugging async job execution.
-    """
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(
-                f"{CREWAI_URL}/jobs",
-                params={"limit": limit}
-            )
-            response.raise_for_status()
-            return [CrewStatusResponse(**job) for job in response.json()]
-            
-    except httpx.RequestError as e:
-        logger.error("Failed to reach CrewAI service: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"CrewAI service unavailable: {str(e)}",
-        ) from e
-        
-    except Exception as e:
-        logger.exception("Unexpected error listing jobs")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list jobs: {str(e)}",
         ) from e
