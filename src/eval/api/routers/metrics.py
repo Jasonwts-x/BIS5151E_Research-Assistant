@@ -17,6 +17,7 @@ from ...schemas.evaluation import (
     LeaderboardResponse,
 )
 from ...trulens import TruLensClient
+from ...cache import get_cache, get_redis_cache
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,7 @@ router = APIRouter(prefix="/metrics", tags=["metrics"])
     status_code=status.HTTP_200_OK,
     summary="Evaluate a query/answer pair",
 )
-def evaluate(request: EvaluationRequest) -> EvaluationResponse:
+async def evaluate(request: EvaluationRequest) -> EvaluationResponse:
     """
     Evaluate a query/answer pair with full metrics.
 
@@ -42,7 +43,7 @@ def evaluate(request: EvaluationRequest) -> EvaluationResponse:
     try:
         # Evaluate using TruLens client (stores to DB)
         client = TruLensClient(enabled=True)
-        evaluation = client.evaluate(
+        evaluation = client.evaluate_async(
             query=request.query,
             context=request.context,
             answer=request.answer,
