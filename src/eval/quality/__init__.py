@@ -10,6 +10,7 @@ from .factuality import FactualityChecker
 from .paraphrase import ParaphraseStabilityCalculator
 from .rouge import ROUGECalculator
 from .semantic import SemanticSimilarityCalculator
+from .storage import store_quality_metrics  # ✨ NEW
 
 __all__ = [
     "ROUGECalculator",
@@ -18,4 +19,5 @@ __all__ = [
     "FactualityChecker",
     "ConsistencyCalculator",
     "ParaphraseStabilityCalculator",
+    "store_quality_metrics",  # ✨ NEW
 ]
