@@ -5,9 +5,12 @@ Client for communicating with evaluation service.
 from __future__ import annotations
 
 import logging
+import asyncio
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
+
+from ..cache import get_cache, get_redis_cache
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +33,14 @@ class TruLensClient:
         self.base_url = base_url
         self.enabled = enabled
         logger.info("TruLensClient initialized: %s (enabled=%s)", base_url, enabled)
+
+        redis_enabled = os.getenv("REDIS_URL") is not None
+        if redis_enabled:
+            self.cache = get_redis_cache()
+            logger.info("Using Redis cache for evaluations")
+        else:
+            self.cache = get_cache()
+            logger.info("Using in-memory cache for evaluations")
 
     def evaluate(
         self,
@@ -55,6 +66,11 @@ class TruLensClient:
         if not self.enabled:
             logger.debug("TruLens client disabled, skipping evaluation")
             return {"enabled": False}
+        
+        cached = self.cache.get(query, answer, context)
+        if cached:
+            logger.info("Returning cached evaluation result")
+            return cached
 
         record_id = str(uuid4())
 
@@ -86,16 +102,53 @@ class TruLensClient:
             "overall_score": (groundedness + relevance + context_rel + citation_qual) / 4,
         }
 
-        # ✨ NEW: Store in database
+        # Store in database
         try:
             self._store_to_database(record_id, query, answer, result, metadata)
         except Exception as e:
             logger.error("Failed to store evaluation to database: %s", e)
 
+        self.cache.set(query, answer, result, context)
+
         logger.info(
             "Evaluation complete: record_id=%s, overall_score=%.2f",
             record_id,
             result["overall_score"],
+        )
+
+        return result
+    
+    async def evaluate_async(
+        self,
+        query: str,
+        context: str,
+        answer: str,
+        language: str = "en",
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Async version of evaluate().
+        
+        Use this when calling from async code to avoid blocking.
+        """
+        if not self.enabled:
+            return {"enabled": False}
+
+        # Check cache
+        cached = self.cache.get(query, answer, context)
+        if cached:
+            return cached
+
+        # Run evaluation in thread pool to avoid blocking
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None,
+            self.evaluate,
+            query,
+            context,
+            answer,
+            language,
+            metadata,
         )
 
         return result
