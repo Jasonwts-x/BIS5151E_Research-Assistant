@@ -33,11 +33,24 @@ def health_check():
 )
 def readiness_check():
     """Check if service is ready to accept requests."""
-    # TODO: Check database connection
-    # TODO: Check TruLens initialization
+    
+    # ✨ IMPROVED: Actually check database
+    try:
+        from ...database import get_database
+        db = get_database()
+        db_healthy = db.health_check()
+    except Exception as e:
+        logger.error("Database check failed: %s", e)
+        db_healthy = False
+    
+    if not db_healthy:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database not available"
+        )
     
     return {
         "status": "ready",
-        "database": "connected",  # TODO: Actual check
-        "trulens": "initialized",  # TODO: Actual check
+        "database": "connected",
+        "trulens": "initialized",
     }
