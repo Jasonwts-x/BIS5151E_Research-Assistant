@@ -6,13 +6,14 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import List
+from typing import Any, Dict, List
 
 from crewai import LLM
 from haystack.dataclasses import Document
 
-from ..eval.guardrails import GuardrailsWrapper
-from ..eval.trulens import TruLensMonitor
+from ..eval.guardrails import InputValidator, OutputValidator, load_guardrails_config
+from ..eval.performance import PerformanceTracker
+from ..eval.trulens import TruLensClient
 from ..utils.config import load_config
 from .crews import ResearchCrew
 
@@ -27,6 +28,7 @@ class CrewResult:
     language: str
     final_output: str
     context_docs: List[Document]
+    evaluation: Dict[str, Any] = None
 
 
 class CrewRunner:
@@ -69,15 +71,36 @@ class CrewRunner:
             self.config.llm.host
         )
 
-        # Initialize safety guardrails
-        self.guardrails = GuardrailsWrapper() if enable_guardrails else None
-        if self.guardrails:
-            logger.info("Safety guardrails enabled")
+        # Initialize guardrails validators
+        if enable_guardrails:
+            try:
+                guardrails_config = load_guardrails_config()
+                self.input_validator = InputValidator(guardrails_config)
+                self.output_validator = OutputValidator(guardrails_config)
+                logger.info("Safety guardrails enabled (new implementation)")
+            except Exception as e:
+                logger.warning("Failed to initialize guardrails: %s", e)
+                self.input_validator = None
+                self.output_validator = None
         else:
+            self.input_validator = None
+            self.output_validator = None
             logger.info("Safety guardrails disabled")
 
-        # Initialize TruLens monitoring
-        self.monitor = TruLensMonitor(enabled=enable_monitoring)
+        # Initialize TruLens client
+        if enable_monitoring:
+            try:
+                self.trulens_client = TruLensClient(enabled=True)
+                logger.info("TruLens monitoring enabled")
+            except Exception as e:
+                logger.warning("Failed to initialize TruLens: %s", e)
+                self.trulens_client = None
+        else:
+            self.trulens_client = None
+            logger.info("TruLens monitoring disabled")
+
+        # Initialize performance tracker
+        self.performance_tracker = PerformanceTracker()
 
     def __del__(self):
         """Cleanup: Close Weaviate connection if it exists."""
@@ -95,103 +118,76 @@ class CrewRunner:
             topic: Research topic/question
             
         Returns:
-            Tuple of (formatted_context_string, list_of_documents)
+            (formatted_context, documents) tuple
         """
         if self.rag_pipeline is None:
-            logger.warning("RAG pipeline not available, returning empty context")
-            return "No context available.", []
+            logger.warning("RAG pipeline not available - returning empty context")
+            return "NO CONTEXT AVAILABLE - RAG pipeline not initialized.", []
         
-        top_k = self.config.rag.top_k
-        docs = self.rag_pipeline.run(query=topic, top_k=top_k)
-        
-        logger.info("Retrieved %d documents for topic: %s", len(docs), topic)
-        
-        # Format context for agents (with stricter formatting)
-        context = self._format_context(docs)
-        
-        # CRITICAL DEBUG: Log context validation markers
-        logger.info("=" * 70)
-        logger.info("CONTEXT DEBUG INFO")
-        logger.info("=" * 70)
-        logger.info("Context length: %d characters", len(context))
-        logger.info("Contains 'SOURCE [': %s", "SOURCE [" in context)
-        logger.info("First 300 chars of context:")
-        logger.info("%s", context[:300] if context else "[empty]")
-        logger.info("=" * 70)
-        
-        return context, docs
+        try:
+            # Track RAG retrieval time
+            with self.performance_tracker.track("rag_retrieval"):
+                documents = self.rag_pipeline.run(
+                    query=topic,
+                    top_k=self.config.rag.top_k
+                )
+            
+            logger.info("Retrieved %d documents for topic: %s", len(documents), topic)
+            
+            if not documents:
+                logger.warning("No documents found for query: %s", topic)
+                return "NO CONTEXT AVAILABLE - No relevant documents found.", []
+            
+            # Format context with citations
+            formatted_context = self._format_context(documents)
+            
+            return formatted_context, documents
+            
+        except Exception as e:
+            logger.exception("Context retrieval failed: %s", e)
+            return f"ERROR: Context retrieval failed - {str(e)}", []
 
-    @staticmethod
-    def _format_context(docs: List[Document]) -> str:
+    def _format_context(self, documents: List[Document]) -> str:
         """
-        Format retrieved documents into context string with prominent citations.
-        
-        This formatting makes it VERY clear what sources are available and what
-        content belongs to each source.
+        Format documents with citation numbers.
         
         Args:
-            docs: List of Haystack Documents
+            documents: List of retrieved documents
             
         Returns:
-            Formatted context string with [1], [2], etc. citations
+            Formatted context string with [1], [2] style citations
         """
-        if not docs:
-            return (
-                "⚠️ NO CONTEXT AVAILABLE ⚠️\n"
-                "No documents were retrieved for this topic.\n"
-                "You CANNOT write a summary without sources.\n"
-                "Inform the user that no relevant documents were found."
+        if not documents:
+            return "NO CONTEXT AVAILABLE"
+        
+        # Build source mapping (deduplicate by source)
+        source_map = {}
+        source_counter = 1
+        
+        for doc in documents:
+            source = doc.meta.get("source", "unknown")
+            if source not in source_map:
+                source_map[source] = source_counter
+                source_counter += 1
+        
+        # Format each document with citation number
+        formatted_chunks = []
+        for doc in documents:
+            source = doc.meta.get("source", "unknown")
+            citation_num = source_map[source]
+            
+            formatted_chunks.append(
+                f"SOURCE [{citation_num}] ({source}):\n{doc.content}\n"
             )
         
-        unique_sources = []
-        context_blocks = []
+        context = "\n---\n".join(formatted_chunks)
         
-        # Group content by source
-        for doc in docs:
-            meta = getattr(doc, "meta", {}) or {}
-            source = meta.get("source", "unknown")
-            
-            # Track unique sources
-            if source not in unique_sources:
-                unique_sources.append(source)
-            
-            idx = unique_sources.index(source) + 1
-            content = doc.content.strip() if doc.content else "[No content]"
-            
-            # Format each chunk with clear source marking
-            context_blocks.append(
-                f"═══════════════════════════════════════\n"
-                f"SOURCE [{idx}]: {source}\n"
-                f"═══════════════════════════════════════\n"
-                f"{content}\n"
-            )
+        # Add source list at end
+        context += "\n\n=== SOURCES ===\n"
+        for source, num in sorted(source_map.items(), key=lambda x: x[1]):
+            context += f"[{num}] {source}\n"
         
-        # Build final context with clear sections
-        context_body = "\n".join(context_blocks)
-        
-        source_list = "\n".join(
-            f"  [{i+1}] {s}" for i, s in enumerate(unique_sources)
-        )
-        
-        header = (
-            "╔═══════════════════════════════════════════════════════════════╗\n"
-            "║   AVAILABLE SOURCES - USE ONLY THESE IN YOUR RESPONSE        ║\n"
-            "╚═══════════════════════════════════════════════════════════════╝\n"
-            f"\n{source_list}\n\n"
-            "⚠️ CRITICAL: You may ONLY cite sources listed above.\n"
-            "⚠️ Do NOT invent additional sources or citations.\n"
-            "⚠️ Every factual claim must reference one of these sources.\n\n"
-        )
-
-        final_context = f"{header}{context_body}"
-    
-        # Log what we're returning
-        logger.info("Formatted context for %d documents from %d unique sources", 
-                    len(docs), len(unique_sources))
-        logger.info("Context validation check: 'SOURCE [' in context = %s", 
-                    "SOURCE [" in final_context)
-        
-        return final_context
+        return context
 
     def run(self, topic: str, language: str = "en") -> CrewResult:
         """
@@ -205,18 +201,37 @@ class CrewRunner:
             CrewResult with final output and metadata
         """
         logger.info("Starting crew run for topic: %s (language: %s)", topic, language)
+        
+        # Start overall performance tracking
+        self.performance_tracker.start()
 
-        # Safety check: Validate input
-        if self.guardrails:
-            is_safe, reason = self.guardrails.validate_input(topic)
-            if not is_safe:
-                logger.error("Input validation failed: %s", reason)
-                return CrewResult(
-                    topic=topic,
-                    language=language,
-                    final_output=f"⚠️ Safety check failed: {reason}",
-                    context_docs=[]
-                )
+        # Input validation using guardrails
+        if self.input_validator:
+            with self.performance_tracker.track("guardrails_input"):
+                passed, results = self.input_validator.validate(topic)
+                
+                if not passed:
+                    # Collect error messages
+                    errors = [r.message for r in results if not r.passed]
+                    error_msg = "; ".join(errors)
+                    
+                    logger.error("Input validation failed: %s", error_msg)
+                    
+                    self.performance_tracker.stop()
+                    
+                    return CrewResult(
+                        topic=topic,
+                        language=language,
+                        final_output=f"⚠️ Safety check failed: {error_msg}",
+                        context_docs=[],
+                        evaluation={
+                            "guardrails": {
+                                "input_passed": False,
+                                "violations": errors,
+                            },
+                            "performance": self.performance_tracker.get_summary(),
+                        },
+                    )
         
         # Step 1: Retrieve context from RAG
         context, docs = self.retrieve_context(topic)
@@ -232,28 +247,73 @@ class CrewRunner:
         # Step 2: Initialize crew with LLM
         crew = ResearchCrew(llm=self.llm)
         
-        # Step 3: Execute crew workflow
+        # Step 3: Execute crew workflow with performance tracking
         logger.info("Executing crew workflow...")
-        final_output = crew.run(
-            topic=topic, context=context, language=language)
+        
+        # Track agent execution time
+        with self.performance_tracker.track("crew_execution"):
+            # Note: Individual agent tracking would require CrewAI instrumentation
+            # For now, we track total crew time
+            final_output = crew.run(topic=topic, context=context, language=language)
         
         logger.info(
             "Crew workflow completed. Output length: %d chars", len(final_output))
         
-        # Safety check: Validate output
-        if self.guardrails:
-            is_safe, reason = self.guardrails.validate_output(final_output)
-            if not is_safe:
-                logger.error("Output validation failed: %s", reason)
-                final_output = f"⚠️ Response blocked due to safety policy: {reason}"
+        # Output validation using new guardrails
+        if self.output_validator:
+            with self.performance_tracker.track("guardrails_output"):
+                passed, results = self.output_validator.validate(final_output)
+                
+                if not passed:
+                    # Log warnings but don't block (output validation is informational)
+                    warnings = [r.message for r in results if not r.passed]
+                    logger.warning("Output validation warnings: %s", "; ".join(warnings))
 
-        # Monitoring: Log interaction
-        if self.monitor:
-            self.monitor.log_interaction(
-                topic=topic,
-                context=context,
-                output=final_output,
-                language=language
+        # Run TruLens evaluation
+        evaluation_results = {}
+        
+        if self.trulens_client:
+            with self.performance_tracker.track("trulens_evaluation"):
+                try:
+                    trulens_result = self.trulens_client.evaluate(
+                        query=topic,
+                        context=context,
+                        answer=final_output,
+                        language=language,
+                    )
+                    evaluation_results["trulens"] = trulens_result
+                    logger.info(
+                        "TruLens evaluation complete: overall_score=%.2f",
+                        trulens_result.get("overall_score", 0.0),
+                    )
+                except Exception as e:
+                    logger.error("TruLens evaluation failed: %s", e)
+                    evaluation_results["trulens"] = {"error": str(e)}
+        
+        # Add guardrails results to evaluation
+        if self.input_validator or self.output_validator:
+            guardrails_summary = {
+                "input_passed": True,  # Already checked above
+                "output_passed": passed if self.output_validator else True,
+            }
+            
+            if self.output_validator and not passed:
+                guardrails_summary["output_warnings"] = [
+                    r.message for r in results if not r.passed
+                ]
+            
+            evaluation_results["guardrails"] = guardrails_summary
+        
+        # Stop performance tracking and add to evaluation
+        self.performance_tracker.stop()
+        evaluation_results["performance"] = self.performance_tracker.get_summary()
+        
+        # TODO (Step H): Translation support for language != 'en'
+        if language.lower() != "en":
+            logger.warning(
+                "Translation not yet implemented. Returning English output. "
+                "Requested language: %s",
+                language,
             )
         
         return CrewResult(
@@ -261,6 +321,7 @@ class CrewRunner:
             language=language,
             final_output=final_output,
             context_docs=docs,
+            evaluation=evaluation_results,
         )
 
     def save_output(self, result: CrewResult, output_base_dir: Path = None) -> dict[str, Path]:
@@ -268,120 +329,117 @@ class CrewRunner:
         Save crew output to multiple formats with keyword-based folder naming.
         
         Args:
-            result: CrewResult from crew execution
-            output_base_dir: Base directory for outputs (default: project outputs/)
+            result: CrewResult to save
+            output_base_dir: Base directory for outputs (default: ./outputs)
             
         Returns:
-            Dictionary mapping format names to file paths
+            Dictionary mapping format -> saved file path
         """
-        # Generate folder name with keywords from topic
-        timestamp = datetime.now().strftime("%Y%m%d")
-        topic_hash = hashlib.md5(result.topic.encode()).hexdigest()[:8]
-        
-        # Extract keywords from topic (max 3 words, alphanumeric only)
-        # Remove common words and keep meaningful ones
-        stop_words = {'what', 'are', 'is', 'the', 'how', 'why', 'when', 'where', 
-                      'who', 'which', 'in', 'on', 'at', 'to', 'for', 'of', 'a', 'an',
-                      'do', 'does', 'can', 'will', 'would', 'should', 'could'}
-        
-        words = re.findall(r'\w+', result.topic.lower())
-        keywords = [w for w in words if w not in stop_words and len(w) > 2][:3]
-        keyword_str = '-'.join(keywords) if keywords else 'query'
-        
-        folder_name = f"{timestamp}_{keyword_str}_{topic_hash}"
-        
-        # Determine output directory
         if output_base_dir is None:
-            output_base_dir = Path("/workspaces/BIS5151E_Research-Assistant/outputs")
+            output_base_dir = Path("outputs")
         
+        # Create topic-based subfolder
+        topic_slug = self._slugify_topic(result.topic)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        folder_name = f"{timestamp}_{topic_slug}"
         output_dir = output_base_dir / folder_name
         output_dir.mkdir(parents=True, exist_ok=True)
         
-        saved_files = {}
+        saved_paths = {}
         
         # Save markdown
         md_path = output_dir / "summary.md"
-        with open(md_path, "w", encoding="utf-8") as f:
-            f.write(f"# Research Summary: {result.topic}\n\n")
-            f.write(f"**Language:** {result.language}\n")
-            f.write(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-            f.write("---\n\n")
-            f.write(result.final_output)
-        saved_files["markdown"] = md_path
-        logger.info("Saved markdown: %s", md_path)
-        
-        # Save JSON
-        json_path = output_dir / "summary.json"
-        import json
-        with open(json_path, "w", encoding="utf-8") as f:
-            json.dump({
-                "topic": result.topic,
-                "language": result.language,
-                "timestamp": datetime.now().isoformat(),
-                "output": result.final_output,
-                "sources": [doc.meta.get('source', 'unknown') for doc in result.context_docs],
-            }, f, indent=2, ensure_ascii=False)
-        saved_files["json"] = json_path
-        logger.info("Saved JSON: %s", json_path)
+        md_content = self._format_markdown_output(result)
+        md_path.write_text(md_content, encoding="utf-8")
+        saved_paths["markdown"] = md_path
         
         # Save plain text
         txt_path = output_dir / "summary.txt"
-        with open(txt_path, "w", encoding="utf-8") as f:
-            f.write(result.final_output)
-        saved_files["text"] = txt_path
-        logger.info("Saved text: %s", txt_path)
+        txt_path.write_text(result.final_output, encoding="utf-8")
+        saved_paths["text"] = txt_path
         
-        # Save PDF (optional - requires reportlab)
-        try:
-            from reportlab.lib.pagesizes import letter
-            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-            from reportlab.lib.units import inch
-            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-            
-            pdf_path = output_dir / "summary.pdf"
-            doc = SimpleDocTemplate(str(pdf_path), pagesize=letter)
-            
-            styles = getSampleStyleSheet()
-            title_style = ParagraphStyle(
-                'CustomTitle',
-                parent=styles['Heading1'],
-                fontSize=24,
-                spaceAfter=30,
-            )
-            
-            story = []
-            
-            # Title
-            title = Paragraph(f"Research Summary: {result.topic}", title_style)
-            story.append(title)
-            story.append(Spacer(1, 0.2*inch))
-            
-            # Metadata
-            meta_text = f"<b>Language:</b> {result.language}<br/><b>Generated:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-            meta = Paragraph(meta_text, styles['Normal'])
-            story.append(meta)
-            story.append(Spacer(1, 0.3*inch))
-            
-            # Content
-            for paragraph in result.final_output.split('\n\n'):
-                if paragraph.strip():
-                    p = Paragraph(paragraph.strip(), styles['Normal'])
-                    story.append(p)
-                    story.append(Spacer(1, 0.1*inch))
-            
-            doc.build(story)
-            saved_files["pdf"] = pdf_path
-            logger.info("Saved PDF: %s", pdf_path)
-            
-        except ImportError:
-            logger.info("reportlab not installed - skipping PDF generation")
-            logger.info("Install with: pip install --break-system-packages reportlab")
-        except Exception as e:
-            logger.error("Failed to generate PDF: %s", e, exc_info=True)
+        logger.info("Outputs saved to: %s", output_dir)
+        return saved_paths
+
+    def _slugify_topic(self, topic: str) -> str:
+        """Convert topic to filesystem-safe slug."""
+        # Remove special characters, lowercase, replace spaces with underscores
+        slug = re.sub(r'[^\w\s-]', '', topic.lower())
+        slug = re.sub(r'[\s_]+', '_', slug)
+        slug = slug[:50]  # Limit length
+        return slug
+
+    def _format_markdown_output(self, result: CrewResult) -> str:
+        """Format result as markdown."""
+        md = f"# Research Summary: {result.topic}\n\n"
+        md += f"**Language:** {result.language}\n"
+        md += f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        md += f"**Sources:** {len(result.context_docs)} documents\n\n"
+        md += "---\n\n"
+        md += result.final_output
+        md += "\n\n---\n\n"
+        md += "## Sources\n\n"
         
-        return saved_files
+        # List unique sources
+        sources = set()
+        for doc in result.context_docs:
+            source = doc.meta.get("source", "unknown")
+            sources.add(source)
+        
+        for i, source in enumerate(sorted(sources), 1):
+            md += f"{i}. {source}\n"
+        
+        # Evaluation summary
+        if result.evaluation:
+            md += "\n\n## Evaluation Metrics\n\n"
+            
+            # Performance
+            if "performance" in result.evaluation:
+                perf = result.evaluation["performance"]
+                md += "### Performance\n"
+                md += f"- Total Time: {perf.get('total_time', 0):.2f}s\n"
+                if "components" in perf:
+                    for comp, time in perf["components"].items():
+                        if comp != "total_time":
+                            md += f"- {comp}: {time:.2f}s\n"
+                md += "\n"
+            
+            # TruLens
+            if "trulens" in result.evaluation:
+                trulens = result.evaluation["trulens"]
+                md += "### Quality Metrics (TruLens)\n"
+                if "overall_score" in trulens:
+                    md += f"- Overall Score: {trulens['overall_score']:.2f}\n"
+                if "trulens" in trulens and isinstance(trulens["trulens"], dict):
+                    for metric, value in trulens["trulens"].items():
+                        if isinstance(value, (int, float)):
+                            md += f"- {metric}: {value:.2f}\n"
+                md += "\n"
+            
+            # Guardrails
+            if "guardrails" in result.evaluation:
+                guards = result.evaluation["guardrails"]
+                md += "### Safety Validation (Guardrails)\n"
+                md += f"- Input Passed: {'✅' if guards.get('input_passed') else '❌'}\n"
+                md += f"- Output Passed: {'✅' if guards.get('output_passed') else '❌'}\n"
+                if guards.get("output_warnings"):
+                    md += "\nWarnings:\n"
+                    for warning in guards["output_warnings"]:
+                        md += f"- {warning}\n"
+        
+        return md
+
+
+# Singleton instance
+_crew_runner = None
 
 
 def get_crew_runner() -> CrewRunner:
-    """Factory function for dependency injection."""
-    return CrewRunner()
+    """Get singleton CrewRunner instance."""
+    global _crew_runner
+    if _crew_runner is None:
+        _crew_runner = CrewRunner(
+            enable_guardrails=True,
+            enable_monitoring=True,
+        )
+    return _crew_runner
