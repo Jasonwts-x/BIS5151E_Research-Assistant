@@ -5,6 +5,8 @@ Request/response models for CrewAI endpoints.
 """
 from __future__ import annotations
 
+from typing import Any, Dict, Optional
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -55,6 +57,12 @@ class CrewRunResponse(BaseModel):
     language: str = Field(..., description="Language code")
     answer: str = Field(..., description="Generated research summary")
 
+    evaluation: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Evaluation metrics (TruLens, Guardrails, Performance)"
+    )
+
+
 
 # ==============================================================================
 # Async Job Tracking Schemas
@@ -90,3 +98,8 @@ class CrewStatusResponse(BaseModel):
     completed_at: str | None = Field(None, description="Job completion timestamp")
     result: str | None = Field(None, description="Final result if completed")
     error: str | None = Field(None, description="Error message if failed")
+
+    evaluation: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Evaluation metrics (only present when status=completed)"
+    )
