@@ -8,6 +8,7 @@
 # 🔧 DEPENDENCY RESOLUTION
 # ------------------------------------------------------------------------------
 tenacity==9.0.0                  # Retry library (pinned to avoid res. loops)
+protobuf==5.29.5                 # Protocol Buffers (pin for gRPC compatibility)
 
 # ------------------------------------------------------------------------------
 # 🤖 AI FRAMEWORK & ORCHESTRATION
