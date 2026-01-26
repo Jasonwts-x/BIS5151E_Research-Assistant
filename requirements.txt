@@ -70,6 +70,8 @@ python-dotenv==1.1.1             # Load environment variables from .env files
 pyyaml==6.0.3                    # YAML parser for configuration files
 requests==2.32.2                 # Simple HTTP library for API requests
 sqlalchemy==2.0.36               # SQL toolkit and ORM for database interactions
+redis==5.2.1                     # Redis client for distributed caching (optional)
+hiredis==3.0.0                   # High-performance Redis parser (optional)
 
 # ------------------------------------------------------------------------------
 # 🧪 DEVELOPMENT & TESTING

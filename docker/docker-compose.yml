@@ -211,6 +211,8 @@ services:
         condition: service_healthy
       ollama:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - research_net
     environment:
@@ -230,6 +232,7 @@ services:
       
       WEAVIATE_URL: http://weaviate:8080
       OLLAMA_HOST: http://ollama:11434
+      REDIS_URL: redis://redis:6379/0 
 
       PYTHONPATH: /workspaces/BIS5151E_Research-Assistant
       PIP_CACHE_DIR: /workspaces/BIS5151E_Research-Assistant/.pip_cache
@@ -343,6 +346,20 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - research_net
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 networks:
   research_net:
