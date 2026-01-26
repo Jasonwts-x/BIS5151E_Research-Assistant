@@ -108,8 +108,8 @@ arxiv==2.1.0                # ArXiv paper fetching
 ### System Architecture
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                         n8n Orchestrator                     │
-│                  Workflow Automation (Port 5678)             │
+│                        n8n Orchestrator                     │
+│                 Workflow Automation (Port 5678)             │
 └──────────────────────────┬──────────────────────────────────┘
                            │
         ┌──────────────────┴──────────────────┐
@@ -128,7 +128,7 @@ arxiv==2.1.0                # ArXiv paper fetching
     └───┬────────┘                      └───┬────────┘
         │                                   │
 ┌───────▼───────────────────────────────────▼──────────┐
-│                                                       │
+│                                                      │
 │  ┌─────────────┐        ┌──────────────┐            │
 │  │  Weaviate   │        │   Ollama     │            │
 │  │  Port 8080  │        │  Port 11434  │            │
@@ -370,46 +370,18 @@ mypy src
 
 We use **conventional commits**:
 ```
-<category>: <description>
+<feature>(<category>): <description>
 
-Categories: api, agents, rag, docker, tests, docs, refactor
-Example: agents: add translator agent for multilingual support
+Features: chore, docs, feat, fix, refactor, style, test
+Categories: agents, api, docker, docs, rag, refactor, tests
+Example: feat(agents): add translator agent for multilingual support
 ```
 
 ---
 
 ## 📊 Usage Examples
 
-### Python API
-```python
-# Ingest documents
-from src.rag.ingestion import IngestionEngine
-from src.rag.sources import LocalFileSource
-
-engine = IngestionEngine()
-source = LocalFileSource("data/raw")
-result = engine.ingest_from_source(source)
-```
-```python
-# Query RAG
-from src.rag.core import RAGPipeline
-
-pipeline = RAGPipeline.from_existing()
-docs = pipeline.run(query="What is AI?", top_k=5)
-```
-```python
-# Run multi-agent workflow
-from src.agents.runner import CrewRunner
-
-runner = CrewRunner()
-result = runner.run(
-    topic="Explain machine learning",
-    language="en"
-)
-print(result.final_output)
-```
-
-### REST API
+### API
 ```bash
 # Ingest ArXiv papers
 curl -X POST http://localhost:8000/rag/ingest/arxiv \
@@ -445,13 +417,65 @@ python -m src.rag.cli reset-index --yes
 
 ---
 
+## 📊 Evaluation & Monitoring
+
+ResearchAssistantGPT includes comprehensive evaluation and monitoring:
+
+### Evaluation Dashboard
+
+Access the interactive dashboard at **http://localhost:8501** to view:
+- TruLens quality metrics (groundedness, relevance)
+- Guardrails validation results
+- Performance timing breakdown
+- ROUGE/BLEU quality scores
+
+### Evaluation API
+
+Query evaluation metrics programmatically:
+```bash
+# Get evaluation leaderboard
+curl http://localhost:8502/metrics/leaderboard
+
+# Get specific evaluation record
+curl http://localhost:8502/metrics/record/{record_id}
+```
+
+### Evaluation in Query Responses
+
+All query responses automatically include evaluation metrics:
+```json
+{
+  "topic": "What is RAG?",
+  "answer": "Retrieval-Augmented Generation...",
+  "evaluation": {
+    "trulens": {
+      "groundedness": 0.85,
+      "answer_relevance": 0.78,
+      "context_relevance": 0.82
+    },
+    "guardrails": {
+      "input_passed": true,
+      "output_passed": true
+    },
+    "performance": {
+      "total_time": 45.2,
+      "rag_retrieval": 2.1,
+      "crew_execution": 42.5
+    }
+  }
+}
+```
+
+See [Evaluation Documentation](docs/evaluation/README.md) for details.
+
+---
+
 ## 👥 Team
 
 **Project Group**: ResearchAssistantGPT
 
 - **Jason Waschtschenko** (GitHub: [@Jasonwts-x](https://github.com/Jasonwts-x))
 - **Karim Epple**
-
 - **Dilsat Bekil**
 - **Rigon Rexha**
 - **Eren Kaya**
@@ -475,6 +499,5 @@ All AI models and datasets used comply with open-source or institutional usage r
 ---
 
 **[⬆ Back to top](#researchassistantgpt)**
-```
 
 ---
