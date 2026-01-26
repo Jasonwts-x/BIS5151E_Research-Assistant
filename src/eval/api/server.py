@@ -5,11 +5,14 @@ Main FastAPI application for evaluation service.
 from __future__ import annotations
 
 import logging
+from ...utils.logging import setup_logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .routers import health, metrics
+
+setup_logging(level="INFO", service_name="eval-service")
 
 logging.basicConfig(
     level=logging.INFO,
