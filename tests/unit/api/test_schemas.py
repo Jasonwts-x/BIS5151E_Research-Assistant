@@ -43,6 +43,25 @@ class TestCrewAISchemas:
         )
         assert response.topic == "test"
         assert response.answer == "Test answer"
+        assert response.evaluation is None
+
+    def test_crew_run_response_with_evaluation(self):
+        """Test CrewRunResponse with evaluation."""
+        evaluation = {
+            "trulens": {"overall_score": 0.85},
+            "guardrails": {"input_passed": True},
+            "performance": {"total_time": 45.2}
+        }
+        
+        response = CrewRunResponse(
+            topic="test",
+            language="en",
+            answer="Test answer",
+            evaluation=evaluation
+        )
+        
+        assert response.evaluation is not None
+        assert response.evaluation["trulens"]["overall_score"] == 0.85
 
 
 class TestRAGSchemas:
@@ -88,17 +107,13 @@ class TestRAGSchemas:
 
     def test_ingest_arxiv_request_max_results_bounds(self):
         """Test max_results bounds validation."""
-        # Should fail if < 1
+        # Valid values
+        IngestArxivRequest(query="test", max_results=1)
+        IngestArxivRequest(query="test", max_results=10)
+        
+        # Invalid values should fail
         with pytest.raises(ValidationError):
             IngestArxivRequest(query="test", max_results=0)
         
-        # Should fail if > 20
         with pytest.raises(ValidationError):
-            IngestArxivRequest(query="test", max_results=21)
-        
-        # Should succeed at boundaries
-        request1 = IngestArxivRequest(query="test", max_results=1)
-        assert request1.max_results == 1
-        
-        request20 = IngestArxivRequest(query="test", max_results=20)
-        assert request20.max_results == 20
+            IngestArxivRequest(query="test", max_results=11)
