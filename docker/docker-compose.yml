@@ -187,6 +187,19 @@ services:
       target: eval
     container_name: eval
     working_dir: /workspaces/BIS5151E_Research-Assistant
+    command: >
+      bash -c "
+      echo '🚀 Starting Evaluation Service...' &&
+      uvicorn src.eval.api.server:app --host 0.0.0.0 --port 8502 &
+      FASTAPI_PID=$$! &&
+      echo '✅ FastAPI started (PID '$$FASTAPI_PID')' &&
+      echo '🚀 Starting Streamlit Dashboard...' &&
+      streamlit run src/eval/dashboard/app.py --server.port 8501 --server.address 0.0.0.0 &
+      STREAMLIT_PID=$$! &&
+      echo '✅ Streamlit started (PID '$$STREAMLIT_PID')' &&
+      echo '📊 Evaluation service ready on ports 8501 (dashboard) and 8502 (API)' &&
+      wait $$FASTAPI_PID $$STREAMLIT_PID
+      "
     restart: unless-stopped
     ports:
       - "8501:8501"

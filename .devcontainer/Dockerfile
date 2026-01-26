@@ -73,27 +73,8 @@ FROM base AS eval
 # Download NLTK data (required for ROUGE metrics)
 RUN python -c "import nltk; nltk.download('punkt', quiet=True); nltk.download('stopwords', quiet=True)"
 
-
-# Create startup script to run both services concurrently
-RUN echo '#!/bin/bash\n\
-    set -e\n\
-    echo "🚀 Starting Evaluation Service..."\n\
-    uvicorn src.eval.api.server:app --host 0.0.0.0 --port 8502 &\n\
-    FASTAPI_PID=$!\n\
-    echo "✅ FastAPI started (PID $FASTAPI_PID)"\n\
-    \n\
-    echo "🚀 Starting Streamlit Dashboard..."\n\
-    streamlit run src/eval/dashboard/app.py --server.port 8501 --server.address 0.0.0.0 &\n\
-    STREAMLIT_PID=$!\n\
-    echo "✅ Streamlit started (PID $STREAMLIT_PID)"\n\
-    \n\
-    echo "📊 Evaluation service ready on ports 8501 (dashboard) and 8502 (API)"\n\
-    wait $FASTAPI_PID $STREAMLIT_PID\n\
-    ' > /workspaces/BIS5151E_Research-Assistant/start_eval.sh \
-    && chmod +x /workspaces/BIS5151E_Research-Assistant/start_eval.sh
-
-# Switch to vscode user for consistency
+# Switch to vscode user
 USER vscode
 
-# Run both services
-CMD ["/workspaces/BIS5151E_Research-Assistant/start_eval.sh"]
+# Set working directory
+WORKDIR /workspaces/BIS5151E_Research-Assistant
