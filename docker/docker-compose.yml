@@ -1,46 +1,5 @@
 name: research-assistant
 services:
-  devcontainer:
-    build:
-      context: ..
-      dockerfile: .devcontainer/Dockerfile
-      target: dev
-    container_name: devcontainer
-    working_dir: /workspaces/BIS5151E_Research-Assistant
-    command: sleep infinity
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-      weaviate:
-        condition: service_healthy
-      ollama:
-        condition: service_healthy
-      n8n:
-        condition: service_healthy
-    networks:
-      - research_net
-    environment:
-      WEAVIATE_URL: http://weaviate:8080
-      OLLAMA_HOST: http://ollama:11434
-      PYTHONPATH: /workspaces/BIS5151E_Research-Assistant
-
-      RAG_CHUNK_SIZE: ${RAG_CHUNK_SIZE:-350}
-      RAG_CHUNK_OVERLAP: ${RAG_CHUNK_OVERLAP:-60}
-      RAG_TOP_K: ${RAG_TOP_K:-5}
-      ALLOW_SCHEMA_RESET: ${ALLOW_SCHEMA_RESET:-false}
-
-      HF_HOME: /workspaces/BIS5151E_Research-Assistant/.hf_cache
-      HF_HUB_CACHE: /workspaces/BIS5151E_Research-Assistant/.hf_cache/hub
-      SENTENCE_TRANSFORMERS_HOME: /workspaces/BIS5151E_Research-Assistant/.hf_cache
-
-      PIP_CACHE_DIR: /workspaces/BIS5151E_Research-Assistant/.pip_cache
-    volumes:
-      - ..:/workspaces/BIS5151E_Research-Assistant:cached
-      - /var/run/docker.sock:/var/run/docker.sock
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-
   postgres:
     image: postgres:15
     container_name: postgres
@@ -57,6 +16,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}  # NO DEFAULT - must be in .env
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ../scripts/setup/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-n8n} -d ${POSTGRES_DB:-n8n}"]
       start_period: 10s
@@ -113,7 +73,7 @@ services:
 
   ollama-init:
     image: ollama/ollama:latest
-    container_name: ollama-init # Alternative: ollama-setup, ollama-pull
+    container_name: ollama-init
     entrypoint: ["/bin/sh", "-c"]
     depends_on:
       ollama:
@@ -126,7 +86,7 @@ services:
       - ollama_data:/root/.ollama
     command: ["ollama pull qwen3:4b && \
           ollama pull qwen2.5:3b && \
-          ollama pull tinyllama:1.1b"] # CPU: qwen3:4b, qwen2:1.5b, tinyllama # GPU: llama3.2:3B, mistral:7B
+          ollama pull tinyllama:1.1b"]
     restart: "no"
 
   n8n:
@@ -185,6 +145,8 @@ services:
         condition: service_healthy
       ollama:
         condition: service_healthy
+      eval:
+        condition: service_healthy
     networks:
       - research_net
     environment:
@@ -193,8 +155,8 @@ services:
 
       LLM_MODEL: qwen2.5:3b
       OLLAMA_HOST: http://ollama:11434
-
       WEAVIATE_URL: http://weaviate:8080
+      EVAL_SERVICE_URL: http://eval:8502
 
       RAG_CHUNK_SIZE: ${RAG_CHUNK_SIZE:-350}
       RAG_CHUNK_OVERLAP: ${RAG_CHUNK_OVERLAP:-60}
@@ -214,6 +176,60 @@ services:
       interval: 10s
       timeout: 10s
       retries: 5
+
+  eval:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+      target: eval
+    container_name: eval
+    working_dir: /workspaces/BIS5151E_Research-Assistant
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+      - "8502:8502"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      weaviate:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    networks:
+      - research_net
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: trulens
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/trulens
+      
+      TRULENS_ENABLED: "true"
+      TRULENS_DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/trulens
+      GUARDRAILS_ENABLED: "true"
+      GUARDRAILS_STRICT_MODE: "false"
+      EVAL_API_PORT: 8502
+      EVAL_DASHBOARD_PORT: 8501
+      
+      WEAVIATE_URL: http://weaviate:8080
+      OLLAMA_HOST: http://ollama:11434
+
+      PYTHONPATH: /workspaces/BIS5151E_Research-Assistant
+      PIP_CACHE_DIR: /workspaces/BIS5151E_Research-Assistant/.pip_cache
+      HF_HOME: /workspaces/BIS5151E_Research-Assistant/.hf_cache
+      HF_HUB_CACHE: /workspaces/BIS5151E_Research-Assistant/.hf_cache/hub
+      SENTENCE_TRANSFORMERS_HOME: /workspaces/BIS5151E_Research-Assistant/.hf_cache
+    volumes:
+      - ..:/workspaces/BIS5151E_Research-Assistant:cached
+      - ../configs:/workspace/configs:ro
+      - ../data:/workspace/data:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8502/health && curl -f http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
 
   api:
     build:
@@ -235,6 +251,8 @@ services:
         condition: service_healthy
       crewai:
         condition: service_started
+      eval:
+        condition: service_healthy
     networks:
       - research_net
     dns:
@@ -244,6 +262,7 @@ services:
       WEAVIATE_URL: http://weaviate:8080
       OLLAMA_HOST: http://ollama:11434
       CREWAI_URL: http://crewai:8100
+      EVAL_SERVICE_URL: http://eval:8502
       PYTHONPATH: /workspaces/BIS5151E_Research-Assistant
 
       RAG_CHUNK_SIZE: ${RAG_CHUNK_SIZE:-350}
@@ -267,12 +286,60 @@ services:
       timeout: 5s
       retries: 5
 
+  devcontainer:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+      target: dev
+    container_name: devcontainer
+    working_dir: /workspaces/BIS5151E_Research-Assistant
+    command: sleep infinity
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      weaviate:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+      n8n:
+        condition: service_healthy
+    networks:
+      - research_net
+    environment:
+      WEAVIATE_URL: http://weaviate:8080
+      OLLAMA_HOST: http://ollama:11434
+      PYTHONPATH: /workspaces/BIS5151E_Research-Assistant
+
+      RAG_CHUNK_SIZE: ${RAG_CHUNK_SIZE:-350}
+      RAG_CHUNK_OVERLAP: ${RAG_CHUNK_OVERLAP:-60}
+      RAG_TOP_K: ${RAG_TOP_K:-5}
+      ALLOW_SCHEMA_RESET: ${ALLOW_SCHEMA_RESET:-false}
+
+      HF_HOME: /workspaces/BIS5151E_Research-Assistant/.hf_cache
+      HF_HUB_CACHE: /workspaces/BIS5151E_Research-Assistant/.hf_cache/hub
+      SENTENCE_TRANSFORMERS_HOME: /workspaces/BIS5151E_Research-Assistant/.hf_cache
+
+      PIP_CACHE_DIR: /workspaces/BIS5151E_Research-Assistant/.pip_cache
+    volumes:
+      - ..:/workspaces/BIS5151E_Research-Assistant:cached
+      - /var/run/docker.sock:/var/run/docker.sock
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+
 networks:
   research_net:
     name: research_net
+    driver: bridge
+
 
 volumes:
   postgres_data:
+    driver: local
   weaviate_data:
+    driver: local
   ollama_data:
+    driver: local
   n8n_data:
+    driver: local
