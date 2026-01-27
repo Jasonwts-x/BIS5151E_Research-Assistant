@@ -4,8 +4,9 @@ Client for communicating with evaluation service.
 """
 from __future__ import annotations
 
-import logging
 import asyncio
+import logging
+import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import uuid4

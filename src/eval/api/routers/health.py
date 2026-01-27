@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, HTTPException, status
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ def health_check():
 def readiness_check():
     """Check if service is ready to accept requests."""
     
-    # ✨ IMPROVED: Actually check database
+    # Actually check database
     try:
         from ...database import get_database
         db = get_database()
