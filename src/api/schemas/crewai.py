@@ -44,10 +44,29 @@ class CrewRunRequest(BaseModel):
     @classmethod
     def validate_language(cls, v: str) -> str:
         """Validate language code."""
-        supported = ['en']  # Extend when translation is implemented
-        if v not in supported:
-            raise ValueError(f'Language {v} not supported. Supported: {supported}')
-        return v
+        supported = [
+            'en',  # English
+            'de',  # German
+            'fr',  # French
+            'es',  # Spanish
+            'it',  # Italian
+            'pt',  # Portuguese
+            'nl',  # Dutch
+            'pl',  # Polish
+            'ru',  # Russian
+            'ja',  # Japanese
+            'zh',  # Chinese
+            'ko',  # Korean
+        ]
+       
+        v_lower = v.lower()
+       
+        if v_lower not in supported:
+            raise ValueError(
+                f'Language {v} not supported. Supported: {supported}'
+            )
+       
+        return v_lower
 
 
 class CrewRunResponse(BaseModel):
@@ -61,7 +80,6 @@ class CrewRunResponse(BaseModel):
         default=None,
         description="Evaluation metrics (TruLens, Guardrails, Performance)"
     )
-
 
 
 # ==============================================================================
