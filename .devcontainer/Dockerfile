@@ -1,10 +1,11 @@
+# .devcontainer/Dockerfile
 # ==============================================================================
 # Multi-stage Dockerfile for Research Assistant Services
 # ==============================================================================
 # Optimized for:
 # - Layer caching (heavy packages cached separately)
 # - Faster rebuilds when adding small packages
-# - Dependency resolution fixes
+# - Modern pip resolver (no legacy resolver!)
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
@@ -26,23 +27,26 @@ WORKDIR /workspaces/BIS5151E_Research-Assistant
 # ==============================================================================
 RUN python -m pip install --upgrade pip
 
-# Install PyTorch (HEAVY - 800MB - cache this separately!)
+# CRITICAL: Install numpy<2.0 FIRST to prevent conflicts
+RUN pip install --no-cache-dir "numpy>=1.23.5,<2.0.0"
+
+# Install PyTorch CPU version (HEAVY - 800MB - cache this separately!)
 RUN pip install --no-cache-dir \
     --index-url https://download.pytorch.org/whl/cpu \
-    # torch==2.5.1+cpu
     torch==2.9.1+cpu
 
-# Install other heavy ML packages (cache separately)
+# Install sentence-transformers (will use the numpy we already installed)
 RUN pip install --no-cache-dir \
     sentence-transformers==3.3.1
 
 # ==============================================================================
 # Install remaining packages from requirements.txt
-# Use legacy resolver to avoid dependency resolution loops
+# Use MODERN pip resolver (removed --use-deprecated=legacy-resolver)
 # ==============================================================================
 COPY requirements.txt /tmp/requirements.txt
+
+# Install with modern resolver and proper dependency resolution
 RUN pip install --no-cache-dir \
-    --use-deprecated=legacy-resolver \
     --default-timeout=100 \
     --retries=5 \
     -r /tmp/requirements.txt
@@ -70,8 +74,8 @@ USER vscode
 # ------------------------------------------------------------------------------
 FROM base AS eval
 
-# Download NLTK data (required for ROUGE metrics)
-RUN python -c "import nltk; nltk.download('punkt', quiet=True); nltk.download('stopwords', quiet=True)"
+# Download NLTK data (required for evaluation metrics)
+RUN python -c "import nltk; nltk.download('punkt', quiet=True); nltk.download('punkt_tab', quiet=True); nltk.download('stopwords', quiet=True)"
 
 # Switch to vscode user
 USER vscode
