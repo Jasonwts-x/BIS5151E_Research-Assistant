@@ -1,12 +1,16 @@
 # =============================================================================
-# Git Attributes Configuration
+# Research-Assistant | Git Attributes Configuration
+# =============================================================================
+# This file configures how Git handles different file types in the repository.
 # =============================================================================
 
-# Default: Auto-detect text files and normalize line endings
+# -----------------------------------------------------------------------------
+# DEFAULT: AUTO-DETECT TEXT FILES AND NORMALIZE LINE ENDINGS
+# -----------------------------------------------------------------------------
 * text=auto
 
 # =============================================================================
-# Source Code
+# SOURCE CODE
 # =============================================================================
 *.py text eol=lf diff=python
 *.pyx text eol=lf diff=python
@@ -15,7 +19,7 @@
 *.bash text eol=lf
 
 # =============================================================================
-# Configuration Files
+# CONFIGURATION FILES
 # =============================================================================
 *.yaml text eol=lf
 *.yml text eol=lf
@@ -30,13 +34,13 @@
 .dockerignore text eol=lf
 
 # =============================================================================
-# Docker
+# DOCKER
 # =============================================================================
 Dockerfile text eol=lf
 docker-compose*.yml text eol=lf
 
 # =============================================================================
-# Documentation
+# DOCUMENTATION
 # =============================================================================
 *.md text eol=lf diff=markdown
 *.txt text eol=lf
@@ -45,7 +49,7 @@ LICENSE text eol=lf
 README* text eol=lf
 
 # =============================================================================
-# Web
+# WEB
 # =============================================================================
 *.html text eol=lf diff=html
 *.css text eol=lf
@@ -55,14 +59,14 @@ README* text eol=lf
 *.tsx text eol=lf
 
 # =============================================================================
-# Data Files
+# DAATA FILES
 # =============================================================================
 *.csv text eol=lf
 *.tsv text eol=lf
 *.xml text eol=lf
 
 # =============================================================================
-# Binary Files (No conversion)
+# BINARY FILES
 # =============================================================================
 *.pdf binary
 *.png binary
@@ -76,7 +80,9 @@ README* text eol=lf
 *.7z binary
 *.rar binary
 
-# Model Files
+# -----------------------------------------------------------------------------
+# MODEL FILES
+# -----------------------------------------------------------------------------
 *.gguf binary
 *.bin binary
 *.safetensors binary
@@ -84,13 +90,15 @@ README* text eol=lf
 *.pth binary
 *.ckpt binary
 
-# Database Files
+# -----------------------------------------------------------------------------
+# DATABASE FILES
+# -----------------------------------------------------------------------------
 *.db binary
 *.sqlite binary
 *.sqlite3 binary
 
 # =============================================================================
-# Archives
+# ARCHIVE FILES
 # =============================================================================
 *.tar.gz binary
 *.tgz binary
@@ -98,20 +106,25 @@ README* text eol=lf
 *.tbz2 binary
 
 # =============================================================================
-# Language Statistics (for GitHub Linguist)
+# LANGUISTIC STATISTICS
 # =============================================================================
-# Exclude test data from language stats
+# EXCLUDE TEST DATA FROM LANGUAGE STATISTICS
+# -----------------------------------------------------------------------------
 tests/fixtures/** linguist-vendored
 data/** linguist-vendored
 outputs/** linguist-generated
 
-# Mark documentation as documentation
+# -----------------------------------------------------------------------------
+# MARK DOCUMENTATION AS DOCUMENTATION
+# -----------------------------------------------------------------------------
 docs/** linguist-documentation
 
 # =============================================================================
-# Export Ignore (files not included in git archive)
+# EXPORT IGNORE
 # =============================================================================
 .gitattributes export-ignore
 .gitignore export-ignore
 .github export-ignore
 tests export-ignore
+
+# =============================================================================
