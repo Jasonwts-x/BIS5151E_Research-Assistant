@@ -18,10 +18,11 @@ from ...eval.schemas.evaluation import (
     EvaluationResponse,
     LeaderboardResponse,
 )
+from ..openapi import APITag
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/eval", tags=["evaluation"])
+router = APIRouter(prefix="/eval", tags=[APITag.EVAL])
 
 # Get eval service URL from environment
 EVAL_URL = os.getenv("EVAL_SERVICE_URL", "http://eval:8502")
@@ -55,6 +56,37 @@ async def health():
             detail=f"Evaluation service unavailable: {str(e)}",
         ) from e
     except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=e.response.status_code,
+            detail=e.response.text,
+        ) from e
+
+
+@router.get(
+    "/ready",
+    status_code=status.HTTP_200_OK,
+    summary="Check evaluation service readiness",
+)
+async def ready():
+    """
+    Proxy readiness check to evaluation service.
+    
+    Checks if evaluation service is ready to accept requests.
+    Verifies database connectivity and TruLens initialization.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(f"{EVAL_URL}/health/ready")
+            response.raise_for_status()
+            return response.json()
+    except httpx.RequestError as e:
+        logger.error("Eval service unreachable: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Evaluation service unavailable: {str(e)}",
+        ) from e
+    except httpx.HTTPStatusError as e:
+        logger.error("Eval service not ready: %s", e.response.text)
         raise HTTPException(
             status_code=e.response.status_code,
             detail=e.response.text,
