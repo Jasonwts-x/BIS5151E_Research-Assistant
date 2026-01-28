@@ -10,8 +10,8 @@ from typing import Any, Dict, List
 
 from crewai import LLM
 from haystack.dataclasses import Document
-from rag.core.pipeline import RAGPipeline
 
+from ..rag.core.pipeline import RAGPipeline
 from ..eval.guardrails import InputValidator, OutputValidator, load_guardrails_config
 from ..eval.performance import PerformanceTracker
 from ..eval.trulens import TruLensClient
