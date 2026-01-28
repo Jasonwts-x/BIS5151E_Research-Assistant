@@ -83,3 +83,83 @@ def _check_ollama_optional(host: str) -> bool | None:
         return r.status_code == 200
     except Exception:
         return False
+
+
+# ============================================================================
+# Aggregated Service Health Check
+# ============================================================================
+
+
+@router.get(
+    "/health/services",
+    status_code=status.HTTP_200_OK,
+    summary="Check health of all downstream services",
+)
+def health_services():
+    """
+    Check health of all downstream services.
+    
+    Returns status for:
+    - Weaviate (vector database)
+    - Ollama (LLM service)
+    - CrewAI (agent service)
+    - Eval (evaluation service)
+    
+    Useful for monitoring and debugging the entire system.
+    """
+    import os
+    
+    services_status = {}
+    
+    # Check Weaviate
+    cfg = load_config()
+    services_status["weaviate"] = {
+        "healthy": _check_weaviate(cfg.weaviate.url),
+        "url": cfg.weaviate.url,
+    }
+    
+    # Check Ollama
+    ollama_healthy = _check_ollama_optional(cfg.llm.host)
+    services_status["ollama"] = {
+        "healthy": ollama_healthy if ollama_healthy is not None else False,
+        "url": cfg.llm.host,
+        "optional": ollama_healthy is None,
+    }
+    
+    # Check CrewAI service
+    crewai_url = os.getenv("CREWAI_URL", "http://crewai:8100")
+    try:
+        r = requests.get(f"{crewai_url}/health", timeout=2)
+        crewai_healthy = r.status_code == 200
+    except Exception:
+        crewai_healthy = False
+    
+    services_status["crewai"] = {
+        "healthy": crewai_healthy,
+        "url": crewai_url,
+    }
+    
+    # Check Eval service
+    eval_url = os.getenv("EVAL_SERVICE_URL", "http://eval:8502")
+    try:
+        r = requests.get(f"{eval_url}/health", timeout=2)
+        eval_healthy = r.status_code == 200
+    except Exception:
+        eval_healthy = False
+    
+    services_status["eval"] = {
+        "healthy": eval_healthy,
+        "url": eval_url,
+    }
+    
+    # Overall status
+    all_healthy = all(
+        service["healthy"] 
+        for service in services_status.values()
+        if not service.get("optional", False)
+    )
+    
+    return {
+        "status": "healthy" if all_healthy else "degraded",
+        "services": services_status,
+    }
