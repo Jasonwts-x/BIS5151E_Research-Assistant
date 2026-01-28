@@ -8,6 +8,7 @@ from .openapi import openapi_tags
 from .routers.system import router as system_router
 from .routers.crewai import router as crewai_router
 from .routers.ollama import router as ollama_router
+from .routers.eval import router as eval_router
 from .routers.rag import router as rag_router
 
 logging.basicConfig(
@@ -26,4 +27,5 @@ app = FastAPI(
 app.include_router(system_router)
 app.include_router(crewai_router)
 app.include_router(ollama_router)
+app.include_router(eval_router)
 app.include_router(rag_router)

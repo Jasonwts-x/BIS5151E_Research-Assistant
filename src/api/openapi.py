@@ -8,6 +8,7 @@ class APITag(StrEnum):
     SYSTEM = "system"
     CREWAI = "crewai"
     OLLAMA = "ollama"
+    EVAL = "eval"
     RAG = "rag"
 
 
@@ -27,6 +28,10 @@ def openapi_tags() -> list[dict[str, Any]]:
         {
             "name": APITag.OLLAMA,
             "description": "Direct Ollama LLM access and model management.",
+        },
+        {
+            "name": APITag.EVAL,
+            "description": "Evaluation service endpoints (metrics, leaderboard)",
         },
         {
             "name": APITag.RAG,
