@@ -18,7 +18,7 @@ SELECT 'CREATE DATABASE trulens'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'trulens')\gexec
 
 -- Grant permissions
-GRANT ALL PRIVILEGES ON DATABASE trulens TO postgres;
+GRANT ALL PRIVILEGES ON DATABASE trulens TO research_assistant;
 
 -- ============================================================================
 -- CUSTOM PERFORMANCE METRICS SCHEMA

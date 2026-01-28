@@ -15,7 +15,7 @@ ResearchAssistantGPT uses **Docker Compose** to orchestrate multiple services:
 | **ollama** | ollama/ollama:latest | LLM inference | 11434 |
 | **n8n** | n8nio/n8n:latest | Workflow automation | 5678 |
 | **api** | (custom build) | FastAPI server | 8000 |
-| **crewai** | (custom build) | Agent service | 8001 |
+| **crewai** | (custom build) | Agent service | 8100 |
 
 ---
 
