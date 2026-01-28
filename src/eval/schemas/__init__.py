@@ -17,11 +17,11 @@ from .metrics import (
 )
 
 __all__ = [
-    # Evaluation
     "EvaluationRequest",
     "EvaluationResponse",
     "EvaluationSummary",
-    # Metrics
+    "LeaderboardEntry",
+    "LeaderboardResponse",
     "TruLensMetrics",
     "GuardrailsResult",
     "PerformanceMetrics",
