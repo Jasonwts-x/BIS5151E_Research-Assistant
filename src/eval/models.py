@@ -89,15 +89,15 @@ class QualityMetrics(Base):
     timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
     # ROUGE scores
-    rouge_1 = Column(Float)                     # MISSING DESCRIPTION
-    rouge_2 = Column(Float)                     # MISSING DESCRIPTION
-    rouge_l = Column(Float)                     # MISSING DESCRIPTION
+    rouge_1 = Column(Float)                     # Unigram overlap between generated and referenc
+    rouge_2 = Column(Float)                     # Bigram overlap between generated and reference
+    rouge_l = Column(Float)                     # Longest common subsequence overlap
 
     # BLEU score
-    bleu_score = Column(Float)                  # MISSING DESCRIPTION
+    bleu_score = Column(Float)                  # Precision-based metric for translation quality (0-1)
 
     # Semantic similarity
-    semantic_similarity = Column(Float)         # MISSING DESCRIPTION
+    semantic_similarity = Column(Float)         # Cosine similarity between embeddings (0-1)
 
     # Factuality
     factuality_score = Column(Float)            # Overall factuality score
