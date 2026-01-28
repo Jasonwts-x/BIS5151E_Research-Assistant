@@ -1,7 +1,7 @@
 """
-Local File Document Source
+Local File Source
 
-Loads documents from local filesystem (data/raw/).
+Load documents from local filesystem directories.
 """
 from __future__ import annotations
 
@@ -19,22 +19,24 @@ logger = logging.getLogger(__name__)
 
 class LocalFileSource(DocumentSource):
     """
-    Loads documents from local filesystem.
-    
+    Load documents from local filesystem.
     Supports: PDF, TXT files from multiple directories
     """
 
-    def __init__(self, data_dir: Path):
+    def __init__(self, data_dirs: List[Path] | Path):
         """
         Initialize local file source.
         
         Args:
             data_dirs: Single directory or list of directories containing documents
         """
+        # Handle both single Path and List[Path]
         if isinstance(data_dirs, Path):
             self.data_dirs = [data_dirs]
-        else:
+        elif isinstance(data_dirs, list):
             self.data_dirs = data_dirs
+        else:
+            raise TypeError(f"data_dirs must be Path or List[Path], got {type(data_dirs)}")
 
     def fetch(self, pattern: str = "*") -> List[Document]:
         """
@@ -77,7 +79,7 @@ class LocalFileSource(DocumentSource):
         )
         
         # Load PDFs
-        if pdfs:
+        if all_pdfs:
             pdf_conv = PyPDFToDocument()
             for pdf in all_pdfs:
                 try:
@@ -118,5 +120,6 @@ class LocalFileSource(DocumentSource):
         doc.meta = meta
 
     def get_source_name(self) -> str:
+        """Get human-readable source name."""
         dir_names = ", ".join(str(d) for d in self.data_dirs)
         return f"LocalFiles({dir_names})"

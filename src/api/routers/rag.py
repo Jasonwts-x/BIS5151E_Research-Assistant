@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 from typing import Annotated
 
 import httpx
@@ -33,26 +34,31 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/rag", tags=[APITag.RAG])
 
-# CrewAI service URL (internal Docker network)
+# ============================================================================
+# Configuration - Data Directories
+# ============================================================================
+
+# Resolve project root (4 levels up from this file: routers/ -> api/ -> src/ -> project/)
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+DATA_RAW_DIR = PROJECT_ROOT / "data" / "raw"
+DATA_ARXIV_DIR = PROJECT_ROOT / "data" / "arxiv"
+DATA_DIRS = [DATA_RAW_DIR, DATA_ARXIV_DIR]
+
+# Ensure directories exist
+DATA_RAW_DIR.mkdir(parents=True, exist_ok=True)
+DATA_ARXIV_DIR.mkdir(parents=True, exist_ok=True)
+
+logger.info("Data directories configured: raw=%s, arxiv=%s", DATA_RAW_DIR, DATA_ARXIV_DIR)
+
+# ============================================================================
+# CrewAI Service Configuration
+# ============================================================================
+
 CREWAI_URL = os.getenv("CREWAI_URL", "http://crewai:8100")
-
-# Get data directory from config
-def get_data_dir():
-    """Get data directory from config or environment."""
-    from pathlib import Path
-    data_dir_str = os.getenv("DATA_DIR")
-    if data_dir_str:
-        return Path(data_dir_str)
-    # Fallback to default
-    return Path("/workspaces/BIS5151E_Research-Assistant/data/raw")
-
-DATA_DIR = get_data_dir()
-
 
 # ============================================================================
 # Query Endpoints
 # ============================================================================
-
 
 @router.post(
     "/query",
@@ -134,12 +140,6 @@ async def rag_query(
 # ============================================================================
 # Ingestion Endpoints
 # ============================================================================
-
-from pathlib import Path
-
-DATA_RAW_DIR = Path(__file__).resolve().parents[3] / "data" / "raw"
-DATA_ARXIV_DIR = Path(__file__).resolve().parents[3] / "data" / "arxiv"
-DATA_DIRS = [DATA_RAW_DIR, DATA_ARXIV_DIR] 
 
 @router.post(
     "/ingest/local",
