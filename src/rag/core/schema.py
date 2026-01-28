@@ -185,8 +185,6 @@ class SchemaManager:
         For simplicity, we check:
         - Collection exists
         - Has expected properties (by name)
-        
-        TODO (Step F): Add stricter validation (types, settings)
         """
         try:
             collection = self.client.collections.get(self.collection_name)
