@@ -4,19 +4,19 @@ FastAPI application serving as the primary entry point for all services.
 """
 from __future__ import annotations
 
+import logging
+
 from fastapi import FastAPI
 
 from ..utils.logging import setup_logging
 from .openapi import openapi_tags
+from .routers import crewai, eval, ollama, rag, system
 
-from .routers.system import router as system_router
-from .routers.crewai import router as crewai_router
-from .routers.ollama import router as ollama_router
-from .routers.eval import router as eval_router
-from .routers.rag import router as rag_router
-
+# Configure logging once for the entire service
 setup_logging(level="INFO", service_name="api-gateway")
+logger = logging.getLogger(__name__)
 
+# Initialize FastAPI app
 app = FastAPI(
     title="Research-Assistant-API-Gateway",
     description="Research assistant that creates short literature summaries with references.",
@@ -24,8 +24,23 @@ app = FastAPI(
     openapi_tags=openapi_tags(),
 )
 
-app.include_router(system_router)
-app.include_router(crewai_router)
-app.include_router(ollama_router)
-app.include_router(eval_router)
-app.include_router(rag_router)
+# Include routers
+app.include_router(system.router)
+logger.info("✓ System router registered")
+
+app.include_router(crewai.router)
+logger.info("✓ CrewAI router registered")
+
+app.include_router(ollama.router)
+logger.info("✓ Ollama router registered")
+
+app.include_router(eval.router)
+logger.info("✓ Eval router registered")
+
+app.include_router(rag.router)
+logger.info("✓ RAG router registered")
+
+logger.info("=" * 70)
+logger.info("API Gateway initialized successfully")
+logger.info("Documentation: http://localhost:8000/docs")
+logger.info("=" * 70)

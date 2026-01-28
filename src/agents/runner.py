@@ -53,7 +53,7 @@ class CrewRunner:
         try:
             from ..rag.core import RAGPipeline
             self.rag_pipeline = RAGPipeline.from_existing()
-            logger.info("RAG pipeline initialized successfully")
+            logger.info("✓ RAG pipeline initialized successfully")
         except Exception as e:
             logger.warning(
                 "Failed to initialize RAG pipeline: %s. Crew will run without context.",
@@ -68,7 +68,7 @@ class CrewRunner:
             temperature=0.3,
         )
         logger.info(
-            "LLM initialized: ollama/%s at %s", 
+            "✓ LLM initialized: ollama/%s at %s", 
             self.config.llm.model, 
             self.config.llm.host
         )
