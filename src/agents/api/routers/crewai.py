@@ -4,7 +4,7 @@ import logging
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 
-from ....api.schemas.crewai import (
+from ...schemas.crewai import (
     CrewAsyncRunResponse,
     CrewRunRequest,
     CrewRunResponse,

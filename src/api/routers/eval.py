@@ -12,8 +12,7 @@ from typing import Optional
 import httpx
 from fastapi import APIRouter, HTTPException, Query, status
 
-# Import schemas from eval service (avoid duplication)
-from ...eval.schemas.evaluation import (
+from ..schemas.eval import (
     EvaluationRequest,
     EvaluationResponse,
     LeaderboardResponse,

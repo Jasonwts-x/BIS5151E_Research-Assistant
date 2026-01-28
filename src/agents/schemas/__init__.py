@@ -1,11 +1,10 @@
 """
-CrewAI Schemas - Gateway Re-export
-Re-exports CrewAI schemas from the service for gateway use.
-This provides a single import point for gateway routers.
+CrewAI Service Schemas
+Pydantic models for CrewAI service requests and responses.
 """
 from __future__ import annotations
 
-from ...agents.schemas.crewai import (
+from .crewai import (
     CrewAsyncRunResponse,
     CrewRunRequest,
     CrewRunResponse,
