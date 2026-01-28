@@ -1,6 +1,7 @@
 from __future__ import annotations
  
 import logging
+import re
 from typing import TYPE_CHECKING
  
 from crewai import Agent, Crew, Process, Task
@@ -78,12 +79,6 @@ class ResearchCrew:
     def _has_valid_context(self, context: str) -> bool:
         """
         Check if context contains actual documents or is just a placeholder.
-       
-        Args:
-            context: Context string from RAG retrieval
-           
-        Returns:
-            True if valid context exists, False otherwise
         """
         if not context:
             return False
@@ -114,27 +109,85 @@ class ResearchCrew:
         logger.debug("Context validation passed: %d chars with SOURCE markers", len(context))
         return True
  
+    def _summarize_sources(self, raw_context: str, topic: str) -> str:
+        """
+        OPTIMIZATION: Pre-summarize sources and extract Metadata for APA7 citations.
+        """
+        logger.info("⚡ Pre-summarizing sources and extracting metadata...")
+       
+        # Split context by Source headers
+        parts = re.split(r'(SOURCE \[\d+\])', raw_context)
+       
+        optimized_output = []
+        current_source_header = ""
+       
+        for part in parts:
+            if "SOURCE [" in part:
+                current_source_header = part.strip()
+            elif current_source_header and len(part.strip()) > 50:
+                # We have a header and content
+                lines = part.strip().split('\n')
+                filename = lines[0].strip()[:100] # Backup if extraction fails
+               
+                content_body = "\n".join(lines[1:]) if len(lines) > 1 else part
+                short_content = content_body[:2000] # Provide enough context for metadata extraction
+               
+                # --- LLM PROMPT FOR METADATA + FACTS ---
+                prompt = f"""
+                Analyze this text segment from a research document.
+               
+                TASK 1: Extract Citation Metadata.
+                - Try to find the Title, Author (Surname), and Year.
+                - If not found, use the filename: "{filename}"
+               
+                TASK 2: Extract 3 Key Facts relevant to '{topic}'.
+               
+                OUTPUT FORMAT (Strict):
+                METADATA: [Author Surname] ([Year]). [Title]
+                FACTS:
+                - [Fact 1]
+                - [Fact 2]
+                - [Fact 3]
+               
+                TEXT:
+                {short_content}
+                """
+               
+                try:
+                    if hasattr(self.llm, 'invoke'):
+                         summary = self.llm.invoke(prompt).content
+                    else:
+                         summary = self.llm.call([{"role": "user", "content": prompt}])
+                except Exception as e:
+                    logger.warning(f"Summarization failed for {current_source_header}: {e}")
+                    summary = f"METADATA: {filename}\nFACTS:\n- Content available."
+ 
+                # Append the structured summary
+                optimized_output.append(f"{current_source_header}")
+                optimized_output.append(f"{summary}\n")
+                optimized_output.append("-" * 40)
+               
+                current_source_header = ""
+ 
+        result_context = "\n".join(optimized_output)
+        logger.info(f"Context optimized: Reduced from {len(raw_context)} to {len(result_context)} chars")
+        return result_context
+ 
     def _run_strict_mode(self, topic: str, context: str, language: str) -> str:
         """
         Run full pipeline with strict fact-checking against provided context.
-       
-        Pipeline: Writer → Reviewer → FactChecker → (Translator if needed)
- 
-        Args:
-            topic: Research topic
-            context: Retrieved context
-            language: Target language
-           
-        Returns:
-            Fact-checked output with citations and references
+        Uses Pre-Summarization to speed up processing.
         """
-        logger.info("Running STRICT MODE - will verify all claims against context")
+        logger.info("Running STRICT MODE - with optimized context")
        
-        # Create tasks
+        # 1. OPTIMIZATION STEP: Summarize context first
+        optimized_context = self._summarize_sources(context, topic)
+       
+        # 2. Create tasks with OPTIMIZED context
         writer_task = create_writer_task(
             agent=self.writer,
             topic=topic,
-            context=context,
+            context=optimized_context,
             mode="strict"
         )
        
@@ -146,24 +199,30 @@ class ResearchCrew:
         factchecker_task = create_factchecker_task(
             agent=self.factchecker,
             reviewer_task=reviewer_task,
-            context=context
+            context=optimized_context
         )
        
-        # Build crew
         tasks = [writer_task, reviewer_task, factchecker_task]
        
-        # Add translation if needed (future enhancement)
+        # Add translation if needed
         if language != "en":
-            logger.warning("Translation not yet implemented, using English")
-       
+            translator_task = create_translator_task(
+                agent=self.translator,
+                factchecker_task=factchecker_task,
+                target_language=language
+            )
+            tasks.append(translator_task)
+            agents_list = [self.writer, self.reviewer, self.factchecker, self.translator]
+        else:
+            agents_list = [self.writer, self.reviewer, self.factchecker]
+
         crew = Crew(
-            agents=[self.writer, self.reviewer, self.factchecker],
+            agents=agents_list,
             tasks=tasks,
             process=Process.sequential,
             verbose=True,
         )
        
-        # Execute
         logger.info("Executing crew with %d tasks", len(tasks))
         result = crew.kickoff()
  
@@ -175,24 +234,9 @@ class ResearchCrew:
     def _run_fallback_mode(self, topic: str, language: str) -> str:
         """
         Run full pipeline using general knowledge (no local database context).
-       
-        Pipeline: Writer → Reviewer → FactChecker → (Translator if needed)
-       
-        The agents will:
-        1. Writer: Use general academic knowledge with cautious language
-        2. Reviewer: Check clarity, coherence, and academic tone
-        3. FactChecker: Verify claims are reasonable and properly qualified
-       
-        Args:
-            topic: Research topic
-            language: Target language
-           
-        Returns:
-            Reviewed and fact-checked summary based on general knowledge
         """
         logger.info("Running FALLBACK MODE - using general knowledge")
        
-        # Create fallback writer task
         writer_task = create_writer_task(
             agent=self.writer,
             topic=topic,
@@ -213,17 +257,25 @@ class ResearchCrew:
  
         tasks = [writer_task, reviewer_task, factchecker_task]
  
+        # Add translation if needed
         if language != "en":
-            logger.warning("Translation not yet implemented, using English")
- 
+            translator_task = create_translator_task(
+                agent=self.translator,
+                factchecker_task=factchecker_task,
+                target_language=language
+            )
+            tasks.append(translator_task)
+            agents_list = [self.writer, self.reviewer, self.factchecker, self.translator]
+        else:
+            agents_list = [self.writer, self.reviewer, self.factchecker]
+
         crew = Crew(
-            agents=[self.writer, self.reviewer, self.factchecker],
+            agents=agents_list,
             tasks=tasks,
             process=Process.sequential,
             verbose=True,
         )
        
-        # Execute
         logger.info("Executing fallback crew with %d tasks", len(tasks))
         result = crew.kickoff()
  
@@ -234,14 +286,7 @@ class ResearchCrew:
  
     def _format_output(self, result, mode: str = "strict") -> str:
         """
-        Format crew output correctly, preserving citations and references.
-       
-        Args:
-            result: CrewAI task result
-            mode: "strict" or "fallback"
-           
-        Returns:
-            Formatted output with citations and references
+        Format crew output correctly, preserving citations and CLEANING unwanted artifacts.
         """
         logger.debug("Formatting output (mode: %s, result type: %s)", mode, type(result))
        
@@ -249,17 +294,38 @@ class ResearchCrew:
             # Extract raw text output from CrewAI result
             if hasattr(result, 'raw'):
                 output_text = str(result.raw)
-                logger.debug("Using result.raw")
             elif hasattr(result, 'output'):
                 output_text = str(result.output)
-                logger.debug("Using result.output")
             else:
                 output_text = str(result)
-                logger.debug("Using str(result)")
            
-            # Clean up the output
             output_text = output_text.strip()
            
+            # --- CLEANUP LOGIC: Remove Agent Instructions from Final Output ---
+            cleaned_lines = []
+            lines = output_text.split('\n')
+           
+            for line in lines:
+                lower_line = line.lower().strip()
+               
+                # --- HARDCORE FILTERS for the artifacts you observed ---
+                # "You MUST return the actual complete content..."
+                if "actual complete content" in lower_line: continue
+                # "...not a summary"
+                if "not a summary" in lower_line: continue
+                # "This is the expected criteria..."
+                if "expected criteria" in lower_line: continue
+                # "You must return..."
+                if "you must return" in lower_line: continue
+                # "Final Answer:" (redundant label)
+                if lower_line.startswith("final answer:"): continue
+               
+                cleaned_lines.append(line)
+           
+            # Reassemble
+            output_text = "\n".join(cleaned_lines).strip()
+            # -----------------------------------------------------------------
+ 
             # Log statistics
             citation_count = self._extract_citations_count(output_text)
             has_references = "## References" in output_text or "## Literaturverzeichnis" in output_text
@@ -275,7 +341,6 @@ class ResearchCrew:
             if mode == "strict" and citation_count == 0:
                 logger.warning("⚠️ STRICT MODE but no citations [1], [2] found in output!")
            
-            # Validation: Warn if no references section in strict mode
             if mode == "strict" and not has_references:
                 logger.warning("⚠️ STRICT MODE but no ## References section found!")
            
@@ -288,18 +353,7 @@ class ResearchCrew:
     def _extract_citations_count(self, text: str) -> int:
         """
         Count inline citations in text for debugging.
-       
-        Args:
-            text: Text to analyze
-           
-        Returns:
-            Number of citations found (e.g., [1], [2], etc.)
         """
         import re
         citations = re.findall(r'\[\d+\]', text)
         return len(citations)
-
-
-# ============================================================================
-# TODO (Step F): Add agent memory support
-# ============================================================================

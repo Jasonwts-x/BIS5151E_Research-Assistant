@@ -10,6 +10,7 @@ from typing import Any, Dict, List
 
 from crewai import LLM
 from haystack.dataclasses import Document
+from rag.core.pipeline import RAGPipeline
 
 from ..eval.guardrails import InputValidator, OutputValidator, load_guardrails_config
 from ..eval.performance import PerformanceTracker
@@ -55,7 +56,8 @@ class CrewRunner:
             logger.info("RAG pipeline initialized successfully")
         except Exception as e:
             logger.warning(
-                "Failed to initialize RAG pipeline: %s. Crew will run without context.", e
+                "Failed to initialize RAG pipeline: %s. Crew will run without context.",
+                e,
             )
             self.rag_pipeline = None
         
@@ -112,37 +114,37 @@ class CrewRunner:
 
     def retrieve_context(self, topic: str) -> tuple[str, List[Document]]:
         """
-        Retrieve relevant documents from RAG pipeline.
-        
+        Retrieve relevant context from RAG pipeline.
+    
         Args:
-            topic: Research topic/question
-            
-        Returns:
-            (formatted_context, documents) tuple
-        """
-        if self.rag_pipeline is None:
-            logger.warning("RAG pipeline not available - returning empty context")
-            return "NO CONTEXT AVAILABLE - RAG pipeline not initialized.", []
+            topic: Query topic
         
+        Returns:
+            Tuple of (formatted_context_string, list_of_documents)
+        """
+        # Check if RAG pipeline is available
+        if self.rag_pipeline is None:
+            logger.warning("RAG pipeline not initialized - returning empty context")
+            return "No context available (RAG pipeline not initialized).", []
+    
         try:
             with self.performance_tracker.track("rag_retrieval"):
-                documents = self.rag_pipeline.run(
-                    query=topic,
-                    top_k=self.config.rag.top_k
-                )
+                # Get top-k documents
+                top_k = self.config.rag.top_k
+                logger.info("Retrieving top-%d documents for topic: %s", top_k, topic)
             
-            logger.info("Retrieved %d documents for topic: %s", len(documents), topic)
+                docs = self.rag_pipeline.run(query=topic, top_k=top_k)
             
-            if not documents:
-                logger.warning("No documents found for query: %s", topic)
-                return "NO CONTEXT AVAILABLE - No relevant documents found.", []
+                logger.info("Retrieved %d documents from RAG", len(docs))
             
-            formatted_context = self._format_context(documents)
-            return formatted_context, documents
+                # Format context
+                context = self._format_context(docs)
+            
+                return context, docs
             
         except Exception as e:
-            logger.exception("Context retrieval failed: %s", e)
-            return f"ERROR: Context retrieval failed - {str(e)}", []
+            logger.exception("RAG retrieval failed: %s", e)
+            return f"Context retrieval failed: {str(e)}", []
 
     def _format_context(self, documents: List[Document]) -> str:
         """Format documents with citation numbers."""
