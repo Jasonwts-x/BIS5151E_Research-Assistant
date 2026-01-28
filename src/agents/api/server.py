@@ -20,3 +20,5 @@ app = FastAPI(
 )
 
 app.include_router(crew_router)
+
+logger.info("CrewAI service initialized")
