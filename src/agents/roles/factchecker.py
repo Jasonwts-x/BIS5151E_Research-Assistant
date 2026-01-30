@@ -1,11 +1,28 @@
+"""
+FactChecker Agent Role
+
+Creates the FactChecker agent with citation validation capabilities.
+This agent verifies all claims against provided context.
+"""
 from __future__ import annotations
 
 from crewai import Agent
+
+from ..tools import validate_citation
 
 
 def create_factchecker_agent(llm) -> Agent:
     """
     Create the FactChecker agent with strict verification requirements.
+    
+    The FactChecker agent has access to the citation validator tool
+    to programmatically verify citations.
+    
+    Args:
+        llm: Language model instance
+        
+    Returns:
+        Configured FactChecker agent
     """
     return Agent(
         role="Fact Checker & Citation Validator",
@@ -22,4 +39,5 @@ def create_factchecker_agent(llm) -> Agent:
         allow_delegation=False,
         llm=llm,
         max_iter=1,
+        tools=[validate_citation],
     )

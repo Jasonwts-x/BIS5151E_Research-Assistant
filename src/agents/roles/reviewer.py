@@ -1,16 +1,33 @@
+"""
+Reviewer Agent Role
+
+Creates the Reviewer agent with text analysis capabilities.
+This agent improves clarity and coherence of drafts.
+"""
 from __future__ import annotations
 
 from crewai import Agent
+
+from ..tools import analyze_text_quality
 
 
 def create_reviewer_agent(llm) -> Agent:
     """
     Create the Reviewer agent.
-
+    
+    The Reviewer agent has access to text analysis tools
+    to objectively assess text quality.
+    
     Responsibilities:
     - Improve clarity, coherence, and flow
     - Enhance academic writing style
     - Preserve all original claims and citations
+    
+    Args:
+        llm: Language model instance
+        
+    Returns:
+        Configured Reviewer agent
     """
     return Agent(
         role="Academic Reviewer",
@@ -26,4 +43,5 @@ def create_reviewer_agent(llm) -> Agent:
         allow_delegation=False,
         llm=llm,
         max_iter=1,
+        tools=[analyze_text_quality],
     )
