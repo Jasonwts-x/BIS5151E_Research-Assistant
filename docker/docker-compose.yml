@@ -13,10 +13,10 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-research_assistant}
       POSTGRES_USER: ${POSTGRES_USER:-research_assistant}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-reasearch_password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-research_password}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ../scripts/setup/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+      - ../database/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-research_assistant} -d ${POSTGRES_DB:-research_assistant}"]
       start_period: 10s
@@ -125,7 +125,7 @@ services:
       DB_POSTGRESDB_PORT: 5432
       DB_POSTGRESDB_DATABASE: ${POSTGRES_DB:-research_assistant}
       DB_POSTGRESDB_USER: ${POSTGRES_USER:-research_assistant} 
-      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:-reasearch_password}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:-research_password}
     volumes:
       - n8n_data:/home/node/.n8n
       - ./workflows:/home/node/workflows
@@ -233,11 +233,11 @@ services:
       POSTGRES_PORT: 5432
       POSTGRES_DB: trulens
       POSTGRES_USER: ${POSTGRES_USER:-research_assistant}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-reasearch_password}
-      DATABASE_URL: postgresql://${POSTGRES_USER:-research_assistant}:${POSTGRES_PASSWORD:-reasearch_password}@postgres:5432/trulens
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-research_password}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-research_assistant}:${POSTGRES_PASSWORD:-research_password}@postgres:5432/trulens
 
       TRULENS_ENABLED: "true"
-      TRULENS_DATABASE_URL: postgresql://${POSTGRES_USER:-research_assistant}:${POSTGRES_PASSWORD:-reasearch_password}@postgres:5432/trulens
+      TRULENS_DATABASE_URL: postgresql://${POSTGRES_USER:-research_assistant}:${POSTGRES_PASSWORD:-research_password}@postgres:5432/trulens
       GUARDRAILS_ENABLED: "true"
       GUARDRAILS_STRICT_MODE: "false"
       EVAL_API_PORT: 8502

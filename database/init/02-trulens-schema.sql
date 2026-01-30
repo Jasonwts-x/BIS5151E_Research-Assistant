@@ -1,33 +1,21 @@
 -- ============================================================================
--- Database Initialization Script
--- ResearchAssistant Evaluation Database
+-- TruLens Custom Schema
+-- ResearchAssistant Evaluation Tables
+-- ============================================================================
+-- This script runs second (02-*) and creates custom evaluation tables
+-- NOTE: TruLens will create its own 'records' table on first initialization
+-- Foreign key constraints will be added later via add-foreign-keys.sh
 -- ============================================================================
 
--- Create TruLens database if it doesn't exist
--- Note: This script runs as postgres user during container initialization
-
--- ============================================================================
--- TRULENS DATABASE
--- ============================================================================
-
--- TruLens will create its own tables when initialized
--- We just ensure the database exists
-
--- Check if trulens database exists, if not create it
-SELECT 'CREATE DATABASE trulens'
-WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'trulens')\gexec
-
--- Grant permissions
-GRANT ALL PRIVILEGES ON DATABASE trulens TO research_assistant;
+-- Connect to trulens database
+\c trulens
 
 -- ============================================================================
 -- CUSTOM PERFORMANCE METRICS SCHEMA
 -- ============================================================================
 
--- Connect to trulens database for custom tables
-\c trulens
-
 -- Performance metrics table (supplement to TruLens records)
+-- NOTE: Foreign key constraints will be added AFTER TruLens creates its tables
 CREATE TABLE IF NOT EXISTS performance_metrics (
     id SERIAL PRIMARY KEY,
     record_id VARCHAR(255) NOT NULL,
@@ -49,12 +37,7 @@ CREATE TABLE IF NOT EXISTS performance_metrics (
     
     -- Metadata
     model_name VARCHAR(100),
-    language VARCHAR(10),
-    
-    CONSTRAINT fk_record
-        FOREIGN KEY(record_id) 
-        REFERENCES records(record_id)
-        ON DELETE CASCADE
+    language VARCHAR(10)
 );
 
 CREATE INDEX IF NOT EXISTS idx_performance_record_id ON performance_metrics(record_id);
@@ -91,12 +74,7 @@ CREATE TABLE IF NOT EXISTS quality_metrics (
     
     -- Answer metrics
     answer_length INTEGER,
-    sentence_count INTEGER,
-    
-    CONSTRAINT fk_record
-        FOREIGN KEY(record_id) 
-        REFERENCES records(record_id)
-        ON DELETE CASCADE
+    sentence_count INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS idx_quality_record_id ON quality_metrics(record_id);
@@ -130,12 +108,7 @@ CREATE TABLE IF NOT EXISTS guardrails_results (
     
     -- Violation details
     violations TEXT[],
-    warnings TEXT[],
-    
-    CONSTRAINT fk_record
-        FOREIGN KEY(record_id) 
-        REFERENCES records(record_id)
-        ON DELETE CASCADE
+    warnings TEXT[]
 );
 
 CREATE INDEX IF NOT EXISTS idx_guardrails_record_id ON guardrails_results(record_id);
@@ -145,16 +118,14 @@ CREATE INDEX IF NOT EXISTS idx_guardrails_timestamp ON guardrails_results(timest
 -- VIEWS FOR CONVENIENT QUERYING
 -- ============================================================================
 
--- Comprehensive evaluation view (joins all metrics)
+-- Note: This view will fail if TruLens hasn't created 'records' table yet
+-- It will be created successfully after TruLens initializes
 CREATE OR REPLACE VIEW evaluation_summary AS
 SELECT 
     r.record_id,
     r.ts AS timestamp,
     r.input AS query,
     r.output AS answer,
-    
-    -- TruLens feedback scores (would need to join feedback_results)
-    -- This is a simplified version - actual implementation would parse feedback_results
     
     -- Performance metrics
     p.total_time,
@@ -183,9 +154,56 @@ LEFT JOIN quality_metrics q ON r.record_id = q.record_id
 LEFT JOIN guardrails_results g ON r.record_id = g.record_id
 ORDER BY r.ts DESC;
 
+-- If the view creation fails (records table doesn't exist yet), that's OK
+-- It will be created when you run add-foreign-keys.sh later
+
 -- ============================================================================
 -- UTILITY FUNCTIONS
 -- ============================================================================
+
+-- Function to add foreign key constraints after TruLens creates tables
+CREATE OR REPLACE FUNCTION add_foreign_key_constraints()
+RETURNS void AS $$
+BEGIN
+    -- Add FK constraint to performance_metrics if not exists
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE constraint_name = 'fk_performance_record'
+    ) THEN
+        ALTER TABLE performance_metrics
+        ADD CONSTRAINT fk_performance_record
+        FOREIGN KEY(record_id) 
+        REFERENCES records(record_id)
+        ON DELETE CASCADE;
+    END IF;
+    
+    -- Add FK constraint to quality_metrics if not exists
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE constraint_name = 'fk_quality_record'
+    ) THEN
+        ALTER TABLE quality_metrics
+        ADD CONSTRAINT fk_quality_record
+        FOREIGN KEY(record_id) 
+        REFERENCES records(record_id)
+        ON DELETE CASCADE;
+    END IF;
+    
+    -- Add FK constraint to guardrails_results if not exists
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE constraint_name = 'fk_guardrails_record'
+    ) THEN
+        ALTER TABLE guardrails_results
+        ADD CONSTRAINT fk_guardrails_record
+        FOREIGN KEY(record_id) 
+        REFERENCES records(record_id)
+        ON DELETE CASCADE;
+    END IF;
+    
+    RAISE NOTICE 'Foreign key constraints added successfully';
+END;
+$$ LANGUAGE plpgsql;
 
 -- Function to clean up old records (retention policy)
 CREATE OR REPLACE FUNCTION cleanup_old_records(days_to_keep INTEGER DEFAULT 90)
@@ -203,24 +221,32 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ============================================================================
--- INITIAL DATA / SEED (Optional)
--- ============================================================================
-
--- No seed data needed for evaluation tables
-
--- ============================================================================
 -- GRANTS
 -- ============================================================================
 
 -- Grant necessary permissions
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO postgres;
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO postgres;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO research_assistant;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO research_assistant;
+GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO research_assistant;
 
 -- ============================================================================
 -- COMPLETION LOG
 -- ============================================================================
 
-\echo 'TruLens database initialized successfully!'
-\echo 'Custom tables created: performance_metrics, quality_metrics, guardrails_results'
-\echo 'Views created: evaluation_summary'
-\echo 'Functions created: cleanup_old_records'
+\echo '✅ TruLens schema initialized successfully!'
+\echo ''
+\echo 'Custom tables created:'
+\echo '  - performance_metrics'
+\echo '  - quality_metrics'
+\echo '  - guardrails_results'
+\echo ''
+\echo 'Views created (may fail if records table does not exist yet):'
+\echo '  - evaluation_summary'
+\echo ''
+\echo 'Functions created:'
+\echo '  - add_foreign_key_constraints()'
+\echo '  - cleanup_old_records(days_to_keep)'
+\echo ''
+\echo '⚠️  IMPORTANT: After TruLens creates its tables, run:'
+\echo '   SELECT add_foreign_key_constraints();'
+\echo '   This will add foreign key constraints to the custom tables.'
