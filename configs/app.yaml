@@ -1,25 +1,68 @@
+# ============================================================================
+# Research Assistant - Application Configuration
+# ============================================================================
+# This file defines default settings for all services.
+# Environment variables (.env) override these values.
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# LLM Configuration
+# ----------------------------------------------------------------------------
+
 llm:
   provider: "ollama"
   model: "qwen2.5:3b"
   host: "http://ollama:11434"
+
+# ----------------------------------------------------------------------------
+# Agent Configuration (CrewAI)
+# ----------------------------------------------------------------------------
+# Settings for CrewAI agents and tasks
+# ----------------------------------------------------------------------------
+
+agents:
+  llm:
+    temperature: 0.3                  # Low = factual, High = creative (0.0-1.0)
+    max_iterations: 1                 # Agent task retry limit
+    verbose: true                     # Enable detailed logging
+    timeout: 600                      # Task timeout in seconds
+  
+  crew:
+    process: "sequential"             # Task execution order
+    memory: false                     # Enable crew memory (experimental)
+    cache: true                       # Cache LLM responses
+
+# ----------------------------------------------------------------------------
+# RAG Configuration
+# ----------------------------------------------------------------------------
 
 rag:
   backend: "weaviate"
   chunk_size: 350
   chunk_overlap: 60
   top_k: 5
-  
-  allow_schema_reset: false  # Set to true in .env for dev mode
+  allow_schema_reset: false           # Set to true in .env for dev mode
   
   weaviate:
     url: "http://weaviate:8080"
-    api_key: ""  # empty for local dev (no auth)
+    api_key: ""                       # empty for local dev (no auth)
     index_name: "research-assistant"
     text_key: "content"
     embedding_model: "sentence-transformers/all-MiniLM-L6-v2"
 
+# ----------------------------------------------------------------------------
+# Guardrails Configuration
+# ----------------------------------------------------------------------------
+
 guardrails:
-  citation_required: true
+  citation_required: true             # Require citations in outputs
+  strict_mode: false                  # Reject outputs without citations
+
+# ----------------------------------------------------------------------------
+# Evaluation Configuration
+# ----------------------------------------------------------------------------
 
 eval:
   faithfulness_metric: "trulens_groundedness"
+  enable_trulens: true
+  enable_performance_tracking: true
