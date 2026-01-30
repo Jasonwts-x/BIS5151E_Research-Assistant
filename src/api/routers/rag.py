@@ -6,14 +6,12 @@ Endpoints for querying and managing the RAG system.
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 from typing import Annotated
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from ...rag.core import RAGService
+from ...rag.core import RAGPipeline, RAGService
 from ...rag.ingestion import IngestionEngine
 from ...rag.sources import ArXivSource, LocalFileSource
 from ...utils.config import load_config
@@ -38,157 +36,186 @@ router = APIRouter(prefix="/rag", tags=[APITag.RAG])
 # Configuration - Data Directories
 # ============================================================================
 
-# Resolve project root (4 levels up from this file: routers/ -> api/ -> src/ -> project/)
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DATA_RAW_DIR = PROJECT_ROOT / "data" / "raw"
 DATA_ARXIV_DIR = PROJECT_ROOT / "data" / "arxiv"
-DATA_DIRS = [DATA_RAW_DIR, DATA_ARXIV_DIR]
 
-# Ensure directories exist
 DATA_RAW_DIR.mkdir(parents=True, exist_ok=True)
 DATA_ARXIV_DIR.mkdir(parents=True, exist_ok=True)
 
 logger.info("Data directories configured: raw=%s, arxiv=%s", DATA_RAW_DIR, DATA_ARXIV_DIR)
 
-# ============================================================================
-# CrewAI Service Configuration
-# ============================================================================
-
-CREWAI_URL = os.getenv("CREWAI_URL", "http://crewai:8100")
 
 # ============================================================================
-# Query Endpoints
+# Query Endpoints - RETRIEVAL ONLY
 # ============================================================================
+
 
 @router.post(
     "/query",
     response_model=RAGQueryResponse,
     status_code=status.HTTP_200_OK,
-    summary="Run RAG + generation and return a final answer.",
+    summary="Query RAG system (retrieval only - no generation)",
+    description="""
+    Retrieve relevant documents from the RAG vector database.
+    
+    **This endpoint performs document retrieval ONLY** - it does NOT run CrewAI agents or generate summaries.
+    
+    **For complete research workflow (RAG + multi-agent generation), use:**
+    - `POST /research/query` (synchronous)
+    - `POST /research/query/async` (asynchronous)
+    
+    **Use this endpoint when you:**
+    - Only need document retrieval
+    - Want to see which documents would be retrieved
+    - Are building custom processing on top of RAG
+    - Need to inspect retrieval quality
+    
+    **Returns:**
+    - Query
+    - Retrieved document sources
+    - Number of chunks retrieved
+    - Empty `answer` field (no generation performed)
+    """,
 )
 async def rag_query(
     payload: RAGQueryRequest,
     rag: Annotated[RAGService, Depends(get_rag_service)],
 ) -> RAGQueryResponse:
     """
-    Execute full RAG pipeline with multi-agent processing.
+    Retrieve relevant documents from RAG system without generation.
     
-    This endpoint:
-    1. Retrieves relevant context using RAG (Weaviate + hybrid search)
-    2. Forwards the query to the CrewAI service for agent processing
-    3. Returns the final fact-checked summary
+    This endpoint ONLY performs retrieval - no CrewAI workflow execution.
+    Use /research/query for full workflow with summary generation.
     
-    The CrewAI service handles:
-    - Writer agent: Drafts initial summary
-    - Reviewer agent: Improves clarity and coherence
-    - FactChecker agent: Verifies claims and citations
-    - (Future: Translator agent for non-English output)
-    
-    Note: This is the recommended user-facing endpoint for research queries.
-    For more control, you can call /crewai/run directly and manage RAG retrieval yourself.
+    Args:
+        payload: Query request with search query and top_k
+        rag: RAG service dependency (injected)
+        
+    Returns:
+        Retrieved documents with sources (no answer generated)
     """
     try:
-        logger.info(
-            "RAG query request: topic='%s', language='%s'",
-            payload.query,
-            payload.language,
+        logger.info("RAG retrieval-only query: %s", payload.query)
+        
+        # Retrieve documents from vector database
+        pipeline = RAGPipeline.from_existing()
+        docs = pipeline.run(query=payload.query, top_k=payload.top_k or 5)
+        
+        logger.info("Retrieved %d documents (retrieval only, no generation)", len(docs))
+        
+        # Extract unique sources
+        sources = []
+        for doc in docs:
+            source = doc.meta.get("source", "unknown")
+            if source not in sources:
+                sources.append(source)
+        
+        # Format document excerpts for preview
+        excerpts = []
+        for i, doc in enumerate(docs[:3], 1):  # Show first 3 excerpts
+            excerpt = doc.content[:200] + "..." if len(doc.content) > 200 else doc.content
+            excerpts.append(f"[{i}] {excerpt}")
+        
+        preview_text = "\n\n".join(excerpts)
+        
+        return RAGQueryResponse(
+            query=payload.query,
+            answer="",  # No answer - retrieval only
+            sources=sources,
+            retrieved_chunks=len(docs),
+            language=payload.language,
+            message=(
+                f"Retrieved {len(docs)} documents (retrieval only). "
+                f"Use POST /research/query for full workflow with summary generation.\n\n"
+                f"Document Previews:\n{preview_text}"
+            ),
         )
         
-        # Forward to CrewAI service (which handles RAG retrieval internally)
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            response = await client.post(
-                f"{CREWAI_URL}/crew/run",
-                json={
-                    "topic": payload.query,
-                    "language": payload.language,
-                },
-            )
-            response.raise_for_status()
-            
-            crew_result = response.json()
-            
-            logger.info("CrewAI service completed successfully")
-            
-            return RAGQueryResponse(
-                query=payload.query,
-                language=payload.language,
-                answer=crew_result["answer"],
-                timings={},
-            )
-            
-    except httpx.HTTPStatusError as e:
-        logger.error("CrewAI service returned error: %s", e.response.text)
+    except Exception as e:
+        logger.exception("RAG retrieval failed")
         raise HTTPException(
-            status_code=e.response.status_code,
-            detail=f"CrewAI service error: {e.response.text}",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"RAG retrieval failed: {str(e)}",
         ) from e
-        
-    except httpx.RequestError as e:
-        logger.error("Failed to reach CrewAI service: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"CrewAI service unavailable: {str(e)}",
-        ) from e
-        
-    except Exception as err:
-        logger.exception("RAG query failed internally.")
-        raise internal_server_error(
-            "An error occurred while processing the request."
-        ) from err
 
 
 # ============================================================================
 # Ingestion Endpoints
 # ============================================================================
 
+
 @router.post(
     "/ingest/local",
     response_model=IngestionResponse,
     status_code=status.HTTP_200_OK,
-    summary="Ingest documents from local filesystem.",
+    summary="Ingest documents from local filesystem",
+    description="""
+    Ingest documents from local filesystem into the RAG vector database.
+    
+    **Supported file types:** PDF, TXT
+    
+    **Source directories:**
+    - `data/raw/` - Manually added documents
+    - `data/arxiv/` - Downloaded ArXiv papers
+    
+    **Workflow:**
+    1. Load matching files from both directories
+    2. Extract text and chunk documents
+    3. Generate embeddings
+    4. Store in Weaviate vector database
+    5. Deduplicate (skip already-indexed chunks)
+    
+    **Note:** Ingestion can take several minutes for large document sets.
+    """,
 )
 def ingest_local(payload: IngestLocalRequest) -> IngestionResponse:
     """
     Ingest documents from local filesystem.
     
-    Files are loaded from:
-    - data/raw/ (manually added documents)
-    - data/arxiv/ (downloaded ArXiv papers)
-    
-    Supports: PDF, TXT files
-    
-    Workflow:
-    1. Load matching files from both directories
-    2. Chunk documents
-    3. Generate embeddings
-    4. Write to Weaviate (skip duplicates)
-    
-    Note: This is idempotent - re-ingesting same files will skip duplicates.
+    Args:
+        payload: Ingestion request with file pattern
+        
+    Returns:
+        Ingestion statistics (documents loaded, chunks created, etc.)
     """
     try:
-        logger.info("Ingesting local files with pattern: %s", payload.pattern)
+        logger.info("Starting local ingestion with pattern: %s", payload.pattern)
         
-        # Create ingestion engine
         engine = IngestionEngine()
         
-        # Ingest from local source
-        source = LocalFileSource(DATA_DIRS)
-        result = engine.ingest_from_source(source, pattern=payload.pattern)
+        # Ingest from both directories
+        results = []
+        for data_dir in [DATA_RAW_DIR, DATA_ARXIV_DIR]:
+            if not data_dir.exists():
+                logger.warning("Directory does not exist: %s", data_dir)
+                continue
+            
+            source = LocalFileSource(data_dir)
+            result = engine.ingest_from_source(source, pattern=payload.pattern)
+            results.append(result)
+        
+        # Aggregate results
+        total_docs = sum(r.documents_loaded for r in results)
+        total_chunks_created = sum(r.chunks_created for r in results)
+        total_chunks_ingested = sum(r.chunks_ingested for r in results)
+        total_chunks_skipped = sum(r.chunks_skipped for r in results)
+        all_errors = [err for r in results for err in r.errors]
         
         logger.info(
-            "Local ingestion complete: %d docs, %d chunks ingested",
-            result.documents_loaded,
-            result.chunks_ingested,
+            "Local ingestion complete: %d docs, %d chunks created, %d ingested, %d skipped",
+            total_docs,
+            total_chunks_created,
+            total_chunks_ingested,
+            total_chunks_skipped,
         )
         
         return IngestionResponse(
-            source=result.source_name,
-            documents_loaded=result.documents_loaded,
-            chunks_created=result.chunks_created,
-            chunks_ingested=result.chunks_ingested,
-            chunks_skipped=result.chunks_skipped,
-            errors=result.errors,
-            success=len(result.errors) == 0,
+            documents_loaded=total_docs,
+            chunks_created=total_chunks_created,
+            chunks_ingested=total_chunks_ingested,
+            chunks_skipped=total_chunks_skipped,
+            errors=all_errors,
         )
         
     except Exception as e:
@@ -197,51 +224,59 @@ def ingest_local(payload: IngestLocalRequest) -> IngestionResponse:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Ingestion failed: {str(e)}",
         ) from e
+    
+    finally:
+        # Always try to close client
+        try:
+            if 'engine' in locals() and hasattr(engine, 'client'):
+                engine.client.close()
+        except Exception as e:
+            logger.warning("Failed to close Weaviate client: %s", str(e))
 
 
 @router.post(
     "/ingest/arxiv",
     response_model=IngestionResponse,
     status_code=status.HTTP_200_OK,
-    summary="Fetch and ingest papers from ArXiv.",
+    summary="Download and ingest papers from ArXiv",
+    description="""
+    Download papers from ArXiv and ingest into RAG vector database.
+    
+    **Workflow:**
+    1. Search ArXiv API for matching papers
+    2. Download PDFs to `data/arxiv/`
+    3. Extract text and chunk documents
+    4. Generate embeddings
+    5. Store in Weaviate
+    
+    **Query examples:**
+    - "transformer neural networks"
+    - "retrieval augmented generation"
+    - "large language models"
+    
+    **Note:** Downloads can take time. Use reasonable `max_results` values (< 50).
+    """,
 )
 def ingest_arxiv(payload: IngestArxivRequest) -> IngestionResponse:
     """
-    Fetch papers from ArXiv and ingest into RAG system.
+    Download and ingest papers from ArXiv.
     
-    Workflow:
-    1. Search ArXiv for relevant papers
-    2. Filter by relevance score
-    3. Download PDFs to data/arxiv/
-    4. Extract metadata (authors, date, category, abstract)
-    5. Chunk and embed papers
-    6. Write to Weaviate (skip duplicates)
-    
-    Features:
-    - Automatic relevance filtering
-    - Metadata enrichment
-    - Abstract extraction for better retrieval
-    - Idempotent (re-fetching same papers skips duplicates)
-    
-    Note: This may take 30-90 seconds for max_results=5 (downloading PDFs).
+    Args:
+        payload: ArXiv query and max results
+        
+    Returns:
+        Ingestion statistics
     """
-    engine = None
     try:
         logger.info(
-            "Ingesting from ArXiv: query='%s', max_results=%d",
+            "Starting ArXiv ingestion: query='%s', max_results=%d",
             payload.query,
             payload.max_results,
         )
         
-        # Create ingestion engine
         engine = IngestionEngine()
+        source = ArXivSource(download_dir=DATA_ARXIV_DIR)
         
-        # Ingest from ArXiv source with relevance filtering
-        arxiv_dir = Path(__file__).resolve().parents[3] / "data" / "arxiv"
-        source = ArXivSource(
-            download_dir=arxiv_dir,
-            min_relevance_score=0.3  # Configurable threshold
-        )
         result = engine.ingest_from_source(
             source,
             query=payload.query,
@@ -249,66 +284,27 @@ def ingest_arxiv(payload: IngestArxivRequest) -> IngestionResponse:
         )
         
         logger.info(
-            "ArXiv ingestion complete: %d papers, %d chunks ingested",
+            "ArXiv ingestion complete: %d docs, %d chunks created, %d ingested",
             result.documents_loaded,
+            result.chunks_created,
             result.chunks_ingested,
         )
         
-        # Check if any papers were found
-        if result.documents_loaded == 0:
-            logger.warning("No relevant papers found for query: %s", payload.query)
-            return IngestionResponse(
-                source=result.source_name,
-                documents_loaded=0,
-                chunks_created=0,
-                chunks_ingested=0,
-                chunks_skipped=0,
-                errors=result.errors or ["No relevant papers found for this query"],
-                success=False,
-                papers=[]
-            )
+        return result
         
-        # Check if ingestion succeeded
-        if result.errors:
-            logger.error("Ingestion encountered errors: %s", result.errors)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Ingestion failed: {'; '.join(result.errors)}",
-            )
-
-        return IngestionResponse(
-            source=result.source_name,
-            documents_loaded=result.documents_loaded,
-            chunks_created=result.chunks_created,
-            chunks_ingested=result.chunks_ingested,
-            chunks_skipped=result.chunks_skipped,
-            errors=result.errors,
-            success=len(result.errors) == 0 and result.chunks_ingested > 0,
-        )
-        
-    except HTTPException:
-        raise
-    except ValueError as e:
-        # Validation error
-        logger.error("Invalid query: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
-        ) from e
     except Exception as e:
         logger.exception("ArXiv ingestion failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"ArXiv ingestion failed: {str(e)}",
         ) from e
+    
     finally:
-        # Properly close the Weaviate client
-        if engine is not None and hasattr(engine, 'client'):
-            try:
+        try:
+            if 'engine' in locals() and hasattr(engine, 'client'):
                 engine.client.close()
-                logger.debug("Weaviate client closed successfully.")
-            except Exception as e:
-                logger.warning("Failed to close Weaviate client: %s", str(e))
+        except Exception as e:
+            logger.warning("Failed to close Weaviate client: %s", str(e))
 
 
 # ============================================================================
@@ -320,11 +316,11 @@ def ingest_arxiv(payload: IngestArxivRequest) -> IngestionResponse:
     "/stats",
     response_model=RAGStatsResponse,
     status_code=status.HTTP_200_OK,
-    summary="Get RAG index statistics.",
+    summary="Get RAG index statistics",
 )
 def get_stats() -> RAGStatsResponse:
     """
-    Get information about the RAG index.
+    Get information about the RAG vector database.
     
     Returns:
     - Collection name
@@ -353,32 +349,40 @@ def get_stats() -> RAGStatsResponse:
     "/admin/reset-index",
     response_model=ResetIndexResponse,
     status_code=status.HTTP_200_OK,
-    summary="Clear all documents from index (WARNING: DESTRUCTIVE).",
+    summary="⚠️ Clear all documents from index (DESTRUCTIVE)",
+    description="""
+    Clear all documents from the RAG vector database.
+    
+    **⚠️ WARNING: This deletes ALL indexed documents!**
+    
+    **Use cases:**
+    - Reset after schema changes
+    - Clean up test data
+    - Start fresh with new documents
+    
+    **After reset, you must re-ingest documents:**
+    - POST /rag/ingest/local
+    - POST /rag/ingest/arxiv
+    """,
 )
 def reset_index() -> ResetIndexResponse:
     """
     Clear all documents from the RAG index.
     
-    ⚠️  WARNING: This deletes ALL indexed documents!
+    **⚠️ WARNING: This is destructive and cannot be undone!**
     
-    Use cases:
-    - Reset after schema changes
-    - Clean up test data
-    - Start fresh with new documents
-    
-    After reset, you must re-ingest documents:
-    - POST /rag/ingest/local
-    - POST /rag/ingest/arxiv
+    Returns:
+        Success status and number of documents deleted
     """
     try:
         logger.warning("Reset index requested - all documents will be deleted!")
         
-        # Get current count
+        # Get current count before deletion
         engine = IngestionEngine()
         stats = engine.get_stats()
         previous_count = stats.get("document_count", 0)
         
-        # Clear index
+        # Clear the index
         engine.clear_index()
         
         logger.info("Index reset complete - %d documents deleted", previous_count)
@@ -395,11 +399,3 @@ def reset_index() -> ResetIndexResponse:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to reset index: {str(e)}",
         ) from e
-
-
-# ============================================================================
-# Future Endpoints (Placeholders)
-# ============================================================================
-# TODO (Step F): Add /rag/retrieve endpoint (retrieval without generation)
-# TODO (Step G): Add /rag/export endpoint (export index to file)
-# TODO (Step G): Add /rag/import endpoint (import index from file)
