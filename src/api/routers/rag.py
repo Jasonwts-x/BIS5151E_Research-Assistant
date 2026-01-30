@@ -211,11 +211,14 @@ def ingest_local(payload: IngestLocalRequest) -> IngestionResponse:
         )
         
         return IngestionResponse(
+            source="LocalFiles",
             documents_loaded=total_docs,
             chunks_created=total_chunks_created,
             chunks_ingested=total_chunks_ingested,
             chunks_skipped=total_chunks_skipped,
             errors=all_errors,
+            success=len(all_errors) == 0,
+            papers=None,
         )
         
     except Exception as e:
@@ -290,7 +293,16 @@ def ingest_arxiv(payload: IngestArxivRequest) -> IngestionResponse:
             result.chunks_ingested,
         )
         
-        return result
+        return IngestionResponse(
+            source=result.source,
+            documents_loaded=result.documents_loaded,
+            chunks_created=result.chunks_created,
+            chunks_ingested=result.chunks_ingested,
+            chunks_skipped=result.chunks_skipped,
+            errors=result.errors,
+            success=result.success,
+            papers=result.papers,
+        )
         
     except Exception as e:
         logger.exception("ArXiv ingestion failed")
