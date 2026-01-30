@@ -1,5 +1,12 @@
-# Task Configurations
-# These define what each agent should do
+# ============================================================================
+# Task Configuration Examples
+# ============================================================================
+# NOTE: This file is for DOCUMENTATION ONLY.
+# Actual task configuration is in Python files (src/agents/tasks/*.py)
+# 
+# This provides examples of how tasks could be configured if using
+# a YAML-based approach. The project uses Python for flexibility.
+# ============================================================================
 
 write_draft:
   description: >

@@ -1,5 +1,12 @@
-# Agent Configurations
-# These define the persona, goal, and backstory for each agent
+# ============================================================================
+# Agent Configuration Examples
+# ============================================================================
+# NOTE: This file is for DOCUMENTATION ONLY.
+# Actual agent configuration is in Python files (src/agents/roles/*.py)
+# 
+# This provides examples of how agents could be configured if using
+# a YAML-based approach. The project uses Python for flexibility.
+# ============================================================================
 
 writer:
   role: "Academic Writer"
