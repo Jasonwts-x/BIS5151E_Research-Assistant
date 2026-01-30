@@ -118,44 +118,57 @@ CREATE INDEX IF NOT EXISTS idx_guardrails_timestamp ON guardrails_results(timest
 -- VIEWS FOR CONVENIENT QUERYING
 -- ============================================================================
 
--- Note: This view will fail if TruLens hasn't created 'records' table yet
--- It will be created successfully after TruLens initializes
-CREATE OR REPLACE VIEW evaluation_summary AS
-SELECT 
-    r.record_id,
-    r.ts AS timestamp,
-    r.input AS query,
-    r.output AS answer,
-    
-    -- Performance metrics
-    p.total_time,
-    p.rag_retrieval_time,
-    p.llm_inference_time,
-    
-    -- Quality metrics
-    q.rouge_1,
-    q.rouge_2,
-    q.bleu_score,
-    q.semantic_similarity,
-    q.factuality_score,
-    q.citation_count,
-    
-    -- Guardrails
-    g.overall_passed AS guardrails_passed,
-    g.violations,
-    
-    -- Overall score calculation (simplified)
-    (COALESCE(q.factuality_score, 0) + 
-     COALESCE(q.semantic_similarity, 0)) / 2 AS overall_score
+-- Create view only if records table exists (TruLens creates it on first use)
+-- If it doesn't exist, skip silently without error
+DO $$
+BEGIN
+    -- Check if records table exists
+    IF EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'records'
+    ) THEN
+        -- Create view if records table exists
+        CREATE OR REPLACE VIEW evaluation_summary AS
+        SELECT 
+            r.record_id,
+            r.ts AS timestamp,
+            r.input AS query,
+            r.output AS answer,
+            
+            -- Performance metrics
+            p.total_time,
+            p.rag_retrieval_time,
+            p.llm_inference_time,
+            
+            -- Quality metrics
+            q.rouge_1,
+            q.rouge_2,
+            q.bleu_score,
+            q.semantic_similarity,
+            q.factuality_score,
+            q.citation_count,
+            
+            -- Guardrails
+            g.overall_passed AS guardrails_passed,
+            g.violations,
+            
+            -- Overall score calculation (simplified)
+            (COALESCE(q.factuality_score, 0) + 
+             COALESCE(q.semantic_similarity, 0)) / 2 AS overall_score
 
-FROM records r
-LEFT JOIN performance_metrics p ON r.record_id = p.record_id
-LEFT JOIN quality_metrics q ON r.record_id = q.record_id
-LEFT JOIN guardrails_results g ON r.record_id = g.record_id
-ORDER BY r.ts DESC;
-
--- If the view creation fails (records table doesn't exist yet), that's OK
--- It will be created when you run add-foreign-keys.sh later
+        FROM records r
+        LEFT JOIN performance_metrics p ON r.record_id = p.record_id
+        LEFT JOIN quality_metrics q ON r.record_id = q.record_id
+        LEFT JOIN guardrails_results g ON r.record_id = g.record_id
+        ORDER BY r.ts DESC;
+        
+        RAISE NOTICE 'evaluation_summary view created successfully';
+    ELSE
+        RAISE NOTICE 'records table does not exist yet - view will be created later';
+        RAISE NOTICE 'Run: bash database/scripts/add-foreign-keys.sh after TruLens initializes';
+    END IF;
+END $$;
 
 -- ============================================================================
 -- UTILITY FUNCTIONS
@@ -240,13 +253,10 @@ GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO research_assistant;
 \echo '  - quality_metrics'
 \echo '  - guardrails_results'
 \echo ''
-\echo 'Views created (may fail if records table does not exist yet):'
-\echo '  - evaluation_summary'
-\echo ''
 \echo 'Functions created:'
 \echo '  - add_foreign_key_constraints()'
 \echo '  - cleanup_old_records(days_to_keep)'
 \echo ''
 \echo '⚠️  IMPORTANT: After TruLens creates its tables, run:'
-\echo '   SELECT add_foreign_key_constraints();'
-\echo '   This will add foreign key constraints to the custom tables.'
+\echo '   bash database/scripts/add-foreign-keys.sh'
+\echo '   This will add foreign key constraints and create the evaluation_summary view.'
