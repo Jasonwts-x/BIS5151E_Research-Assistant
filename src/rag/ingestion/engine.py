@@ -29,12 +29,14 @@ logging.getLogger("httpx").setLevel(logging.WARNING)  # Reduce httpx noise
 class IngestionResult:
     """Result of ingestion operation."""
 
-    source_name: str
+    source: str
     documents_loaded: int
     chunks_created: int
     chunks_ingested: int
-    chunks_skipped: int  # Duplicates
+    chunks_skipped: int
     errors: List[str]
+    success: bool
+    papers: Optional[List[dict]] = None
 
 
 class IngestionEngine:
@@ -156,12 +158,14 @@ class IngestionEngine:
             )
             
             return IngestionResult(
-                source_name=source.get_source_name(),
-                documents_loaded=len(documents),
-                chunks_created=len(chunks),
+                source=source.name,
+                documents_loaded=len(docs),
+                chunks_created=len(all_chunks),
                 chunks_ingested=ingested,
                 chunks_skipped=skipped,
                 errors=errors,
+                success=len(errors) == 0,
+                papers=None,
             )
             
         except Exception as e:
