@@ -23,7 +23,7 @@ from ..sources.base import DocumentSource
 from .processor import DocumentProcessor, ProcessedChunk
 
 logger = logging.getLogger(__name__)
-logging.getLogger("httpx").setLevel(logging.WARNING)  # Reduce httpx noise
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 @dataclass
 class IngestionResult:
@@ -114,7 +114,7 @@ class IngestionEngine:
             if not documents:
                 logger.warning("No documents fetched from source")
                 return IngestionResult(
-                    source_name=source.get_source_name(),
+                    source=source.get_source_name(),
                     documents_loaded=0,
                     chunks_created=0,
                     chunks_ingested=0,
@@ -158,9 +158,9 @@ class IngestionEngine:
             )
             
             return IngestionResult(
-                source=source.name,
-                documents_loaded=len(docs),
-                chunks_created=len(all_chunks),
+                source=source.get_source_name(),
+                documents_loaded=len(documents),
+                chunks_created=len(chunks),
                 chunks_ingested=ingested,
                 chunks_skipped=skipped,
                 errors=errors,
@@ -172,12 +172,14 @@ class IngestionEngine:
             logger.exception("Ingestion failed")
             errors.append(str(e))
             return IngestionResult(
-                source_name=source.get_source_name(),
+                source=source.get_source_name(),
                 documents_loaded=0,
                 chunks_created=0,
                 chunks_ingested=0,
                 chunks_skipped=0,
                 errors=errors,
+                success=False,
+                papers=None,
             )
 
     def _write_to_weaviate(
