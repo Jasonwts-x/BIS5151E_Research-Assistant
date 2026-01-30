@@ -1,3 +1,7 @@
+"""
+CrewAI Runner
+Main orchestrator for RAG + CrewAI workflow execution.
+"""
 from __future__ import annotations
 
 import hashlib
@@ -37,152 +41,111 @@ class CrewRunner:
     Orchestrates RAG retrieval + CrewAI execution.
     
     This is the main entry point for running the agentic workflow.
+    Uses singleton pattern for crew reuse across requests.
     """
 
     def __init__(self, enable_guardrails: bool = True, enable_monitoring: bool = False):
         """
-        Initialize runner with RAG pipeline, LLM, and optional safety/monitoring.
+        Initialize runner with RAG pipeline, LLM, crew, and optional safety/monitoring.
 
         Args:
             enable_guardrails: Enable safety checks on inputs/outputs
             enable_monitoring: Enable TruLens monitoring (requires trulens-eval)
         """
+        logger.info("Initializing CrewRunner...")
+        
         self.config = load_config()
         
         # Initialize RAG pipeline for retrieval
         try:
-            from ..rag.core import RAGPipeline
             self.rag_pipeline = RAGPipeline.from_existing()
             logger.info("✓ RAG pipeline initialized successfully")
         except Exception as e:
             logger.warning(
-                "Failed to initialize RAG pipeline: %s. Crew will run without context.",
-                e,
+                "Failed to initialize RAG pipeline: %s. Crew will run without context.", e
             )
             self.rag_pipeline = None
         
-        # Initialize CrewAI LLM for Ollama
+        # Initialize LLM
+        llm_config = self.config.llm
+        
         self.llm = LLM(
-            model=f"ollama/{self.config.llm.model}",
-            base_url=self.config.llm.host,
-            temperature=0.3,
+            model=f"ollama/{llm_config.model}",
+            base_url=llm_config.host,
+            temperature=llm_config.temperature,
         )
-        logger.info(
-            "✓ LLM initialized: ollama/%s at %s", 
-            self.config.llm.model, 
-            self.config.llm.host
-        )
-
-        # Initialize new guardrails validators
+        logger.info("✓ LLM initialized: model=%s, temp=%.2f", llm_config.model, llm_config.temperature)
+        
+        # ✅ Initialize crew once (singleton pattern)
+        logger.info("Initializing ResearchCrew (singleton)...")
+        self.crew = ResearchCrew(llm=self.llm)
+        logger.info("✓ Research crew initialized with 4 agents")
+        
+        # Initialize optional safety and monitoring components
+        self.input_validator = None
+        self.output_validator = None
+        self.trulens_client = None
+        
         if enable_guardrails:
             try:
                 guardrails_config = load_guardrails_config()
                 self.input_validator = InputValidator(guardrails_config)
                 self.output_validator = OutputValidator(guardrails_config)
-                logger.info("Safety guardrails enabled (new implementation)")
+                logger.info("✓ Guardrails enabled")
             except Exception as e:
                 logger.warning("Failed to initialize guardrails: %s", e)
-                self.input_validator = None
-                self.output_validator = None
-        else:
-            self.input_validator = None
-            self.output_validator = None
-            logger.info("Safety guardrails disabled")
-
-        # Initialize new TruLens client
+        
         if enable_monitoring:
             try:
                 self.trulens_client = TruLensClient(enabled=True)
-                logger.info("TruLens monitoring enabled")
+                logger.info("✓ TruLens monitoring enabled")
             except Exception as e:
                 logger.warning("Failed to initialize TruLens: %s", e)
-                self.trulens_client = None
-        else:
-            self.trulens_client = None
-            logger.info("TruLens monitoring disabled")
-
-        # Initialize performance tracker
+        
+        # Performance tracker
         self.performance_tracker = PerformanceTracker()
+        
+        logger.info("=" * 70)
+        logger.info("CrewRunner initialization complete")
+        logger.info("  RAG: %s", "enabled" if self.rag_pipeline else "disabled")
+        logger.info("  Guardrails: %s", "enabled" if self.input_validator else "disabled")
+        logger.info("  Monitoring: %s", "enabled" if self.trulens_client else "disabled")
+        logger.info("  Crew: singleton (reused across requests)")
+        logger.info("=" * 70)
 
     def __del__(self):
         """Cleanup: Close Weaviate connection if it exists."""
         if self.rag_pipeline is not None:
             try:
                 self.rag_pipeline.close()
+                logger.debug("RAG pipeline closed")
             except Exception:
                 pass
 
-    def retrieve_context(self, topic: str) -> tuple[str, List[Document]]:
-        """
-        Retrieve relevant context from RAG pipeline.
-    
-        Args:
-            topic: Query topic
-        
-        Returns:
-            Tuple of (formatted_context_string, list_of_documents)
-        """
-        # Check if RAG pipeline is available
-        if self.rag_pipeline is None:
-            logger.warning("RAG pipeline not initialized - returning empty context")
-            return "No context available (RAG pipeline not initialized).", []
-    
-        try:
-            with self.performance_tracker.track("rag_retrieval"):
-                # Get top-k documents
-                top_k = self.config.rag.top_k
-                logger.info("Retrieving top-%d documents for topic: %s", top_k, topic)
-            
-                docs = self.rag_pipeline.run(query=topic, top_k=top_k)
-            
-                logger.info("Retrieved %d documents from RAG", len(docs))
-            
-                # Format context
-                context = self._format_context(docs)
-            
-                return context, docs
-            
-        except Exception as e:
-            logger.exception("RAG retrieval failed: %s", e)
-            return f"Context retrieval failed: {str(e)}", []
-
-    def _format_context(self, documents: List[Document]) -> str:
-        """Format documents with citation numbers."""
-        if not documents:
-            return "NO CONTEXT AVAILABLE"
-        
-        source_map = {}
-        source_counter = 1
-        
-        for doc in documents:
-            source = doc.meta.get("source", "unknown")
-            if source not in source_map:
-                source_map[source] = source_counter
-                source_counter += 1
-        
-        formatted_chunks = []
-        for doc in documents:
-            source = doc.meta.get("source", "unknown")
-            citation_num = source_map[source]
-            
-            formatted_chunks.append(
-                f"SOURCE [{citation_num}] ({source}):\n{doc.content}\n"
-            )
-        
-        context = "\n---\n".join(formatted_chunks)
-        context += "\n\n=== SOURCES ===\n"
-        for source, num in sorted(source_map.items(), key=lambda x: x[1]):
-            context += f"[{num}] {source}\n"
-        
-        return context
-
     def run(self, topic: str, language: str = "en") -> CrewResult:
-        """Execute the full crew workflow."""
+        """
+        Execute the full RAG + CrewAI workflow.
+        
+        Steps:
+        1. Validate input (guardrails)
+        2. Retrieve context from RAG
+        3. Execute crew workflow (reusing singleton crew instance)
+        4. Validate output (guardrails)
+        5. Evaluate results (TruLens, performance metrics)
+        6. Return CrewResult
+        
+        Args:
+            topic: Research topic/question
+            language: Target language (en, de, fr, es, etc.)
+            
+        Returns:
+            CrewResult with final output and evaluation metrics
+        """
         logger.info("Starting crew run for topic: %s (language: %s)", topic, language)
         
         self.performance_tracker.start()
 
-        # Input validation using new guardrails
+        # Input validation using guardrails
         if self.input_validator:
             with self.performance_tracker.track("guardrails_input"):
                 passed, results = self.input_validator.validate(topic)
@@ -218,18 +181,15 @@ class CrewRunner:
                 topic
             )
         
-        # Step 2: Initialize crew with LLM
-        crew = ResearchCrew(llm=self.llm)
-        
-        # Step 3: Execute crew workflow with performance tracking
-        logger.info("Executing crew workflow...")
+        # ✅ Step 2: Execute crew workflow (reuse singleton crew)
+        logger.info("Executing crew workflow (reusing singleton crew)...")
         
         with self.performance_tracker.track("crew_execution"):
-            final_output = crew.run(topic=topic, context=context, language=language)
+            final_output = self.crew.run(topic=topic, context=context, language=language)
         
         logger.info("Crew workflow completed. Output length: %d chars", len(final_output))
         
-        # ✅ Output validation using new guardrails
+        # Output validation using guardrails
         output_passed = True
         output_results = []
         
@@ -258,66 +218,30 @@ class CrewRunner:
                     record_id = trulens_result.get("record_id")
                     
                     logger.info(
-                        "TruLens evaluation complete: overall_score=%.2f",
-                        trulens_result.get("overall_score", 0.0),
+                        "TruLens evaluation complete: score=%.2f, record_id=%s",
+                        trulens_result.get("overall_score", 0),
+                        record_id,
                     )
                 except Exception as e:
-                    logger.error("TruLens evaluation failed: %s", e)
-                    evaluation_results["trulens"] = {"error": str(e)}
+                    logger.warning("TruLens evaluation failed: %s", e)
         
-        # Store guardrails results to database
-        if record_id and (self.input_validator or self.output_validator):
-            try:
-                from ..eval.database import get_database
-                from ..eval.models import GuardrailsResults
-                
-                db = get_database()
-                
-                input_passed_val = True  # Already validated above
-                
-                guardrails_record = GuardrailsResults(
-                    record_id=record_id,
-                    timestamp=datetime.utcnow(),
-                    input_passed=input_passed_val,
-                    output_passed=output_passed,
-                    overall_passed=input_passed_val and output_passed,
-                    violations=[r.message for r in output_results if not r.passed and r.level.value == "error"],
-                    warnings=[r.message for r in output_results if not r.passed and r.level.value == "warning"],
-                )
-                
-                with db.get_session() as session:
-                    session.add(guardrails_record)
-                    session.commit()
-                    
-                logger.info("Stored guardrails results for record %s", record_id)
-                    
-            except Exception as e:
-                logger.error("Failed to store guardrails results: %s", e)
-        
-        # Add guardrails results to evaluation
-        if self.input_validator or self.output_validator:
-            guardrails_summary = {
-                "input_passed": True,
-                "output_passed": output_passed,
-            }
-            
-            if self.output_validator and not output_passed:
-                guardrails_summary["output_warnings"] = [
-                    r.message for r in output_results if not r.passed
-                ]
-            
-            evaluation_results["guardrails"] = guardrails_summary
-        
-        # Stop performance tracking and add to evaluation
+        # Stop performance tracker and get summary
         self.performance_tracker.stop()
-        evaluation_results["performance"] = self.performance_tracker.get_summary()
+        perf_summary = self.performance_tracker.get_summary()
         
-        if language.lower() != "en":
-            logger.warning(
-                "Translation not yet implemented. Returning English output. "
-                "Requested language: %s",
-                language,
-            )
+        # Compile evaluation results
+        evaluation_results["performance"] = perf_summary
+        evaluation_results["guardrails"] = {
+            "input_passed": True,  # Made it past input validation
+            "output_passed": output_passed,
+            "output_warnings": [r.message for r in output_results if not r.passed] if output_results else [],
+        }
+        
+        logger.info(
+            "Crew run complete: %d chars output, %.2f seconds total",
+            len(final_output),
+            perf_summary.get("total_time", 0),
+        )
         
         return CrewResult(
             topic=topic,
@@ -327,11 +251,108 @@ class CrewRunner:
             evaluation=evaluation_results,
         )
 
+    def retrieve_context(self, topic: str) -> tuple[str, List[Document]]:
+        """
+        Retrieve relevant context from RAG pipeline.
+        
+        Args:
+            topic: Search query
+            
+        Returns:
+            (formatted_context, documents) tuple
+        """
+        if self.rag_pipeline is None:
+            logger.warning("RAG pipeline not initialized. No context available.")
+            return "NO CONTEXT AVAILABLE: RAG pipeline not initialized.", []
+        
+        try:
+            with self.performance_tracker.track("rag_retrieval"):
+                top_k = self.config.rag.top_k
+                logger.info("Retrieving top-%d documents for topic: %s", top_k, topic)
+                
+                docs = self.rag_pipeline.run(query=topic, top_k=top_k)
+                
+                logger.info("Retrieved %d documents from RAG", len(docs))
+                
+                context = self._format_context(docs)
+                
+                return context, docs
+                
+        except Exception as e:
+            logger.exception("RAG retrieval failed: %s", e)
+            return f"CONTEXT UNAVAILABLE: Error during retrieval: {e}", []
+
+    def _format_context(self, documents: List[Document]) -> str:
+        """
+        Format retrieved documents into context string with source citations.
+        
+        Args:
+            documents: Retrieved documents
+            
+        Returns:
+            Formatted context string with [1], [2], etc. markers
+        """
+        if not documents:
+            return "NO CONTEXT AVAILABLE"
+        
+        # Deduplicate sources (multiple chunks from same source get same citation)
+        source_map = {}
+        source_counter = 1
+        
+        for doc in documents:
+            source = doc.meta.get("source", "unknown")
+            if source not in source_map:
+                source_map[source] = source_counter
+                source_counter += 1
+        
+        # Format chunks with citations
+        formatted_chunks = []
+        for doc in documents:
+            source = doc.meta.get("source", "unknown")
+            citation_num = source_map[source]
+            
+            # Add metadata if available
+            metadata_parts = []
+            if "title" in doc.meta:
+                metadata_parts.append(doc.meta["title"])
+            if "authors" in doc.meta:
+                metadata_parts.append(f"Authors: {doc.meta['authors']}")
+            if "year" in doc.meta:
+                metadata_parts.append(f"Year: {doc.meta['year']}")
+            
+            metadata_line = f"METADATA: {', '.join(metadata_parts)}" if metadata_parts else ""
+            
+            chunk_text = f"SOURCE [{citation_num}]: {source}\n"
+            if metadata_line:
+                chunk_text += f"{metadata_line}\n"
+            chunk_text += f"{doc.content.strip()}\n"
+            
+            formatted_chunks.append(chunk_text)
+        
+        context = "\n---\n".join(formatted_chunks)
+        
+        # Add source summary at end
+        context += "\n\n=== SOURCES ===\n"
+        for source, num in sorted(source_map.items(), key=lambda x: x[1]):
+            context += f"[{num}] {source}\n"
+        
+        return context
+
     def save_output(self, result: CrewResult, output_base_dir: Path = None) -> dict[str, Path]:
-        """Save crew output to multiple formats with keyword-based folder naming."""
+        """
+        Save crew output to multiple formats with keyword-based folder naming.
+        
+        Args:
+            result: CrewResult to save
+            output_base_dir: Base directory for outputs (default: ./outputs)
+            
+        Returns:
+            Dictionary mapping file type to saved path
+        """
         if output_base_dir is None:
             output_base_dir = Path("outputs")
         
+        # Create folder with timestamp and topic slug
         topic_slug = self._slugify_topic(result.topic)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         folder_name = f"{timestamp}_{topic_slug}"
@@ -340,11 +361,13 @@ class CrewRunner:
         
         saved_paths = {}
         
+        # Save as markdown
         md_path = output_dir / "summary.md"
         md_content = self._format_markdown_output(result)
         md_path.write_text(md_content, encoding="utf-8")
         saved_paths["markdown"] = md_path
         
+        # Save as plain text
         txt_path = output_dir / "summary.txt"
         txt_path.write_text(result.final_output, encoding="utf-8")
         saved_paths["text"] = txt_path
@@ -353,20 +376,43 @@ class CrewRunner:
         return saved_paths
 
     def _slugify_topic(self, topic: str) -> str:
-        """Convert topic to filesystem-safe slug."""
+        """
+        Convert topic to filesystem-safe slug.
+        
+        Args:
+            topic: Original topic string
+            
+        Returns:
+            Filesystem-safe slug (max 50 chars)
+        """
+        # Remove non-alphanumeric characters
         slug = re.sub(r'[^\w\s-]', '', topic.lower())
+        # Replace whitespace/underscores with single underscore
         slug = re.sub(r'[\s_]+', '_', slug)
+        # Limit length
         slug = slug[:50]
         return slug
 
     def _format_markdown_output(self, result: CrewResult) -> str:
-        """Format result as markdown."""
+        """
+        Format result as markdown with metadata and evaluation.
+        
+        Args:
+            result: CrewResult
+            
+        Returns:
+            Markdown-formatted string
+        """
         md = f"# Research Summary: {result.topic}\n\n"
         md += f"**Language:** {result.language}\n"
         md += f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
         md += f"**Sources:** {len(result.context_docs)} documents\n\n"
         md += "---\n\n"
+        
+        # Main output
         md += result.final_output
+        
+        # Add sources section
         md += "\n\n---\n\n"
         md += "## Sources\n\n"
         
@@ -416,11 +462,17 @@ class CrewRunner:
         return md
 
 
+# Singleton instance
 _crew_runner = None
 
 
 def get_crew_runner() -> CrewRunner:
-    """Get singleton CrewRunner instance."""
+    """
+    Get singleton CrewRunner instance.
+    
+    Returns:
+        Global CrewRunner instance
+    """
     global _crew_runner
     if _crew_runner is None:
         _crew_runner = CrewRunner(
