@@ -1,20 +1,18 @@
-# ============================================================================
+# ==========================================================================================
 # NVIDIA GPU Support for Ollama
-# ============================================================================
-#
+# ==========================================================================================
 # Prerequisites:
 #   1. NVIDIA GPU with CUDA support
 #   2. NVIDIA Driver installed on host (version 525+ recommended)
 #   3. Docker with NVIDIA Container Toolkit:
 #      https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
-#
+# ------------------------------------------------------------------------------------------
 # Usage:
 #   docker compose -f docker-compose.yml -f docker-compose.nvidia.yml up
-#
+# ------------------------------------------------------------------------------------------
 # Verify GPU is being used:
 #   docker compose exec ollama nvidia-smi
-#
-# ============================================================================
+# ==========================================================================================
 
 services:
   ollama:
