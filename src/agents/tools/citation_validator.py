@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from typing import Dict
 
-from crewai_tools import tool
+from crewai.tools import tool
 
 
 @tool

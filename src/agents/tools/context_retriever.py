@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Dict, List
 
-from crewai_tools import tool
+from crewai.tools import tool
 
 logger = logging.getLogger(__name__)
 
