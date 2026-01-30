@@ -13,6 +13,7 @@ tenacity==9.0.0                  # Retry library (pinned to avoid res. loops)
 # 🤖 AI ORCHESTRATION & AGENTS
 # ------------------------------------------------------------------------------
 crewai==1.3.0                    # Multi-agent orchestration framework
+crewai-tools==1.3.0              # Tool integrations for CrewAI agents
 
 # ------------------------------------------------------------------------------
 # 🧠 RAG PIPELINE & EMBEDDINGS  
