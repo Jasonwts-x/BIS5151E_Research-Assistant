@@ -1,109 +1,132 @@
 """
-Overview Page
-Dashboard overview with key metrics summary.
+Performance Metrics Page
+Performance and timing analysis dashboard.
 """
 from __future__ import annotations
 
 import streamlit as st
 
 
-def render_overview():
-    """Render overview page."""
-    st.header("📈 Overview")
+def render_performance():
+    """Render performance metrics page."""
+    st.header("⚡ Performance Metrics")
     
     st.markdown("""
-    Welcome to the ResearchAssistant Evaluation Dashboard!
-    
-    This dashboard provides comprehensive monitoring of your AI research assistant's
-    quality, performance, and safety metrics.
+    Monitor system performance, timing, and resource usage.
     """)
     
-    # Key metrics (top row)
-    st.markdown("### Key Metrics")
+    # Time period selector
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        time_range = st.selectbox(
+            "Time Range",
+            ["Last Hour", "Last 24 Hours", "Last 7 Days", "Last 30 Days", "All Time"],
+        )
+    with col2:
+        st.button("Refresh Data")
+    
+    st.markdown("---")
+    
+    # Performance summary
+    st.markdown("### Performance Summary")
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         st.metric(
-            label="Total Evaluations",
-            value="0",
-            delta="0 today",
+            label="Avg Total Time",
+            value="N/A",
+            delta=None,
         )
     
     with col2:
         st.metric(
-            label="Average Overall Score",
+            label="Avg RAG Time",
             value="N/A",
             delta=None,
         )
     
     with col3:
         st.metric(
-            label="Average Response Time",
+            label="Avg Agent Time",
             value="N/A",
             delta=None,
         )
     
     with col4:
         st.metric(
-            label="Guardrails Pass Rate",
+            label="Avg LLM Time",
             value="N/A",
             delta=None,
         )
     
     st.markdown("---")
     
-    # Recent evaluations
-    st.markdown("### Recent Evaluations")
-    st.info("No evaluations yet. Start using the research assistant to see metrics here!")
+    # Timing breakdown
+    st.markdown("### Timing Breakdown")
     
-    # TODO: Fetch and display recent evaluations
-    # Example table structure:
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("#### Component Times")
+        st.info("Bar chart: Time spent in each component")
+        # TODO: Add actual chart
+    
+    with col2:
+        st.markdown("#### Time Trend")
+        st.info("Line chart: Total time over time")
+        # TODO: Add actual chart
+    
+    st.markdown("---")
+    
+    # Resource usage
+    st.markdown("### Resource Usage")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric(
+            label="Avg Memory (MB)",
+            value="N/A",
+            delta=None,
+        )
+    
+    with col2:
+        st.metric(
+            label="Avg Token Count",
+            value="N/A",
+            delta=None,
+        )
+    
+    with col3:
+        st.metric(
+            label="Requests/Hour",
+            value="N/A",
+            delta=None,
+        )
+    
+    st.markdown("---")
+    
+    # Recent queries performance
+    st.markdown("### Recent Queries Performance")
+    
     st.dataframe({
-        "Timestamp": [],
         "Query": [],
-        "Overall Score": [],
-        "Groundedness": [],
-        "Answer Relevance": [],
-        "Response Time (s)": [],
-        "Status": [],
+        "Total Time (s)": [],
+        "RAG (s)": [],
+        "Writer (s)": [],
+        "Reviewer (s)": [],
+        "FactChecker (s)": [],
+        "Timestamp": [],
     })
     
     st.markdown("---")
     
-    # System status
-    st.markdown("### System Status")
-    col1, col2 = st.columns(2)
+    # Slowest queries
+    st.markdown("### Slowest Queries (Top 10)")
     
-    with col1:
-        st.success("✅ **Evaluation Service**: Healthy")
-        st.success("✅ **Database**: Connected")
-        st.success("✅ **TruLens**: Initialized")
-    
-    with col2:
-        st.success("✅ **Guardrails**: Enabled")
-        st.success("✅ **Performance Tracking**: Active")
-        st.success("✅ **Quality Metrics**: Available")
-    
-    st.markdown("---")
-    
-    # Quick stats
-    st.markdown("### Quick Statistics")
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.markdown("#### TruLens Metrics")
-        st.write("- Groundedness: N/A")
-        st.write("- Answer Relevance: N/A")
-        st.write("- Context Relevance: N/A")
-    
-    with col2:
-        st.markdown("#### Guardrails")
-        st.write("- Input Validations: 0")
-        st.write("- Output Validations: 0")
-        st.write("- Violations Blocked: 0")
-    
-    with col3:
-        st.markdown("#### Performance")
-        st.write("- Avg RAG Time: N/A")
-        st.write("- Avg Agent Time: N/A")
-        st.write("- Avg LLM Time: N/A")
+    st.dataframe({
+        "Query": [],
+        "Total Time (s)": [],
+        "Bottleneck": [],
+        "Timestamp": [],
+    })
