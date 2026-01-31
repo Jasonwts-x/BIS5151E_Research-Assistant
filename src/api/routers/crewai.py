@@ -46,7 +46,7 @@ async def health():
     Useful for monitoring and debugging connectivity between gateway and crew service.
     """
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.get(f"{CREWAI_URL}/health")
             response.raise_for_status()
             return response.json()
@@ -86,7 +86,7 @@ async def crewai_run(payload: CrewRunRequest) -> CrewRunResponse:
     try:
         logger.info("Proxying CrewAI run request: topic=%s", payload.topic)
         
-        async with httpx.AsyncClient(timeout=300.0) as client:
+        async with httpx.AsyncClient(timeout=1500.0) as client:
             response = await client.post(
                 f"{CREWAI_URL}/run",
                 json=payload.model_dump(),
@@ -124,7 +124,7 @@ async def crewai_run_async(payload: CrewRunRequest) -> CrewAsyncRunResponse:
     try:
         logger.info("Proxying async CrewAI request: topic=%s", payload.topic)
         
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.post(
                 f"{CREWAI_URL}/run/async",
                 json=payload.model_dump(),
@@ -158,7 +158,7 @@ async def crewai_status(job_id: str) -> CrewStatusResponse:
     try:
         logger.info("Checking status for job: %s", job_id)
         
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.get(f"{CREWAI_URL}/status/{job_id}")
             response.raise_for_status()
             return CrewStatusResponse(**response.json())

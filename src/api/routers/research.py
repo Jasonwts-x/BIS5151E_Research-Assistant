@@ -63,7 +63,7 @@ logger.info("Research router initialized: crewai_url=%s", CREWAI_URL)
     "/query",
     response_model=ResearchQueryResponse,
     status_code=status.HTTP_200_OK,
-    summary="⭐ Execute research query (synchronous)",
+    summary="Execute research query (synchronous)",
     description="""
     Execute a complete research workflow with RAG retrieval and multi-agent processing.
     
@@ -85,32 +85,6 @@ logger.info("Research router initialized: crewai_url=%s", CREWAI_URL)
     - Typical execution time: **30-60 seconds**
     - This endpoint **blocks** until completion
     - For async execution, use `POST /research/query/async`
-    
-    ## Example Request
-```json
-    {
-      "query": "What is retrieval augmented generation?",
-      "language": "en",
-      "top_k": 5,
-      "enable_evaluation": true
-    }
-```
-    
-    ## Example Response
-```json
-    {
-      "query": "What is retrieval augmented generation?",
-      "summary": "Retrieval Augmented Generation (RAG) is...[1][2]\\n\\n## References\\n[1] Source 1\\n[2] Source 2",
-      "language": "en",
-      "sources": ["paper1.pdf", "paper2.pdf"],
-      "retrieved_chunks": 5,
-      "evaluation": {
-        "performance": {"total_time": 45.2},
-        "trulens": {"overall_score": 0.85},
-        "guardrails": {"input_passed": true, "output_passed": true}
-      }
-    }
-```
     """,
 )
 async def research_query(
@@ -137,7 +111,7 @@ async def research_query(
         logger.info("Step 1/3: Retrieving relevant documents from RAG...")
         
         pipeline = RAGPipeline.from_existing()
-        docs = pipeline.run(query=request.query, top_k=request.top_k or 5)
+        docs = pipeline.run(query=request.query, top_k=request.top_k or 3)
         
         logger.info("Retrieved %d documents from RAG", len(docs))
         
@@ -159,7 +133,7 @@ async def research_query(
             language=request.language,
         )
         
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with httpx.AsyncClient(timeout=1500.0) as client:
             response = await client.post(
                 f"{CREWAI_URL}/run",
                 json=crew_request.model_dump(),
@@ -219,7 +193,7 @@ async def research_query(
     "/query/async",
     response_model=ResearchAsyncResponse,
     status_code=status.HTTP_202_ACCEPTED,
-    summary="⭐ Execute research query (asynchronous)",
+    summary="Execute research query (asynchronous)",
     description="""
     Execute a complete research workflow asynchronously.
     
@@ -234,46 +208,6 @@ async def research_query(
     2. **Background Processing**: Query executes in background (30-60s)
     3. **Status Polling**: Check status with `GET /research/status/{job_id}`
     4. **Result Retrieval**: Get final result when status is 'completed'
-    
-    ## Usage Pattern
-```python
-    # Step 1: Submit query
-    response = requests.post("/research/query/async", json={
-        "query": "What is machine learning?",
-        "language": "en"
-    })
-    job_id = response.json()["job_id"]
-    
-    # Step 2: Poll status
-    while True:
-        status = requests.get(f"/research/status/{job_id}").json()
-        if status["status"] == "completed":
-            result = status["result"]
-            break
-        elif status["status"] == "failed":
-            error = status["error"]
-            break
-        time.sleep(5)  # Poll every 5 seconds
-```
-    
-    ## Example Request
-```json
-    {
-      "query": "Explain neural networks",
-      "language": "en",
-      "top_k": 5
-    }
-```
-    
-    ## Example Response
-```json
-    {
-      "job_id": "550e8400-e29b-41d4-a716-446655440000",
-      "status": "pending",
-      "message": "Research job submitted successfully. Retrieved 5 documents.",
-      "estimated_time": 45
-    }
-```
     """,
 )
 async def research_query_async(
@@ -300,7 +234,7 @@ async def research_query_async(
         logger.info("Retrieving documents from RAG for async query...")
         
         pipeline = RAGPipeline.from_existing()
-        docs = pipeline.run(query=request.query, top_k=request.top_k or 5)
+        docs = pipeline.run(query=request.query, top_k=request.top_k or 3)
         
         logger.info("Retrieved %d documents for async processing", len(docs))
         
@@ -312,7 +246,7 @@ async def research_query_async(
             language=request.language,
         )
         
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.post(
                 f"{CREWAI_URL}/run/async",
                 json=crew_request.model_dump(),
@@ -417,7 +351,7 @@ async def get_research_status(job_id: str) -> ResearchStatusResponse:
     try:
         logger.debug("Fetching status for job: %s", job_id)
         
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.get(f"{CREWAI_URL}/status/{job_id}")
             response.raise_for_status()
             crew_status = response.json()
