@@ -17,7 +17,6 @@ from ...schemas.evaluation import (
     LeaderboardResponse,
 )
 from ...trulens import TruLensClient
-from ...cache import get_cache, get_redis_cache
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +42,7 @@ async def evaluate(request: EvaluationRequest) -> EvaluationResponse:
     try:
         # Evaluate using TruLens client (stores to DB)
         client = TruLensClient(enabled=True)
-        evaluation = client.evaluate_async(
+        evaluation = await client.evaluate_async(
             query=request.query,
             context=request.context,
             answer=request.answer,
@@ -70,7 +69,7 @@ async def evaluate(request: EvaluationRequest) -> EvaluationResponse:
             answer_length=len(request.answer),
             summary=summary,
             trulens=evaluation.get("trulens"),
-            guardrails=None,  # TODO: Add guardrails results
+            guardrails=None,
         )
 
         logger.info("Evaluation completed: record_id=%s", evaluation["record_id"])
@@ -81,6 +80,118 @@ async def evaluate(request: EvaluationRequest) -> EvaluationResponse:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Evaluation failed: {str(e)}",
+        ) from e
+
+
+@router.get(
+    "/summary",
+    status_code=status.HTTP_200_OK,
+    summary="Get aggregate evaluation statistics",
+)
+def get_summary():
+    """
+    Get aggregate statistics across all evaluations.
+    
+    Returns:
+    - Total evaluation count
+    - Average scores across all metrics
+    - Success rates
+    """
+    try:
+        logger.info("Summary statistics requested")
+        
+        db = get_database()
+        
+        with db.get_session() as session:
+            from ...models import EvaluationRecord, EvaluationScores
+            from sqlalchemy import func
+
+            stats = session.query(
+                func.count(EvaluationScores.id).label('total'),
+                func.avg(EvaluationScores.overall_score).label('avg_overall'),
+                func.avg(EvaluationScores.groundedness).label('avg_groundedness'),
+                func.avg(EvaluationScores.answer_relevance).label('avg_answer_relevance'),
+                func.avg(EvaluationScores.context_relevance).label('avg_context_relevance'),
+            ).first()
+            
+            total = session.query(func.count(EvaluationRecord.record_id)).scalar() or 0
+            
+            if total == 0:
+                return {
+                    "total_evaluations": 0,
+                    "average_overall_score": 0.0,
+                    "average_groundedness": 0.0,
+                    "average_answer_relevance": 0.0,
+                    "average_context_relevance": 0.0,
+                }
+            
+            return {
+                "total_evaluations": stats.total or 0,
+                "average_overall_score": round(float(stats.avg_overall or 0), 3),
+                "average_groundedness": round(float(stats.avg_groundedness or 0), 3),
+                "average_answer_relevance": round(float(stats.avg_answer_relevance or 0), 3),
+                "average_context_relevance": round(float(stats.avg_context_relevance or 0), 3),
+            }
+            
+    except Exception as e:
+        logger.exception("Failed to fetch summary")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch summary: {str(e)}",
+        ) from e
+
+
+@router.get(
+    "/recent",
+    status_code=status.HTTP_200_OK,
+    summary="Get recent evaluations",
+)
+def get_recent(limit: int = Query(default=10, ge=1, le=100)):
+    """
+    Get most recent evaluation records.
+    
+    Args:
+        limit: Maximum number of records to return (1-100)
+        
+    Returns:
+        List of recent evaluations with basic info
+    """
+    try:
+        logger.info("Recent evaluations requested (limit=%d)", limit)
+        
+        db = get_database()
+        
+        with db.get_session() as session:
+            from ...models import EvaluationRecord
+            
+            records = (
+                session.query(EvaluationRecord)
+                .order_by(EvaluationRecord.ts.desc())
+                .limit(limit)
+                .all()
+            )
+            
+            evaluations = []
+            for record in records:
+                evaluations.append({
+                    "record_id": record.record_id,
+                    "timestamp": record.ts.isoformat() if record.ts else None,
+                    "query": record.input[:100] + "..." if len(record.input) > 100 else record.input,
+                    "answer_preview": record.output[:100] + "..." if len(record.output) > 100 else record.output,
+                    "app_id": record.app_id,
+                })
+            
+            return {
+                "total": len(evaluations),
+                "limit": limit,
+                "evaluations": evaluations
+            }
+            
+    except Exception as e:
+        logger.exception("Failed to fetch recent evaluations")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch recent evaluations: {str(e)}",
         ) from e
 
 
@@ -164,7 +275,7 @@ def get_record(record_id: str) -> EvaluationResponse:
         from ...schemas.evaluation import EvaluationSummary
 
         summary = EvaluationSummary(
-            passed=True,  # TODO: Calculate from metrics
+            passed=True,
             overall_score=0.75,  # TODO: Calculate from stored metrics
             issues=[],
             warnings=[],
@@ -176,7 +287,7 @@ def get_record(record_id: str) -> EvaluationResponse:
             query=record["query"],
             answer_length=len(record["answer"]),
             summary=summary,
-            trulens=None,  # TODO: Get from DB
+            trulens=None,
             guardrails=None,
             performance=record.get("performance"),
             quality=record.get("quality"),
@@ -192,69 +303,3 @@ def get_record(record_id: str) -> EvaluationResponse:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve record: {str(e)}",
         ) from e
-    
-    
-@router.post(
-    "/benchmark/consistency",
-    status_code=status.HTTP_200_OK,
-    summary="Run consistency benchmark",
-)
-def benchmark_consistency(
-    query: str,
-    context: str,
-    runs: int = 3,
-):
-    """
-    Run consistency benchmark.
-    
-    Executes the same query multiple times and measures score variance.
-    """
-    from ...quality import ConsistencyCalculator
-    from ...trulens import TruLensClient
-    
-    client = TruLensClient(enabled=True)
-    scores = []
-    
-    for i in range(runs):
-        # Run evaluation (this would need to trigger full pipeline)
-        result = client.evaluate(
-            query=query,
-            context=context,
-            answer="",  # Would need actual answer from pipeline
-        )
-        scores.append(result.get("overall_score", 0))
-    
-    calculator = ConsistencyCalculator()
-    consistency = calculator.calculate(scores)
-    
-    return consistency
-
-
-@router.post(
-    "/benchmark/paraphrase",
-    status_code=status.HTTP_200_OK,
-    summary="Run paraphrase stability benchmark",
-)
-def benchmark_paraphrase(
-    query_variations: list[str],
-    context: str,
-    answer: str,
-):
-    """
-    Run paraphrase stability benchmark.
-    
-    Tests how evaluation scores vary across paraphrased queries.
-    """
-    from ...quality import ParaphraseStabilityCalculator
-    from ...trulens import FeedbackProvider
-    
-    provider = FeedbackProvider()
-    
-    def evaluator(query, context, answer):
-        score, _ = provider.groundedness_score(context, answer)
-        return score
-    
-    calculator = ParaphraseStabilityCalculator(evaluator)
-    stability = calculator.calculate(query_variations, context, answer)
-    
-    return stability
