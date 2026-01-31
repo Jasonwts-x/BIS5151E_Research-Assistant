@@ -28,7 +28,8 @@ class EvaluationDatabase:
         """
         if database_url is None:
             database_url = os.getenv(
-                "DATABASE_URL", "postgresql://postgres:postgres@postgres:5432/trulens"
+                "DATABASE_URL", 
+                "postgresql://research_assistant:research_password@postgres:5432/research_assistant"
             )
 
         self.database_url = database_url
