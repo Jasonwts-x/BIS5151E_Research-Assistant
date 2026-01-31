@@ -125,6 +125,23 @@ class QualityMetrics(Base):
     record = relationship("EvaluationRecord", back_populates="quality")
 
 
+class EvaluationScores(Base):
+    """Stores evaluation scores for aggregation."""
+    __tablename__ = "evaluation_scores"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    record_id = Column(String(255), ForeignKey("records.record_id"), nullable=False, index=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    overall_score = Column(Float)
+    groundedness = Column(Float)
+    answer_relevance = Column(Float)
+    context_relevance = Column(Float)
+    citation_quality = Column(Float)
+    
+    record = relationship("EvaluationRecord", backref="scores")
+
+
 class GuardrailsResults(Base):
     """Guardrails validation results."""
 
