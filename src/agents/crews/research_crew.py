@@ -29,7 +29,7 @@ class ResearchCrew:
     Research Assistant Crew composition.
  
     Orchestrates Writer → Reviewer → FactChecker → (Translator) pipeline using CrewAI.
-    Supports both strict mode (with context) and fallback mode (without context).
+    Supports both default mode (with context) and fallback mode (without context).
     """
  
     def __init__(self, llm):
@@ -70,12 +70,12 @@ class ResearchCrew:
         # Detect if we have actual context or not
         has_context = self._has_valid_context(context)
  
-        if not has_context:
+        if has_context:
+            logger.info("Valid context available - using default mode with %d chars", len(context))
+            return self._run_default_mode(topic, context, language)
+        else:
             logger.warning("No valid context available - using fallback mode")
             return self._run_fallback_mode(topic, language)
-        else:
-            logger.info("Valid context available - using strict mode with %d chars", len(context))
-            return self._run_strict_mode(topic, context, language)
  
     def _has_valid_context(self, context: str) -> bool:
         """
@@ -191,9 +191,9 @@ class ResearchCrew:
             'title': title[:100]  # Limit length
         }
  
-    def _run_strict_mode(self, topic: str, context: str, language: str) -> str:
+    def _run_default_mode(self, topic: str, context: str, language: str) -> str:
         """
-        Run full pipeline with strict fact-checking against provided context.
+        Run full pipeline with default fact-checking against provided context.
         Uses Pre-Summarization to speed up processing.
         """
         logger.info("Running STRICT MODE - with optimized context")
@@ -206,7 +206,7 @@ class ResearchCrew:
             agent=self.writer,
             topic=topic,
             context=optimized_context,
-            mode="strict"
+            mode="default"
         )
        
         reviewer_task = create_reviewer_task(
@@ -244,7 +244,7 @@ class ResearchCrew:
         logger.info("Executing crew with %d tasks", len(tasks))
         result = crew.kickoff()
  
-        formatted_output = self._format_output(result, mode="strict")
+        formatted_output = self._format_output(result, mode="default")
        
         logger.info("Crew execution completed. Output length: %d chars", len(formatted_output))
         return formatted_output
@@ -302,7 +302,7 @@ class ResearchCrew:
         logger.info("Fallback crew execution completed. Output length: %d chars", len(formatted_output))
         return formatted_output
  
-    def _format_output(self, result, mode: str = "strict") -> str:
+    def _format_output(self, result, mode: str = "default") -> str:
         """
         Format crew output correctly, preserving citations and CLEANING unwanted artifacts.
         """
@@ -355,12 +355,12 @@ class ResearchCrew:
                 has_references
             )
            
-            # Validation: Warn if no citations in strict mode
-            if mode == "strict" and citation_count == 0:
-                logger.warning("⚠️ STRICT MODE but no citations [1], [2] found in output!")
+            # Validation: Warn if no citations in default mode
+            if mode == "default" and citation_count == 0:
+                logger.warning("⚠️ DEFAULT MODE but no citations [1], [2] found in output!")
            
-            if mode == "strict" and not has_references:
-                logger.warning("⚠️ STRICT MODE but no ## References section found!")
+            if mode == "default" and not has_references:
+                logger.warning("⚠️ DEFAULT MODE but no ## References section found!")
            
             return output_text
            

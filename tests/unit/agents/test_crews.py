@@ -66,30 +66,30 @@ This is test content about neural networks.
         context = "This is a long message but it has no source markers at all. " * 10
         assert crew._has_valid_context(context) is False
 
-    def test_run_uses_strict_mode_with_valid_context(self, crew):
-        """Test that valid context triggers strict mode."""
+    def test_run_uses_default_mode_with_valid_context(self, crew):
+        """Test that valid context triggers default mode."""
         valid_context = """
 SOURCE [1]: test.pdf
 This is valid context with enough text.
 """ * 5  # Make it long enough
         
-        with patch.object(crew, '_run_strict_mode', return_value="strict output") as mock_strict:
+        with patch.object(crew, '_run_default_mode', return_value="default output") as mock_default:
             with patch.object(crew, '_run_fallback_mode') as mock_fallback:
                 result = crew.run(topic="test", context=valid_context, language="en")
                 
-                mock_strict.assert_called_once()
+                mock_default.assert_called_once()
                 mock_fallback.assert_not_called()
-                assert result == "strict output"
+                assert result == "default output"
 
     def test_run_uses_fallback_mode_with_no_context(self, crew):
         """Test that no context triggers fallback mode."""
         no_context = "⚠️ NO CONTEXT AVAILABLE ⚠️\nNo documents were retrieved."
         
-        with patch.object(crew, '_run_strict_mode') as mock_strict:
+        with patch.object(crew, '_run_default_mode') as mock_default:
             with patch.object(crew, '_run_fallback_mode', return_value="fallback output") as mock_fallback:
                 result = crew.run(topic="test", context=no_context, language="en")
                 
-                mock_strict.assert_not_called()
+                mock_default.assert_not_called()
                 mock_fallback.assert_called_once()
                 assert result == "fallback output"
 
