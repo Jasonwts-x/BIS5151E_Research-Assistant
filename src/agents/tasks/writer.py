@@ -15,7 +15,7 @@ TOPIC:
 SOURCES:
 {context}
    
-TASK: Write a coherent research summary (200-300 words) based on the SOURCES.
+TASK: Write a coherent RESEARCH SUMMARY (200-300 words) based on the SOURCES.
    
 REQUIREMENTS:
 1. Begin with a clear introduction sentence.
@@ -39,9 +39,9 @@ and includes proper in-text citations ([1], [2], etc.).
 TOPIC: 
 {topic}
 
-NOTE: No specific sources available. Use general academic knowledge.
+NOTE: NO specific SOURCES available. Use general academic knowledge.
 
-TASK: Write a 200-300 word educational summary about '{topic}'.
+TASK: Write a 200-300 word EDUVATIONAL SUMMARY about '{topic}'.
 
 REQUIREMENTS:
 1. Use cautious language: "typically", "may", "often".
