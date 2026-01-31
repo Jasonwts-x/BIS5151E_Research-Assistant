@@ -195,11 +195,11 @@ class RAGPipeline:
         collection = self.client.collections.get(self.collection_name)
    
         # Hybrid search using raw Weaviate client
-        # alpha=0.75 favors vector search (semantic) over BM25 (keyword)
+        # alpha=0.55 favors vector search (semantic) over BM25 (keyword)
         response = collection.query.hybrid(
             query=query,
             vector=query_embedding,
-            alpha=0.75,
+            alpha=0.55,
             limit=top_k,
             return_metadata=['score'],
         )
