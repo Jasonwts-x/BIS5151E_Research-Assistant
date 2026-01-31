@@ -38,37 +38,37 @@ def create_translator_task(agent, factchecker_task: Task, target_language: str) 
    
     description = f"""
     
-    TASK: Translate the fact-checked text from the previous task to {language}.
+TASK: Translate the fact-checked text from the previous task to {language}.
 
-    PRESERVE:
-    - All citations ([1], [2], etc.) in exact positions.
-    - All factual content. Maintain original meaning and structure.
-    - Academic tone appropriate for {language}.
+PRESERVE:
+- All citations ([1], [2], etc.) in exact positions.
+- All factual content. Maintain original meaning and structure.
+- Academic tone appropriate for {language}.
 
-    TRANSLATE:
-    - Main text to natural {language}.
-    - Use standard academic terminology in {language}.
-    - If there is no direct translation, use the English term in quotation marks.
-    - "References" section header to "{reference_header}".
+TRANSLATE:
+- Main text to natural {language}.
+- Use standard academic terminology in {language}.
+- If there is no direct translation, use the English term in quotation marks.
+- "References" section header to "{reference_header}".
     
-    KEEP UNCHANGED:
-    - Citation details in the References section.
-    - Author names, publication years, and source titles.
+KEEP UNCHANGED:
+- Citation details in the References section.
+- Author names, publication years, and source titles.
 
-    OUTPUT FORMAT:
-    - Begin directly with the translated text.
-    - Do not include meta-commentary like "Here is the translation...".
-    - End with "{reference_header}" section.
+OUTPUT FORMAT:
+- Begin directly with the translated text.
+- Do not include meta-commentary like "Here is the translation...".
+- End with "{reference_header}" section.
  
-    """
+"""
  
     expected_output= f"""T
     
-    The complete {language} translation of the fact-checked summary 
-    with academic tone and terminology appropriate for the target language. 
-    All citations ([1], [2], etc.) preserved in exact positions and not meta-commentary.
+The complete {language} translation of the fact-checked summary 
+with academic tone and terminology appropriate for the target language. 
+All citations ([1], [2], etc.) preserved in exact positions and not meta-commentary.
         
-    """
+"""
 
     context=[factchecker_task]
 

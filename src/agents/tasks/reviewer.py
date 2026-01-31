@@ -7,21 +7,21 @@ def create_reviewer_task(agent, writer_task) -> Task:
 
     description = f"""
 
-    TASK: Review and improve the draft text.
+TASK: Review and improve the draft text.
 
-    IMPROVE:
-    - Sentence structure and grammar
-    - Flow and clarity
-    - Academic tone
+IMPROVE:
+- Sentence structure and grammar
+- Flow and clarity
+- Academic tone
 
-    PRESERVE:
-    - All citations [1], [2], etc.
-    - All factual claims
-    - Original meaning
+PRESERVE:
+- All citations [1], [2], etc.
+- All factual claims
+- Original meaning
 
-    REMOVE: Any LaTeX notation (\\(x\\), $t$, etc.)
+REMOVE: Any LaTeX notation (\\(x\\), $t$, etc.)
 
-    """
+"""
     
     expected_output = "Improved draft. Same content and citations. No LaTeX."
     
