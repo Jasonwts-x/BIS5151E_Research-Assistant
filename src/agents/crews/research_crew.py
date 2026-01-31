@@ -112,10 +112,7 @@ class ResearchCrew:
  
     def _summarize_sources(self, raw_context: str, topic: str) -> str:
         """
-        OPTIMIZED: Extract metadata without complex LLM prompts.
-    
-        APPROACH: Use simple regex + optional minimal LLM call
-        SPEED: ~30-40 seconds for 5 docs (vs 99 sec original)
+        Extract metadata from sources without duplicates.
         """
         import re
     
@@ -124,6 +121,7 @@ class ResearchCrew:
         # Split by SOURCE markers
         parts = re.split(r'(SOURCE \[\d+\])', raw_context)
     
+        seen_sources = set()
         optimized_output = []
         current_header = ""
     
@@ -133,9 +131,15 @@ class ResearchCrew:
             elif current_header and len(part.strip()) > 50:
                 lines = part.strip().split('\n')
                 filename = lines[0].strip()
+
+                if filename in seen_sources:
+                    current_header = ""
+                    continue
+                seen_sources.add(filename)
+
                 content = "\n".join(lines[1:]) if len(lines) > 1 else part
             
-                # SIMPLE EXTRACTION - No LLM needed
+                # Extract metadata
                 metadata = self._extract_metadata_simple(filename, content[:500])
             
                 # Format output
@@ -144,7 +148,7 @@ class ResearchCrew:
                     filename,
                     f"METADATA: {metadata['author']} ({metadata['year']}). {metadata['title']}",
                     "",
-                    content[:800],  # Reduced from 2000 for speed
+                    content[:1000],  # Reduced for speed
                     "-" * 40,
                     ""
                 ])
@@ -196,7 +200,7 @@ class ResearchCrew:
         Run full pipeline with default fact-checking against provided context.
         Uses Pre-Summarization to speed up processing.
         """
-        logger.info("Running STRICT MODE - with optimized context")
+        logger.info("Running DEFAULT MODE - with optimized context")
        
         # 1. OPTIMIZATION STEP: Summarize context first
         optimized_context = self._summarize_sources(context, topic)
@@ -319,30 +323,42 @@ class ResearchCrew:
            
             output_text = output_text.strip()
            
-            # --- CLEANUP LOGIC: Remove Agent Instructions from Final Output ---
+            # Remove Agent Instructions from Final Output ---
+            lines_to_remove = [
+
+                # Meta-commentary patterns
+                "actual complete content",
+                "not a summary",
+                "expected criteria",
+                "you must return",
+                "this analysis includes",
+                "the text contains",
+                "references section",
+                "appropriately formatted",
+                "citations are formatted",
+
+                # Redundant labels
+                "final answer:",
+                "here is the",
+                "here's the",
+                "the following is",
+            ]
+        
             cleaned_lines = []
-            lines = output_text.split('\n')
-           
-            for line in lines:
+            for line in output_text.split('\n'):
                 lower_line = line.lower().strip()
-               
-                # --- HARDCORE FILTERS for the artifacts you observed ---
-                # "You MUST return the actual complete content..."
-                if "actual complete content" in lower_line: continue
-                # "...not a summary"
-                if "not a summary" in lower_line: continue
-                # "This is the expected criteria..."
-                if "expected criteria" in lower_line: continue
-                # "You must return..."
-                if "you must return" in lower_line: continue
-                # "Final Answer:" (redundant label)
-                if lower_line.startswith("final answer:"): continue
-               
-                cleaned_lines.append(line)
+            
+                # Check if line contains any forbidden patterns
+                should_skip = False
+                for pattern in lines_to_remove:
+                    if pattern in lower_line:
+                        should_skip = True
+                        break
+            
+                if not should_skip:
+                    cleaned_lines.append(line)
            
-            # Reassemble
-            output_text = "\n".join(cleaned_lines).strip()
-            # -----------------------------------------------------------------
+                output_text = "\n".join(cleaned_lines).strip()
  
             # Log statistics
             citation_count = self._extract_citations_count(output_text)
