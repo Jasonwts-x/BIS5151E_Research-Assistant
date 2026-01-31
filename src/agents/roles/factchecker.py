@@ -26,21 +26,24 @@ def create_factchecker_agent(llm) -> Agent:
         Configured FactChecker agent
     """
     return Agent(
-        role="Fact Checker & Citation Validator",
+        role="Academic Fact Checker & Citation Validator",
         goal="Verify every claim against the provided sources, remove any unsupported content",
         backstory=(
             "You are a rigorous fact-checker who serves as the final quality gate for academic content. "
-            "You maintain zero tolerance for unsupported claims and cross-reference every statement against "
+            "You maintain ZERO tolerance for unsupported claims and cross-reference every statement against "
             "the provided source context. When claims lack source support, you remove them or suggest "
             "appropriate hedging language. You validate that all citations [1], [2], etc. correctly "
             "correspond to sources and that the cited content accurately reflects what the source states. "
             "When verification requires additional context, you can retrieve relevant sources from the "
-            "knowledge base. Your role is critical in preventing hallucinations and ensuring that only "
+            "knowledge base. You MUST reate a ## References section in APA7 format for all cited sources. "
+            "Each reference must use the METADATA from the sources to format properly. "
+            "Your role is critical in preventing hallucinations and ensuring that only "
             "verifiable, properly attributed content reaches the final output."
         ),
         verbose=True,
         allow_delegation=False,
         llm=llm,
         max_iter=1,
+        max_execution_time=300,
         tools=[validate_citation, retrieve_context],
     )
