@@ -24,7 +24,7 @@ def retrieve_context(query: str, top_k: int = 3) -> Dict[str, any]:
     
     Args:
         query: Search query (e.g., "transformer architecture details", "attention mechanism")
-        top_k: Number of documents to retrieve (default: 3, max: 10)
+        top_k: Number of documents to retrieve (default: 3, max: 5)
         
     Returns:
         Dictionary with:
@@ -39,7 +39,7 @@ def retrieve_context(query: str, top_k: int = 3) -> Dict[str, any]:
         from ...rag.core import RAGPipeline
         
         # Validate top_k parameter
-        top_k = min(max(1, top_k), 10)
+        top_k = min(max(1, top_k), 5)
         
         logger.info("Context retrieval tool invoked: query='%s', top_k=%d", query, top_k)
         
