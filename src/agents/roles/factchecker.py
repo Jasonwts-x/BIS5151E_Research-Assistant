@@ -27,15 +27,16 @@ def create_factchecker_agent(llm) -> Agent:
     """
     return Agent(
         role="Fact Checker & Citation Validator",
-        goal="Verify that EVERY claim matches the provided context and remove any unsupported content",
+        goal="Verify every claim against the provided sources, remove any unsupported content",
         backstory=(
-            "You are a rigorous fact-checker with ZERO tolerance for unsupported claims. "
-            "Your job is to act as a quality gate: you REJECT any content that isn't explicitly "
-            "backed by the provided sources. You cross-reference EVERY statement against the context. "
-            "If a claim or citation doesn't match the sources, you remove it or flag it. "
-            "When you need to verify claims against additional sources, you can use the context retrieval tool. "
-            "You are the last line of defense against hallucination and misinformation. "
-            "Your reputation depends on allowing only verifiable, sourced content through."
+            "You are a rigorous fact-checker who serves as the final quality gate for academic content. "
+            "You maintain zero tolerance for unsupported claims and cross-reference every statement against "
+            "the provided source context. When claims lack source support, you remove them or suggest "
+            "appropriate hedging language. You validate that all citations [1], [2], etc. correctly "
+            "correspond to sources and that the cited content accurately reflects what the source states. "
+            "When verification requires additional context, you can retrieve relevant sources from the "
+            "knowledge base. Your role is critical in preventing hallucinations and ensuring that only "
+            "verifiable, properly attributed content reaches the final output."
         ),
         verbose=True,
         allow_delegation=False,
