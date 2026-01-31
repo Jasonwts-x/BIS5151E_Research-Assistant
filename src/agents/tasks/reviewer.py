@@ -7,7 +7,7 @@ def create_reviewer_task(agent, writer_task) -> Task:
 
     description = f"""
 
-TASK: Review and improve the draft text.
+TASK: REVIEW and IMPROVE the draft text.
 
 IMPROVE:
 - Sentence structure and grammar
@@ -19,11 +19,32 @@ PRESERVE:
 - All factual claims
 - Original meaning
 
+INSTRUCTIONS:
+- Enhance readability and coherence.
+- Maintain academic style.
+- Keep all original references intact.
+- Do NOT add meta-commentary about the text itself.
+- Do NOT mention what the text "includes" or "contains".
+
+FORBIDDEN PHRASES:
+- "This analysis includes..."
+- "The text contains..."
+- "A references section..."
+- "Citations are formatted..."
+
 REMOVE: Any LaTeX notation (\\(x\\), $t$, etc.)
+
+
+OUTPUT: The improved text ONLY, without any commentary about the text.
 
 """
     
-    expected_output = "Improved draft. Same content and citations. No LaTeX."
+    expected_output = f"""
+
+Improved draft with enhanced clarity and polished academic style. 
+All original citations preserved. No LaTeX notation. NO meta-commentary.
+
+"""
     
     context = [writer_task]
 
