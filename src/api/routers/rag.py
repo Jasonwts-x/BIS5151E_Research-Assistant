@@ -425,92 +425,91 @@ def reset_index() -> ResetIndexResponse:
     
 
 @router.get(
-    "/debug/weaviate-direct",
+    "/debug/weaviate",
     status_code=status.HTTP_200_OK,
-    summary="🔧 Debug: Direct Weaviate query (bypass Python client)",
+    summary="Debug Weaviate connection and data",
 )
-def debug_weaviate_direct():
+def debug_weaviate():
     """
-    Bypass Python client and query Weaviate directly via GraphQL.
-    
-    This helps diagnose if documents are in Weaviate but the Python client
-    is not seeing them due to connection/caching issues.
+    Diagnostic endpoint to check Weaviate connection and collection status.
     
     Returns:
-        Direct count from Weaviate GraphQL API
+        Detailed diagnostic information about Weaviate
     """
-    import httpx
-    
     try:
-        # GraphQL query to count documents
-        graphql_query = {
-            "query": """
-            {
-              Aggregate {
-                ResearchDocument {
-                  meta {
-                    count
-                  }
+        from ...rag.core.pipeline import RAGPipeline
+        import weaviate
+        
+        cfg = load_config()
+        
+        # Parse Weaviate URL
+        from urllib.parse import urlparse
+        parsed = urlparse(cfg.weaviate.url if cfg.weaviate.url.startswith('http') else f'http://{cfg.weaviate.url}')
+        host = parsed.hostname or 'weaviate'
+        port = parsed.port or 8080
+        
+        # Connect to Weaviate
+        client = weaviate.connect_to_local(host=host, port=port)
+        
+        try:
+            # Check collection existence
+            collection_name = "ResearchDocument"
+            exists = client.collections.exists(collection_name)
+            
+            if not exists:
+                return {
+                    "status": "error",
+                    "message": f"Collection '{collection_name}' does not exist",
+                    "weaviate_url": f"{host}:{port}",
+                    "collection_name": collection_name,
                 }
-              }
+            
+            # Get collection stats
+            collection = client.collections.get(collection_name)
+            response = collection.aggregate.over_all(total_count=True)
+            doc_count = response.total_count
+            
+            # Fetch sample document
+            sample_response = collection.query.fetch_objects(limit=1)
+            has_data = len(sample_response.objects) > 0
+            
+            sample_doc = None
+            if has_data:
+                obj = sample_response.objects[0]
+                props = obj.properties
+                sample_doc = {
+                    "source": props.get('source', 'N/A'),
+                    "chunk_index": props.get('chunk_index', 'N/A'),
+                    "content_preview": props.get('content', '')[:200],
+                }
+            
+            # Test RAG pipeline
+            try:
+                pipeline = RAGPipeline.from_existing()
+                test_docs = pipeline.run(query="test", top_k=1)
+                pipeline_works = len(test_docs) > 0
+            except Exception as e:
+                pipeline_works = False
+                pipeline_error = str(e)
+            
+            return {
+                "status": "success",
+                "weaviate_url": f"{host}:{port}",
+                "collection_name": collection_name,
+                "collection_exists": exists,
+                "document_count": doc_count,
+                "has_data": has_data,
+                "sample_document": sample_doc,
+                "rag_pipeline_works": pipeline_works,
+                "rag_pipeline_error": pipeline_error if not pipeline_works else None,
             }
-            """
-        }
-        
-        # Query Weaviate directly via HTTP
-        response = httpx.post(
-            "http://weaviate:8080/v1/graphql",
-            json=graphql_query,
-            timeout=10.0
-        )
-        response.raise_for_status()
-        result = response.json()
-        
-        count = result.get("data", {}).get("Aggregate", {}).get("ResearchDocument", {}).get("meta", {}).get("count", 0)
-        
-        # Also try fetching sample objects
-        sample_query = {
-            "query": """
-            {
-              Get {
-                ResearchDocument(limit: 3) {
-                  content
-                  source
-                  chunk_index
-                }
-              }
-            }
-            """
-        }
-        
-        sample_response = httpx.post(
-            "http://weaviate:8080/v1/graphql",
-            json=sample_query,
-            timeout=10.0
-        )
-        sample_result = sample_response.json()
-        samples = sample_result.get("data", {}).get("Get", {}).get("ResearchDocument", [])
-        
-        return {
-            "success": True,
-            "method": "Direct GraphQL to Weaviate",
-            "document_count": count,
-            "sample_documents_fetched": len(samples),
-            "samples": [
-                {
-                    "source": s.get("source"),
-                    "chunk_index": s.get("chunk_index"),
-                    "content_preview": s.get("content", "")[:100] + "..."
-                }
-                for s in samples[:3]
-            ] if samples else [],
-            "message": f"Direct Weaviate query: {count} documents found" if count > 0 else "No documents found in Weaviate"
-        }
-        
+            
+        finally:
+            client.close()
+            
     except Exception as e:
-        logger.exception("Direct Weaviate query failed")
+        logger.exception("Weaviate diagnostic failed")
         return {
-            "success": False,
-            "error": str(e),
-            "message": "Failed to query Weaviate directly"
+            "status": "error",
+            "message": str(e),
         }

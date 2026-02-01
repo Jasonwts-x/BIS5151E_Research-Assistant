@@ -253,104 +253,126 @@ class RAGPipeline:
             if result.errors:
                 logger.warning("Errors during ingestion: %s", result.errors)
 
-    def run(self, query: str, top_k: int = 5) -> List[Document]:
-        """
-        Retrieve relevant documents using Hybrid Search.
+def run(self, query: str, top_k: int = 5) -> List[Document]:
+    """
+    Execute RAG pipeline: embed query + hybrid search + return documents.
+    
+    Args:
+        query: User query string
+        top_k: Number of documents to retrieve
         
-        Implements smart truncation to prevent context overflow for local LLMs.
-        Uses Weaviate's hybrid search (BM25 + semantic) with alpha=0.55.
-        
-        Args:
-            query: Search query
-            top_k: Number of results to return (default: 5)
-            
-        Returns:
-            List of relevant documents with optimized content length
-        """
-        logger.info("Retrieving top_k=%d for query='%s'", top_k, query)
-
-        # Generate query embedding
-        emb_result = self.text_embedder.run(text=query)
-        query_embedding = emb_result["embedding"]
-
-        # Get Weaviate collection
+    Returns:
+        List of retrieved Haystack Documents with metadata
+    """
+    logger.info("=== RAG PIPELINE START ===")
+    logger.info("Query: '%s', top_k: %d", query, top_k)
+    logger.info("Collection: '%s'", self.collection_name)
+    
+    # Step 1: Generate query embedding
+    logger.info("Step 1/3: Generating query embedding...")
+    try:
+        embed_result = self.text_embedder.run(text=query)
+        query_embedding = embed_result["embedding"]
+        logger.info("✓ Query embedding generated: %d dimensions", len(query_embedding))
+    except Exception as e:
+        logger.error("❌ Failed to generate query embedding: %s", e, exc_info=True)
+        return []
+    
+    # Step 2: Get Weaviate collection
+    logger.info("Step 2/3: Accessing Weaviate collection...")
+    try:
         collection = self.client.collections.get(self.collection_name)
-
-        # DIAGNOSTIC: Check if collection has any documents before querying
-        try:
-            # Quick sanity check - fetch 1 object to verify collection has data
-            test_fetch = collection.query.fetch_objects(limit=1)
-            collection_has_data = test_fetch and len(test_fetch.objects) > 0
-            logger.info(
-                "Pre-query diagnostic: collection '%s' has data: %s",
-                self.collection_name,
-                collection_has_data
+        logger.info("✓ Collection accessed: %s", self.collection_name)
+    except Exception as e:
+        logger.error("❌ Failed to access collection: %s", e, exc_info=True)
+        return []
+    
+    # Pre-query diagnostic: Check if collection has data
+    try:
+        response = collection.aggregate.over_all(total_count=True)
+        doc_count = response.total_count
+        logger.info("📊 Collection has %d documents", doc_count)
+        
+        if doc_count == 0:
+            logger.warning(
+                "⚠️ Collection '%s' is EMPTY. No documents will be retrieved.",
+                self.collection_name
             )
-            if not collection_has_data:
-                logger.warning(
-                    "Collection '%s' appears empty! No documents will be retrieved.",
-                    self.collection_name
-                )
-        except Exception as diag_error:
-            logger.warning("Pre-query diagnostic failed: %s", diag_error)
+            return []
+    except Exception as diag_error:
+        logger.warning("Pre-query diagnostic failed: %s", diag_error)
 
-        # Hybrid search: alpha=0.55 favors vector search over BM25
-        # This balances semantic understanding with keyword matching
+    # Step 3: Execute hybrid search
+    logger.info("Step 3/3: Executing hybrid search (alpha=0.55)...")
+    try:
         response = collection.query.hybrid(
             query=query,
             vector=query_embedding,
-            alpha=0.55,
+            alpha=0.55,  # Favor vector search slightly
             limit=top_k,
             return_metadata=['score'],
         )
-
-        # DIAGNOSTIC: Log response details
+        
         result_count = len(response.objects) if response and response.objects else 0
-        logger.info("Hybrid search returned %d results (requested top_k=%d)", result_count, top_k)
+        logger.info("✓ Hybrid search completed: %d results (requested: %d)", result_count, top_k)
+        
+        if result_count == 0:
+            logger.warning("⚠️ Hybrid search returned 0 results for query: '%s'", query)
+            logger.warning("   This might indicate:")
+            logger.warning("   - Query is too specific / no semantic match")
+            logger.warning("   - Collection data is incompatible")
+            logger.warning("   - Embedding model mismatch")
+            return []
+        
+    except Exception as e:
+        logger.error("❌ Hybrid search failed: %s", e, exc_info=True)
+        return []
+    
+    # Step 4: Convert results to Haystack Documents
+    logger.info("Step 4/4: Converting %d results to Haystack Documents...", result_count)
+    docs = []
+    MAX_CHARS_PER_CHUNK = 2500
 
-        # Convert Weaviate objects to Haystack Documents with smart truncation
-        docs = []
+    for i, obj in enumerate(response.objects, 1):
+        props = obj.properties
+        raw_content = props.get('content', '')
+        
+        # Log first result for debugging
+        if i == 1:
+            logger.debug("First result preview:")
+            logger.debug("  Source: %s", props.get('source', 'N/A'))
+            logger.debug("  Content length: %d chars", len(raw_content))
+            logger.debug("  Content preview: %s...", raw_content[:100])
 
-        # Smart truncation configuration
-        # Target: ~600 tokens per chunk, 5 chunks = ~3000 tokens total context
-        MAX_CHARS_PER_CHUNK = 2500
+        # Clean whitespace
+        clean_content = re.sub(r'\s+', ' ', raw_content).strip()
 
-        for obj in response.objects:
-            props = obj.properties
-            raw_content = props.get('content', '')
+        # Smart truncate if needed
+        if len(clean_content) > MAX_CHARS_PER_CHUNK:
+            truncated = clean_content[:MAX_CHARS_PER_CHUNK]
+            last_period = truncated.rfind('.')
+            if last_period > MAX_CHARS_PER_CHUNK * 0.8:
+                clean_content = truncated[:last_period + 1]
+            else:
+                clean_content = truncated + "..."
 
-            # Clean whitespace: newlines/tabs → single space
-            # This saves massive tokens in PDFs with bad formatting
-            clean_content = re.sub(r'\s+', ' ', raw_content).strip()
+        # Create Haystack Document
+        doc = Document(
+            content=clean_content,
+            meta={
+                'source': props.get('source', 'unknown'),
+                'chunk_index': props.get('chunk_index', 0),
+                'document_id': props.get('document_id', ''),
+                'authors': props.get('authors', []),
+                'arxiv_id': props.get('arxiv_id', ''),
+            },
+            score=obj.metadata.score if hasattr(obj.metadata, 'score') else None,
+        )
+        docs.append(doc)
 
-            # Smart truncate if needed
-            if len(clean_content) > MAX_CHARS_PER_CHUNK:
-                # Cut at limit
-                truncated = clean_content[:MAX_CHARS_PER_CHUNK]
-                # Try to find last sentence end for clean cut
-                last_period = truncated.rfind('.')
-                if last_period > MAX_CHARS_PER_CHUNK * 0.8:  # At least 80% through
-                    clean_content = truncated[:last_period + 1]
-                else:
-                    clean_content = truncated + "..."
-
-            # Create Haystack Document
-            doc = Document(
-                content=clean_content,
-                meta={
-                    'source': props.get('source', 'unknown'),
-                    'chunk_index': props.get('chunk_index', 0),
-                    'document_id': props.get('document_id', ''),
-                    'authors': props.get('authors', []),
-                    'arxiv_id': props.get('arxiv_id', ''),
-                },
-                score=obj.metadata.score if hasattr(obj.metadata, 'score') else None,
-            )
-            docs.append(doc)
-
-        logger.info("Retrieved %d documents (smart truncation applied)", len(docs))
-
-        return docs
+    logger.info("✓ Retrieved %d documents successfully", len(docs))
+    logger.info("=== RAG PIPELINE END ===")
+    return docs
 
 
 # Legacy compatibility function
