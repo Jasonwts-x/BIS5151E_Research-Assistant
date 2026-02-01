@@ -8,7 +8,7 @@
 -- ============================================================================
 
 -- Connect to trulens database
-\c trulens
+\c research_assistant
 
 -- ============================================================================
 -- CUSTOM PERFORMANCE METRICS SCHEMA

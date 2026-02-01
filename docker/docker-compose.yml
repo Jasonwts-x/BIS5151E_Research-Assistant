@@ -167,6 +167,9 @@ services:
       WEAVIATE_URL: http://weaviate:8080
       EVAL_SERVICE_URL: http://eval:8502
 
+      POSTGRES_DB: research_assistant
+      DATABASE_URL: postgresql://${POSTGRES_USER:-research_assistant}:${POSTGRES_PASSWORD:-research_password}@postgres:5432/research_assistant
+
       RAG_CHUNK_SIZE: ${RAG_CHUNK_SIZE:-350}
       RAG_CHUNK_OVERLAP: ${RAG_CHUNK_OVERLAP:-60}
       RAG_TOP_K: ${RAG_TOP_K:-5}
@@ -231,13 +234,13 @@ services:
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
-      POSTGRES_DB: trulens
+      POSTGRES_DB: research_assistant
       POSTGRES_USER: ${POSTGRES_USER:-research_assistant}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-research_password}
-      DATABASE_URL: postgresql://${POSTGRES_USER:-research_assistant}:${POSTGRES_PASSWORD:-research_password}@postgres:5432/trulens
+      DATABASE_URL: postgresql://${POSTGRES_USER:-research_assistant}:${POSTGRES_PASSWORD:-research_password}@postgres:5432/research_assistant
 
       TRULENS_ENABLED: "true"
-      TRULENS_DATABASE_URL: postgresql://${POSTGRES_USER:-research_assistant}:${POSTGRES_PASSWORD:-research_password}@postgres:5432/trulens
+      TRULENS_DATABASE_URL: postgresql://${POSTGRES_USER:-research_assistant}:${POSTGRES_PASSWORD:-research_password}@postgres:5432/research_assistant
       GUARDRAILS_ENABLED: "true"
       GUARDRAILS_STRICT_MODE: "false"
       EVAL_API_PORT: 8502
