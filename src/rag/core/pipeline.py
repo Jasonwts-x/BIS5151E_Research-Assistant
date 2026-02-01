@@ -135,7 +135,7 @@ class RAGPipeline:
 
         try:
             # Get collection name from schema definition
-            from ..ingestion.schema import RESEARCH_DOCUMENT_SCHEMA
+            from .schema import RESEARCH_DOCUMENT_SCHEMA
             collection_name = RESEARCH_DOCUMENT_SCHEMA["class"]
 
             # Check if collection exists, create if needed
@@ -146,13 +146,12 @@ class RAGPipeline:
                 )
 
                 # Auto-create schema using SchemaManager
-                from ..ingestion.schema import SchemaManager
+                from .schema import SchemaManager
                 schema_manager = SchemaManager(
                     client=client,
-                    collection_name=collection_name,
-                    embedding_model=cfg.weaviate.embedding_model
+                    allow_reset=False
                 )
-                schema_manager.create_schema()
+                schema_manager.ensure_schema()
 
                 logger.info("✓ Collection '%s' created successfully", collection_name)
             else:
