@@ -138,6 +138,7 @@ class IngestionEngine:
         Create Weaviate client based on configuration.
         
         Supports both local and cloud deployments.
+        FIXED: Uses connect_to_custom to ensure correct gRPC communication in Docker.
         
         Returns:
             Connected Weaviate client
@@ -156,16 +157,24 @@ class IngestionEngine:
                 auth_credentials=Auth.api_key(api_key),
             )
         else:
-            # Local deployment without auth
+            # Local / Docker deployment
             parsed = urlparse(url if url.startswith('http') else f'http://{url}')
             host = parsed.hostname or 'localhost'
             port = parsed.port or 8080
+            grpc_port = 50051 # Standard gRPC port for Weaviate
 
-            logger.info("Connecting to Weaviate at %s:%d", host, port)
+            logger.info("Connecting to Weaviate at %s (HTTP:%d, gRPC:%d)", host, port, grpc_port)
 
-            client = weaviate.connect_to_local(
-                host=host,
-                port=port,
+            # FIXED: Use connect_to_custom to explicitly set gRPC host/port.
+            # connect_to_local often fails inside Docker containers because it 
+            # implies 'localhost' for gRPC, but we need to talk to the 'weaviate' service.
+            client = weaviate.connect_to_custom(
+                http_host=host,
+                http_port=port,
+                http_secure=False,
+                grpc_host=host,     # WICHTIG: Muss im Docker-Netz explizit auf 'weaviate' zeigen
+                grpc_port=grpc_port,
+                grpc_secure=False
             )
 
             logger.info("Connected to Weaviate successfully")
@@ -243,6 +252,7 @@ class IngestionEngine:
 
             try:
                 collection = self.client.collections.get(self.schema_manager.collection_name)
+                # This fetch requires working gRPC!
                 test_fetch = collection.query.fetch_objects(limit=5)
                 actual_count = len(test_fetch.objects) if test_fetch and test_fetch.objects else 0
                 logger.info("POST-INGESTION VERIFICATION: Collection now has %d documents (sampled)", actual_count)
@@ -290,6 +300,8 @@ class IngestionEngine:
         skipped = 0
 
         # Batch insert for efficiency
+        # WARNING: In Weaviate v4 Python client, this relies heavily on gRPC.
+        # If gRPC is not connected correctly, this might fail silently or hang.
         with collection.batch.dynamic() as batch:
             for chunk in chunks:
                 try:

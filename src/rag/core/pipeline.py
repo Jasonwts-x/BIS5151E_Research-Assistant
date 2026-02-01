@@ -76,6 +76,7 @@ class RAGPipeline:
         Create Weaviate client based on configuration.
         
         Supports both local and cloud deployments.
+        FIXED: Uses connect_to_custom to ensure correct gRPC communication in Docker.
         
         Args:
             cfg: Application configuration with Weaviate settings
@@ -97,16 +98,23 @@ class RAGPipeline:
                 auth_credentials=Auth.api_key(api_key),
             )
         else:
-            # Local deployment without authentication
+            # Local / Docker deployment
             parsed = urlparse(url if url.startswith('http') else f'http://{url}')
             host = parsed.hostname or 'localhost'
             port = parsed.port or 8080
+            grpc_port = 50051  # Standard gRPC port for Weaviate
 
-            logger.info("Connecting to local Weaviate at %s:%d", host, port)
+            logger.info("Connecting to Weaviate at %s (HTTP:%d, gRPC:%d)", host, port, grpc_port)
 
-            client = weaviate.connect_to_local(
-                host=host,
-                port=port,
+            # Use connect_to_custom to explicitly set gRPC host/port.
+            # In Docker, the host for gRPC is the same as HTTP (e.g., 'weaviate').
+            client = weaviate.connect_to_custom(
+                http_host=host,
+                http_port=port,
+                http_secure=False,
+                grpc_host=host,     # WICHTIG: Muss im Docker-Netz explizit gesetzt sein
+                grpc_port=grpc_port,
+                grpc_secure=False
             )
 
         logger.info("Connected to Weaviate successfully")
@@ -279,6 +287,7 @@ class RAGPipeline:
         # DIAGNOSTIC: Check if collection has any documents before querying
         try:
             # Quick sanity check - fetch 1 object to verify collection has data
+            # This requires a working gRPC connection!
             test_fetch = collection.query.fetch_objects(limit=1)
             collection_has_data = test_fetch and len(test_fetch.objects) > 0
             logger.info(

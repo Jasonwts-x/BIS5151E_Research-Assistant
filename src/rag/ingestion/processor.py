@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import uuid  # <--- NEU: Wichtig für Weaviate IDs
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -191,15 +192,10 @@ class DocumentProcessor:
 
     def _generate_chunk_id(self, source: str, content: str, chunk_index: int) -> str:
         """
-        Generate deterministic chunk ID from content.
+        Generate deterministic UUID based on content.
         
-        Format: SHA-256 hash of (source + content + index)
-        Truncated to 16 chars for readability
-        
-        This ensures:
-            - Same content → same ID
-            - Different content → different ID
-            - Rebuild produces identical IDs
+        FIX: Uses uuid.uuid5 to generate a valid UUID format required by Weaviate.
+        Previous hex string format caused silent ingestion failures.
         
         Args:
             source: Source filename
@@ -207,10 +203,13 @@ class DocumentProcessor:
             chunk_index: Sequential chunk index
             
         Returns:
-            16-character deterministic ID
+            Valid UUID string (e.g. '36f52e6e-6c07-4229-a3d8-261208953109')
         """
         hash_input = f"{source}::{content}::{chunk_index}"
-        return hashlib.sha256(hash_input.encode()).hexdigest()[:16]
+        
+        # Generiert eine deterministische UUID basierend auf dem Namespace DNS und dem Input-String
+        # Dies stellt sicher, dass der String ein echtes UUID-Format hat.
+        return str(uuid.uuid5(uuid.NAMESPACE_DNS, hash_input))
 
     @staticmethod
     def chunk_documents_stable(

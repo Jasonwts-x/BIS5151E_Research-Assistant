@@ -466,8 +466,19 @@ def debug_weaviate():
             
             # Get collection stats
             collection = client.collections.get(collection_name)
-            response = collection.aggregate.over_all(total_count=True)
-            doc_count = response.total_count
+            
+            # Try aggregate first
+            doc_count = 0
+            try:
+                response = collection.aggregate.over_all(total_count=True)
+                doc_count = response.total_count if hasattr(response, 'total_count') else 0
+            except Exception:
+                # Fallback to fetch_objects
+                try:
+                    sample_response = collection.query.fetch_objects(limit=10000)
+                    doc_count = len(sample_response.objects) if sample_response else 0
+                except Exception:
+                    doc_count = -1  # Error
             
             # Fetch sample document
             sample_response = collection.query.fetch_objects(limit=1)
@@ -484,6 +495,9 @@ def debug_weaviate():
                 }
             
             # Test RAG pipeline
+            pipeline_works = False
+            pipeline_error = None  # ✅ INITIALIZE BEFORE TRY BLOCK
+            
             try:
                 pipeline = RAGPipeline.from_existing()
                 test_docs = pipeline.run(query="test", top_k=1)
@@ -498,10 +512,10 @@ def debug_weaviate():
                 "collection_name": collection_name,
                 "collection_exists": exists,
                 "document_count": doc_count,
-                "has_data": has_data,
+                "has_queryable_data": has_data,
                 "sample_document": sample_doc,
                 "rag_pipeline_works": pipeline_works,
-                "rag_pipeline_error": pipeline_error if not pipeline_works else None,
+                "rag_pipeline_error": pipeline_error,
             }
             
         finally:
