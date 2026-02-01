@@ -141,6 +141,79 @@ async def rag_query(
 
 
 # ============================================================================
+# Schema Endpoints - Manage Schemas
+# ============================================================================
+
+
+@router.post(
+    "/schema/create",
+    status_code=status.HTTP_200_OK,
+    summary="Create Weaviate schema (collection)",
+)
+def create_schema():
+    """
+    Create the Weaviate collection schema if it doesn't exist.
+    
+    This is useful to initialize the database before ingesting documents.
+    Safe to call multiple times - won't recreate if already exists.
+    """
+    try:
+        from ...rag.ingestion.schema import SchemaManager
+        from ...utils.config import load_config
+        import weaviate
+        
+        cfg = load_config()
+        
+        # Connect to Weaviate
+        logger.info("Connecting to Weaviate at %s", cfg.weaviate.url)
+        
+        from urllib.parse import urlparse
+        parsed = urlparse(cfg.weaviate.url if cfg.weaviate.url.startswith('http') else f'http://{cfg.weaviate.url}')
+        host = parsed.hostname or 'weaviate'
+        port = parsed.port or 8080
+        
+        client = weaviate.connect_to_local(host=host, port=port)
+        
+        # Check if collection exists
+        collection_name = cfg.weaviate.index_name
+        exists = client.collections.exists(collection_name)
+        
+        if exists:
+            logger.info("Collection '%s' already exists", collection_name)
+            return {
+                "status": "already_exists",
+                "collection_name": collection_name,
+                "message": f"Collection '{collection_name}' already exists"
+            }
+        
+        # Create schema
+        logger.info("Creating collection '%s'", collection_name)
+        schema_manager = SchemaManager(
+            client=client,
+            collection_name=collection_name,
+            embedding_model=cfg.weaviate.embedding_model
+        )
+        schema_manager.create_schema()
+        
+        client.close()
+        
+        logger.info("✓ Collection '%s' created successfully", collection_name)
+        
+        return {
+            "status": "created",
+            "collection_name": collection_name,
+            "message": f"Collection '{collection_name}' created successfully"
+        }
+        
+    except Exception as e:
+        logger.exception("Failed to create schema")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create schema: {str(e)}"
+        ) from e
+
+
+# ============================================================================
 # Ingestion Endpoints
 # ============================================================================
 
@@ -150,76 +223,49 @@ async def rag_query(
     response_model=IngestionResponse,
     status_code=status.HTTP_200_OK,
     summary="Ingest documents from local filesystem",
-    description="""
-    Ingest documents from local filesystem into the RAG vector database.
-    
-    **Supported file types:** PDF, TXT
-    
-    **Source directories:**
-    - `data/raw/` - Manually added documents
-    - `data/arxiv/` - Downloaded ArXiv papers
-    
-    **Workflow:**
-    1. Load matching files from both directories
-    2. Extract text and chunk documents
-    3. Generate embeddings
-    4. Store in Weaviate vector database
-    5. Deduplicate (skip already-indexed chunks)
-    
-    **Note:** Ingestion can take several minutes for large document sets.
-    """,
 )
 def ingest_local(payload: IngestLocalRequest) -> IngestionResponse:
-    """
-    Ingest documents from local filesystem.
-    
-    Args:
-        payload: Ingestion request with file pattern
-        
-    Returns:
-        Ingestion statistics (documents loaded, chunks created, etc.)
-    """
+    """Ingest documents from local filesystem."""
     try:
         logger.info("Starting local ingestion with pattern: %s", payload.pattern)
         
-        engine = IngestionEngine()
-        
-        # Ingest from both directories
-        results = []
-        for data_dir in [DATA_RAW_DIR, DATA_ARXIV_DIR]:
-            if not data_dir.exists():
-                logger.warning("Directory does not exist: %s", data_dir)
-                continue
+        # Use context manager for automatic cleanup
+        with IngestionEngine() as engine:
+            results = []
+            for data_dir in [DATA_RAW_DIR, DATA_ARXIV_DIR]:
+                if not data_dir.exists():
+                    logger.warning("Directory does not exist: %s", data_dir)
+                    continue
+                
+                source = LocalFileSource(data_dir)
+                result = engine.ingest_from_source(source, pattern=payload.pattern)
+                results.append(result)
             
-            source = LocalFileSource(data_dir)
-            result = engine.ingest_from_source(source, pattern=payload.pattern)
-            results.append(result)
-        
-        # Aggregate results
-        total_docs = sum(r.documents_loaded for r in results)
-        total_chunks_created = sum(r.chunks_created for r in results)
-        total_chunks_ingested = sum(r.chunks_ingested for r in results)
-        total_chunks_skipped = sum(r.chunks_skipped for r in results)
-        all_errors = [err for r in results for err in r.errors]
-        
-        logger.info(
-            "Local ingestion complete: %d docs, %d chunks created, %d ingested, %d skipped",
-            total_docs,
-            total_chunks_created,
-            total_chunks_ingested,
-            total_chunks_skipped,
-        )
-        
-        return IngestionResponse(
-            source="LocalFiles",
-            documents_loaded=total_docs,
-            chunks_created=total_chunks_created,
-            chunks_ingested=total_chunks_ingested,
-            chunks_skipped=total_chunks_skipped,
-            errors=all_errors,
-            success=len(all_errors) == 0,
-            papers=None,
-        )
+            # Aggregate results
+            total_docs = sum(r.documents_loaded for r in results)
+            total_chunks_created = sum(r.chunks_created for r in results)
+            total_chunks_ingested = sum(r.chunks_ingested for r in results)
+            total_chunks_skipped = sum(r.chunks_skipped for r in results)
+            all_errors = [err for r in results for err in r.errors]
+            
+            logger.info(
+                "Local ingestion complete: %d docs, %d chunks created, %d ingested, %d skipped",
+                total_docs,
+                total_chunks_created,
+                total_chunks_ingested,
+                total_chunks_skipped,
+            )
+            
+            return IngestionResponse(
+                source="LocalFiles",
+                documents_loaded=total_docs,
+                chunks_created=total_chunks_created,
+                chunks_ingested=total_chunks_ingested,
+                chunks_skipped=total_chunks_skipped,
+                errors=all_errors,
+                success=len(all_errors) == 0,
+                papers=None,
+            )
         
     except Exception as e:
         logger.exception("Local ingestion failed")
@@ -227,14 +273,6 @@ def ingest_local(payload: IngestLocalRequest) -> IngestionResponse:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Ingestion failed: {str(e)}",
         ) from e
-    
-    finally:
-        # Always try to close client
-        try:
-            if 'engine' in locals() and hasattr(engine, 'client'):
-                engine.client.close()
-        except Exception as e:
-            logger.warning("Failed to close Weaviate client: %s", str(e))
 
 
 @router.post(
@@ -242,34 +280,9 @@ def ingest_local(payload: IngestLocalRequest) -> IngestionResponse:
     response_model=IngestionResponse,
     status_code=status.HTTP_200_OK,
     summary="Download and ingest papers from ArXiv",
-    description="""
-    Download papers from ArXiv and ingest into RAG vector database.
-    
-    **Workflow:**
-    1. Search ArXiv API for matching papers
-    2. Download PDFs to `data/arxiv/`
-    3. Extract text and chunk documents
-    4. Generate embeddings
-    5. Store in Weaviate
-    
-    **Query examples:**
-    - "transformer neural networks"
-    - "retrieval augmented generation"
-    - "large language models"
-    
-    **Note:** Downloads can take time. Use reasonable `max_results` values (< 50).
-    """,
 )
 def ingest_arxiv(payload: IngestArxivRequest) -> IngestionResponse:
-    """
-    Download and ingest papers from ArXiv.
-    
-    Args:
-        payload: ArXiv query and max results
-        
-    Returns:
-        Ingestion statistics
-    """
+    """Download and ingest papers from ArXiv."""
     try:
         logger.info(
             "Starting ArXiv ingestion: query='%s', max_results=%d",
@@ -277,32 +290,33 @@ def ingest_arxiv(payload: IngestArxivRequest) -> IngestionResponse:
             payload.max_results,
         )
         
-        engine = IngestionEngine()
-        source = ArXivSource(download_dir=DATA_ARXIV_DIR)
-        
-        result = engine.ingest_from_source(
-            source,
-            query=payload.query,
-            max_results=payload.max_results,
-        )
-        
-        logger.info(
-            "ArXiv ingestion complete: %d docs, %d chunks created, %d ingested",
-            result.documents_loaded,
-            result.chunks_created,
-            result.chunks_ingested,
-        )
-        
-        return IngestionResponse(
-            source=result.source,
-            documents_loaded=result.documents_loaded,
-            chunks_created=result.chunks_created,
-            chunks_ingested=result.chunks_ingested,
-            chunks_skipped=result.chunks_skipped,
-            errors=result.errors,
-            success=result.success,
-            papers=result.papers,
-        )
+        # Use context manager for automatic cleanup
+        with IngestionEngine() as engine:
+            source = ArXivSource(download_dir=DATA_ARXIV_DIR)
+            
+            result = engine.ingest_from_source(
+                source,
+                query=payload.query,
+                max_results=payload.max_results,
+            )
+            
+            logger.info(
+                "ArXiv ingestion complete: %d docs, %d chunks created, %d ingested",
+                result.documents_loaded,
+                result.chunks_created,
+                result.chunks_ingested,
+            )
+            
+            return IngestionResponse(
+                source=result.source,
+                documents_loaded=result.documents_loaded,
+                chunks_created=result.chunks_created,
+                chunks_ingested=result.chunks_ingested,
+                chunks_skipped=result.chunks_skipped,
+                errors=result.errors,
+                success=result.success,
+                papers=result.papers,
+            )
         
     except Exception as e:
         logger.exception("ArXiv ingestion failed")
@@ -310,18 +324,6 @@ def ingest_arxiv(payload: IngestArxivRequest) -> IngestionResponse:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"ArXiv ingestion failed: {str(e)}",
         ) from e
-    
-    finally:
-        try:
-            if 'engine' in locals() and hasattr(engine, 'client'):
-                engine.client.close()
-        except Exception as e:
-            logger.warning("Failed to close Weaviate client: %s", str(e))
-
-
-# ============================================================================
-# Admin Endpoints
-# ============================================================================
 
 
 @router.get(
@@ -331,30 +333,22 @@ def ingest_arxiv(payload: IngestArxivRequest) -> IngestionResponse:
     summary="Get RAG index statistics",
 )
 def get_stats() -> RAGStatsResponse:
-    """
-    Get information about the RAG vector database.
-    
-    Returns:
-    - Collection name
-    - Schema version
-    - Number of indexed chunks
-    - Whether index exists
-    """
-    try:
-        engine = IngestionEngine()
+    """Get information about the RAG vector database."""
+    # Use context manager for temporary connection
+    with IngestionEngine() as engine:
         stats = engine.get_stats()
         
-        return RAGStatsResponse(**stats)
-        
-    except Exception as e:
-        logger.exception("Failed to get stats")
         return RAGStatsResponse(
-            collection_name="unknown",
-            schema_version="unknown",
-            document_count=0,
-            exists=False,
-            error=str(e),
+            collection_name=stats["collection_name"],
+            schema_version=stats["schema_version"],
+            document_count=stats["document_count"],
+            exists=stats["exists"],
         )
+
+
+# ============================================================================
+# Admin Endpoints
+# ============================================================================
 
 
 @router.delete(
