@@ -94,7 +94,7 @@ def render_performance():
             st.markdown("### Timing Breakdown")
             
             import pandas as pd
-            import plotly.express as fig
+            import plotly.express as px
             
             df = pd.DataFrame(entries)
             if "total_time" in df.columns:

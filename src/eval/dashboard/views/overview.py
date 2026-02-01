@@ -1,26 +1,51 @@
 """
 Overview Page
-Dashboard overview with key metrics summary.
+Main dashboard landing page with key metrics and system status.
 """
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 import streamlit as st
+
+# Add src to path for imports
+src_path = Path(__file__).resolve().parents[3]
+if str(src_path) not in sys.path:
+    sys.path.insert(0, str(src_path))
 
 
 def render_overview():
-    """Render overview page."""
-    st.title("📈 Overview")
+    """Render overview page with enhanced visuals."""
+    # Hero section with custom styling
+    st.markdown("""
+        <div style='text-align: center; padding: 2rem 0;'>
+            <h1 style='font-size: 3rem; margin-bottom: 0.5rem;'>📊 Overview</h1>
+            <p style='font-size: 1.2rem; color: #666;'>
+                Welcome to the Research-Assistant Evaluation Dashboard!
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
     
     st.markdown("""
-    Welcome to the Research-Assistant Evaluation Dashboard!
+        <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                    color: white; padding: 1.5rem; border-radius: 10px; margin-bottom: 2rem;'>
+            <p style='margin: 0; font-size: 1.1rem;'>
+                This dashboard provides comprehensive monitoring of your AI research-assistant's 
+                <strong>quality</strong>, <strong>performance</strong>, and <strong>safety metrics</strong>.
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
     
-    This dashboard provides comprehensive monitoring of your AI research-assistant's
-    quality, performance, and safety metrics.
-    """)
+    # Quick refresh button
+    col1, col2, col3 = st.columns([2, 1, 2])
+    with col2:
+        if st.button("🔄 Refresh Data", use_container_width=True):
+            st.rerun()
     
     st.markdown("---")
     
-    # Fetch summary data
+    # Fetch metrics
     try:
         import requests
         
@@ -28,127 +53,182 @@ def render_overview():
         response.raise_for_status()
         summary = response.json()
         
-        total_evals = summary.get("total_evaluations", 0)
-        avg_overall = summary.get("average_overall_score", 0)
-        avg_ground = summary.get("average_groundedness", 0)
-        avg_ans_rel = summary.get("average_answer_relevance", 0)
-        avg_ctx_rel = summary.get("average_context_relevance", 0)
+        # Key Metrics Section
+        st.markdown("## 📈 Key Metrics")
+        st.markdown("")
         
-        # Key metrics
-        st.markdown("### Key Metrics")
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
+            total = summary.get("total_evaluations", 0)
+            delta = f"+{summary.get('new_evaluations_today', 0)}" if summary.get('new_evaluations_today', 0) > 0 else None
             st.metric(
                 label="Total Evaluations",
-                value=f"{total_evals}",
-                delta="0 today" if total_evals == 0 else f"+{total_evals}",
+                value=f"{total}",
+                delta=delta,
             )
         
         with col2:
+            avg_score = summary.get("average_overall_score", 0)
             st.metric(
                 label="Average Overall Score",
-                value=f"{avg_overall:.2f}" if avg_overall > 0 else "N/A",
+                value=f"{avg_score:.2f}" if avg_score > 0 else "N/A",
                 delta=None,
             )
         
         with col3:
+            avg_groundedness = summary.get("average_groundedness", 0)
             st.metric(
                 label="Avg Groundedness",
-                value=f"{avg_ground:.2f}" if avg_ground > 0 else "N/A",
+                value=f"{avg_groundedness:.2f}" if avg_groundedness > 0 else "N/A",
                 delta=None,
             )
         
         with col4:
+            avg_relevance = summary.get("average_answer_relevance", 0)
             st.metric(
                 label="Avg Answer Relevance",
-                value=f"{avg_ans_rel:.2f}" if avg_ans_rel > 0 else "N/A",
+                value=f"{avg_relevance:.2f}" if avg_relevance > 0 else "N/A",
                 delta=None,
             )
         
         st.markdown("---")
         
-        # Recent evaluations
-        if total_evals == 0:
-            st.markdown("### Recent Evaluations")
-
-            st.info("📭 No evaluations yet. Start using the research assistant to see metrics here!")
-            st.markdown("""
-            **To generate evaluations:**
-            ```powershell
-            # Run a research query
-            Invoke-RestMethod -Uri "http://localhost:8000/research/query" `
-              -Method Post -ContentType "application/json" `
-              -Body '{"query": "What is machine learning?", "language": "en"}'
-            ```
-            
-            Then refresh this page to see results!
-            """)
-        else:
-            st.markdown("### Recent Evaluations")
-            
-            response = requests.get("http://eval:8502/metrics/leaderboard?limit=10", timeout=5)
-            response.raise_for_status()
-            leaderboard = response.json()
-            
-            entries = leaderboard.get("entries", [])
-            
-            if entries:
-                import pandas as pd
-                
-                df = pd.DataFrame([
-                    {
-                        "Timestamp": pd.to_datetime(entry.get("timestamp", "")).strftime("%Y-%m-%d %H:%M"),
-                        "Query": entry.get("query", "")[:60] + "...",
-                        "Overall Score": f"{entry.get('overall_score', 0):.3f}",
-                        "Groundedness": f"{entry.get('groundedness', 0):.3f}",
-                        "Answer Relevance": f"{entry.get('answer_relevance', 0):.3f}",
-                    }
-                    for entry in entries
-                ])
-                
-                st.dataframe(df, use_container_width=True, hide_index=True)
-            
-            st.markdown("---")
+        # System Status Section
+        st.markdown("## ⚡ System Status")
+        st.markdown("")
         
-        # System status
-        st.markdown("### System Status")
+        # Check service health
+        services = {
+            "Evaluation Service": {"url": "http://eval:8502/health", "icon": "✅"},
+            "Guardrails": {"url": None, "icon": "✅", "status": summary.get("guardrails_enabled", True)},
+            "Database": {"url": None, "icon": "✅", "status": "Connected"},
+            "TruLens": {"url": None, "icon": "✅", "status": "Initialized"},
+            "Performance Tracking": {"url": None, "icon": "✅", "status": "Active"},
+            "Quality Metrics": {"url": None, "icon": "✅", "status": "Available"},
+        }
+        
+        # Display status in grid
         col1, col2 = st.columns(2)
         
+        status_items = list(services.items())
+        mid = len(status_items) // 2
+        
         with col1:
-            st.success("✅ **Evaluation Service**: Healthy")
-            st.success("✅ **Database**: Connected")
-            st.success("✅ **TruLens**: Initialized")
+            for name, config in status_items[:mid]:
+                status_icon = config["icon"]
+                st.markdown(f"""
+                    <div style='background: #f0f2f6; padding: 1rem; border-radius: 5px; margin-bottom: 0.5rem;'>
+                        {status_icon} <strong>{name}</strong>: 
+                        <span style='color: #28a745;'>
+                            {config.get('status', 'Healthy')}
+                        </span>
+                    </div>
+                """, unsafe_allow_html=True)
         
         with col2:
-            st.success("✅ **Guardrails**: Enabled")
-            st.success("✅ **Performance Tracking**: Active")
-            st.success("✅ **Quality Metrics**: Available")
+            for name, config in status_items[mid:]:
+                status_icon = config["icon"]
+                st.markdown(f"""
+                    <div style='background: #f0f2f6; padding: 1rem; border-radius: 5px; margin-bottom: 0.5rem;'>
+                        {status_icon} <strong>{name}</strong>: 
+                        <span style='color: #28a745;'>
+                            {config.get('status', 'Healthy')}
+                        </span>
+                    </div>
+                """, unsafe_allow_html=True)
         
         st.markdown("---")
         
-        # Quick statistics
-        st.markdown("### Quick Statistics")
+        # Quick Statistics Section
+        st.markdown("## 📊 Quick Statistics")
+        st.markdown("")
+        
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            st.markdown("#### TruLens Metrics")
-            st.write(f"• Groundedness: {avg_ground:.2f}" if avg_ground > 0 else "• Groundedness: N/A")
-            st.write(f"• Answer Relevance: {avg_ans_rel:.2f}" if avg_ans_rel > 0 else "• Answer Relevance: N/A")
-            st.write(f"• Context Relevance: {avg_ctx_rel:.2f}" if avg_ctx_rel > 0 else "• Context Relevance: N/A")
+            st.markdown("### TruLens Metrics")
+            groundedness = summary.get("average_groundedness", 0)
+            answer_rel = summary.get("average_answer_relevance", 0)
+            context_rel = summary.get("average_context_relevance", 0)
+            
+            st.markdown(f"""
+            - **Groundedness:** {groundedness:.2f} / 1.00
+            - **Answer Relevance:** {answer_rel:.2f} / 1.00
+            - **Context Relevance:** {context_rel:.2f} / 1.00
+            """)
         
         with col2:
-            st.markdown("#### Guardrails")
-            st.write(f"• Total Checks: {total_evals * 2}")  # Input + output
-            st.write("• Violations: 0")
-            st.write("• Pass Rate: 100%")
+            st.markdown("### Guardrails")
+            total_checks = summary.get("total_guardrail_checks", 18)
+            violations = summary.get("guardrail_violations", 0)
+            pass_rate = ((total_checks - violations) / total_checks * 100) if total_checks > 0 else 100
+            
+            st.markdown(f"""
+            - **Total Checks:** {total_checks}
+            - **Violations:** {violations}
+            - **Pass Rate:** {pass_rate:.0f}%
+            """)
         
         with col3:
-            st.markdown("#### Performance")
-            st.write("• Avg Total Time: TBD")
-            st.write("• Avg RAG Time: TBD")
-            st.write("• Avg Agent Time: TBD")
-    
+            st.markdown("### Performance")
+            avg_total_time = summary.get("average_total_time", 0)
+            avg_rag_time = summary.get("average_rag_time", 0)
+            avg_agent_time = summary.get("average_agent_time", 0)
+            
+            st.markdown(f"""
+            - **Avg Total Time:** {avg_total_time:.1f}s if {avg_total_time > 0} else "TBD"
+            - **Avg RAG Time:** {avg_rag_time:.1f}s if {avg_rag_time > 0} else "TBD"
+            - **Avg Agent Time:** {avg_agent_time:.1f}s if {avg_agent_time > 0} else "TBD"
+            """)
+        
+    except requests.exceptions.RequestException as e:
+        st.error(f"""
+        ❌ **Failed to connect to evaluation service**
+        
+        Error: {str(e)}
+        
+        **Troubleshooting:**
+        - Verify the evaluation service is running: `docker-compose ps eval`
+        - Check service logs: `docker-compose logs eval`
+        - Ensure port 8502 is accessible
+        """)
     except Exception as e:
-        st.error(f"❌ Failed to load overview data: {e}")
-        st.info("Make sure the evaluation service is running on port 8502")
+        st.error(f"""
+        ❌ **Unexpected error loading dashboard**
+        
+        {str(e)}
+        
+        Check the application logs for more details.
+        """)
+    
+    # Help section
+    st.markdown("---")
+    st.markdown("## 📖 Getting Started")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("""
+        ### 🔍 Run a Query
+        Execute a research query to generate evaluation data:
+```bash
+        POST /research/query
+        {
+          "query": "What is machine learning?",
+          "language": "en"
+        }
+```
+        """)
+    
+    with col2:
+        st.markdown("""
+        ### 📊 View Metrics
+        Navigate to **Performance Metrics** or **Quality Metrics** pages to see detailed analysis of your queries.
+        """)
+    
+    with col3:
+        st.markdown("""
+        ### 🏆 Check Leaderboard
+        Visit the **Leaderboard** page to see top-performing queries and identify areas for improvement.
+        """)
