@@ -30,7 +30,6 @@ GRANT ALL PRIVILEGES ON DATABASE trulens TO research_assistant;
 -- ============================================================================
 
 \echo '✅ Database creation complete:'
-\echo '   - research_assistant (n8n workflows)'
-\echo '   - trulens (evaluation metrics)'
+\echo '   - research_assistant (all services)'
 \echo ''
 \echo 'Next: Loading TruLens schema...'
