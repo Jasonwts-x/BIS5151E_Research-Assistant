@@ -87,6 +87,24 @@ class IngestionEngine:
         self.embedder.warm_up()
         
         logger.info("IngestionEngine initialized with embedding model: %s", embedding_model)
+    
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - cleanup resources."""
+        self.close()
+        return False
+    
+    def close(self):
+        """Close Weaviate client and cleanup resources."""
+        if hasattr(self, 'client') and self.client is not None:
+            try:
+                self.client.close()
+                logger.debug("IngestionEngine: Weaviate client closed")
+            except Exception as e:
+                logger.warning("IngestionEngine: Error closing Weaviate client: %s", e)
 
     def ingest_from_source(
         self,
