@@ -12,9 +12,9 @@ def render_overview():
     st.title("📈 Overview")
     
     st.markdown("""
-    Welcome to the Research Assistant Evaluation Dashboard!
+    Welcome to the Research-Assistant Evaluation Dashboard!
     
-    This dashboard provides comprehensive monitoring of your AI research assistant's
+    This dashboard provides comprehensive monitoring of your AI research-assistant's
     quality, performance, and safety metrics.
     """)
     
@@ -42,7 +42,7 @@ def render_overview():
             st.metric(
                 label="Total Evaluations",
                 value=f"{total_evals}",
-                delta=None,
+                delta="0 today" if total_evals == 0 else f"+{total_evals}",
             )
         
         with col2:
@@ -68,21 +68,23 @@ def render_overview():
         
         st.markdown("---")
         
+        # Recent evaluations
         if total_evals == 0:
+            st.markdown("### Recent Evaluations")
+
             st.info("📭 No evaluations yet. Start using the research assistant to see metrics here!")
             st.markdown("""
             **To generate evaluations:**
-```powershell
+            ```powershell
             # Run a research query
             Invoke-RestMethod -Uri "http://localhost:8000/research/query" `
               -Method Post -ContentType "application/json" `
               -Body '{"query": "What is machine learning?", "language": "en"}'
-```
+            ```
             
             Then refresh this page to see results!
             """)
         else:
-            # Recent evaluations
             st.markdown("### Recent Evaluations")
             
             response = requests.get("http://eval:8502/metrics/leaderboard?limit=10", timeout=5)

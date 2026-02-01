@@ -16,9 +16,9 @@ if str(src_path) not in sys.path:
 
 # Import page render functions
 try:
-    from eval.dashboard.pages.overview import render_overview
-    from eval.dashboard.pages.performance import render_performance
-    from eval.dashboard.pages.quality import render_quality
+    from eval.dashboard.views.overview import render_overview
+    from eval.dashboard.views.performance import render_performance
+    from eval.dashboard.views.quality import render_quality
 except ImportError as e:
     st.error(f"Import error: {e}")
     st.error("Make sure you're running from the project root")
@@ -43,7 +43,7 @@ def main():
     st.sidebar.markdown("### Navigation")
     page = st.sidebar.radio(
         "Select Page",
-        ["Overview", "Performance", "Quality", "Leaderboard"],
+        ["Overview", "Performance Metrics", "Quality Metrics", "Leaderboard"],
         label_visibility="collapsed",
     )
 
@@ -52,7 +52,7 @@ def main():
     st.sidebar.markdown("### About")
     st.sidebar.info(
         "This dashboard monitors the quality and performance of the "
-        "Research Assistant AI system."
+        "Research-Assistant AI system."
     )
     
     st.sidebar.markdown("#### Metrics Tracked")
@@ -83,9 +83,9 @@ def main():
     # Render selected page
     if page == "Overview":
         render_overview()
-    elif page == "Performance":
+    elif page == "Performance Metrics":
         render_performance()
-    elif page == "Quality":
+    elif page == "Quality Metrics":
         render_quality()
     elif page == "Leaderboard":
         render_leaderboard()
