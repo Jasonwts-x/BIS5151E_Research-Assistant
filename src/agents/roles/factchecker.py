@@ -48,6 +48,6 @@ def create_factchecker_agent(llm) -> Agent:
         allow_delegation=False,
         llm=llm,
         max_iter=1,
-        max_execution_time=300,
+        max_execution_time=600,
         tools=[validate_citation, retrieve_context],
     )
