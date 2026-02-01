@@ -1,7 +1,8 @@
 """
-Document Ingestion Module
+Document Ingestion Module.
 
 Handles document processing and ingestion into Weaviate.
+Provides chunking, embedding generation, and deduplication.
 """
 from __future__ import annotations
 

@@ -1,7 +1,8 @@
 """
-Abstract Base for Document Sources
+Abstract Base for Document Sources.
 
 Defines interface for loading documents from various sources.
+All document source implementations must inherit from this base class.
 """
 from __future__ import annotations
 
@@ -15,7 +16,10 @@ class DocumentSource(ABC):
     """
     Abstract base class for document sources.
     
-    Implementations: LocalFileSource, ArXivSource, etc.
+    Implementations:
+        - LocalFileSource: Load from local filesystem
+        - ArXivSource: Fetch from ArXiv API
+        - (Future: WebSource, DatabaseSource, etc.)
     """
 
     @abstractmethod
@@ -23,6 +27,9 @@ class DocumentSource(ABC):
         """
         Fetch documents from this source.
         
+        Args:
+            **kwargs: Source-specific parameters
+            
         Returns:
             List of Haystack Document objects with metadata
         """
@@ -30,5 +37,10 @@ class DocumentSource(ABC):
 
     @abstractmethod
     def get_source_name(self) -> str:
-        """Return human-readable source name for logging."""
+        """
+        Return human-readable source name for logging.
+        
+        Returns:
+            Source name string (e.g., "LocalFiles", "ArXiv")
+        """
         pass

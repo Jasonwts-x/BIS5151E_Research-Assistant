@@ -1,8 +1,13 @@
 """
-Weaviate Schema Management
+Weaviate Schema Management.
 
 Explicit schema definition for ResearchDocument collection.
 Ensures deterministic structure and prevents schema drift.
+
+The schema includes:
+    - Core fields: content, source, chunk metadata
+    - ArXiv enrichment: authors, publication_date, abstract, categories
+    - Ingestion metadata: timestamp, schema_version
 """
 from __future__ import annotations
 
@@ -111,9 +116,14 @@ class SchemaManager:
     Manages Weaviate schema lifecycle.
     
     Responsibilities:
-    - Create schema if missing
-    - Validate schema matches expected definition
-    - Handle schema mismatches (fail hard or reset)
+        - Create schema if missing
+        - Validate schema matches expected definition
+        - Handle schema mismatches (fail hard or reset)
+    
+    Attributes:
+        client: Weaviate client instance
+        allow_reset: If True, auto-reset schema on mismatch (dev mode only)
+        collection_name: Name of the Weaviate collection
     """
 
     def __init__(self, client, allow_reset: bool = False):
@@ -133,11 +143,11 @@ class SchemaManager:
         Ensure schema exists and matches expected definition.
         
         Behavior:
-        - If schema missing: Create it
-        - If schema matches: Continue
-        - If schema mismatches:
-            - allow_reset=True: Delete and recreate
-            - allow_reset=False: Raise error with instructions
+            - If schema missing: Create it
+            - If schema matches: Continue
+            - If schema mismatches:
+                - allow_reset=True: Delete and recreate
+                - allow_reset=False: Raise SchemaValidationError with instructions
         """
         if not self._schema_exists():
             logger.info("Schema does not exist - creating new schema")
@@ -171,7 +181,12 @@ class SchemaManager:
             )
 
     def _schema_exists(self) -> bool:
-        """Check if collection exists in Weaviate."""
+        """
+        Check if collection exists in Weaviate.
+        
+        Returns:
+            True if collection exists, False otherwise
+        """
         try:
             return self.client.collections.exists(self.collection_name)
         except Exception as e:
@@ -182,26 +197,27 @@ class SchemaManager:
         """
         Check if current schema matches expected definition.
         
-        For simplicity, we check:
-        - Collection exists
-        - Has expected properties (by name)
+        Validates that all expected properties exist in the collection.
+        
+        Returns:
+            True if schema matches, False otherwise
         """
         try:
             collection = self.client.collections.get(self.collection_name)
             config = collection.config.get()
-            
+
             # Get current property names
             current_props = {prop.name for prop in config.properties}
-            
+
             # Get expected property names
             expected_props = {
                 prop["name"] for prop in RESEARCH_DOCUMENT_SCHEMA["properties"]
             }
-            
+
             # Check if all expected properties exist
             missing = expected_props - current_props
             extra = current_props - expected_props
-            
+
             if missing or extra:
                 logger.warning("Schema mismatch:")
                 if missing:
@@ -209,31 +225,35 @@ class SchemaManager:
                 if extra:
                     logger.warning("  Extra properties: %s", extra)
                 return False
-            
+
             return True
-            
+
         except Exception as e:
             logger.error("Failed to validate schema: %s", e)
             return False
 
     def _create_schema(self) -> None:
-        """Create collection with explicit schema."""
+        """
+        Create collection with explicit schema.
+        
+        Converts our schema dict to Weaviate's native format and creates the collection.
+        """
         try:
             from weaviate.classes.config import Configure, Property, DataType
-            
+
             # Convert our schema dict to Weaviate's format
             properties = []
             for prop in RESEARCH_DOCUMENT_SCHEMA["properties"]:
                 # Map our dataType strings to Weaviate's DataType enum
                 data_type_str = prop["dataType"][0]
-                
-                # Handle array types
+
+                # Handle array types (e.g., "text[]")
                 if data_type_str.endswith("[]"):
                     base_type = data_type_str[:-2]
                     data_type = getattr(DataType, base_type.upper() + "_ARRAY")
                 else:
                     data_type = getattr(DataType, data_type_str.upper())
-                
+
                 properties.append(
                     Property(
                         name=prop["name"],
@@ -243,22 +263,26 @@ class SchemaManager:
                         index_searchable=prop.get("indexSearchable", False),
                     )
                 )
-            
+
             # Create collection
             self.client.collections.create(
                 name=self.collection_name,
                 description=RESEARCH_DOCUMENT_SCHEMA["description"],
                 properties=properties,
             )
-            
+
             logger.info("✓ Created collection '%s'", self.collection_name)
-            
+
         except Exception as e:
             logger.error("Failed to create schema: %s", e)
             raise
 
     def _delete_schema(self) -> None:
-        """Delete collection (and all its data)."""
+        """
+        Delete collection (and all its data).
+        
+        WARNING: This is destructive and cannot be undone!
+        """
         try:
             self.client.collections.delete(self.collection_name)
             logger.info("✓ Deleted collection '%s'", self.collection_name)
@@ -271,15 +295,15 @@ class SchemaManager:
         Get index statistics.
         
         Returns:
-            Dictionary with document count, schema info, etc.
+            Dictionary with document count, schema version, existence status, etc.
         """
         try:
             collection = self.client.collections.get(self.collection_name)
-            
+
             # Count documents
             result = collection.aggregate.over_all(total_count=True)
             doc_count = result.total_count
-            
+
             return {
                 "collection_name": self.collection_name,
                 "schema_version": SCHEMA_VERSION,

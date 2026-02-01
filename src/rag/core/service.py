@@ -1,8 +1,13 @@
 """
-RAG Service - Simplified
+RAG Service - Simplified.
 
 Focuses on retrieval and context formatting.
-Ingestion is now handled by IngestionEngine.
+Ingestion is handled separately by IngestionEngine.
+
+Architecture Note:
+    This service provides a high-level interface for retrieval operations,
+    used by API endpoints and CrewAI agents. It wraps RAGPipeline and adds
+    context formatting with citation support.
 """
 from __future__ import annotations
 
@@ -24,16 +29,23 @@ class RAGService:
     RAG service for retrieval and context formatting.
     
     Responsibilities:
-    - Retrieve documents via RAGPipeline
-    - Format context with citations
+        - Retrieve documents via RAGPipeline
+        - Format context with citations for LLM consumption
     
-    Note: Ingestion is handled by IngestionEngine (separate concern)
+    Attributes:
+        config: Application configuration
+        pipeline: RAGPipeline instance for document retrieval
+    
+    Architecture Note:
+        Ingestion is handled by IngestionEngine (separate concern).
+        This service is for query-time operations only.
     """
 
     config: Optional[AppConfig] = None
     pipeline: Optional[RAGPipeline] = None
 
     def __post_init__(self) -> None:
+        """Initialize configuration and pipeline."""
         if self.config is None:
             self.config = load_config()
 
@@ -76,6 +88,9 @@ class RAGService:
         """
         Format retrieved documents into context string with citations.
         
+        Deduplicates sources so multiple chunks from the same document
+        share the same citation number (e.g., [1], [1], [2]).
+        
         Args:
             docs: List of retrieved Haystack Documents
             
@@ -91,9 +106,12 @@ class RAGService:
         for d in docs:
             meta = getattr(d, "meta", {}) or {}
             src = meta.get("source", "unknown")
+            
+            # Deduplicate sources: assign same citation number to same source
             if src not in unique_sources:
                 unique_sources.append(src)
             idx = unique_sources.index(src) + 1
+            
             lines.append(f"[{idx}] {d.content.strip()}")
 
         context = "\n\n".join(lines)

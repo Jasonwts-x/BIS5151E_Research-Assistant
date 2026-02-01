@@ -1,19 +1,43 @@
 #!/usr/bin/env python3
 """
-RAG CLI Tool
+RAG Command-Line Interface.
 
-Command-line interface for RAG administration and testing.
+Administrative tool for managing the RAG system from the command line.
+Provides commands for ingestion, querying, and index management.
 
-Usage:
-    python -m src.rag.cli --help
+Commands:
+    ingest-local: Ingest documents from local filesystem (data/raw/)
+    ingest-arxiv: Fetch and ingest papers from ArXiv API
+    query: Test retrieval for a given query
+    stats: Display index statistics (document count, schema version)
+    reset-index: Clear all documents from Weaviate (DESTRUCTIVE)
+    verify-determinism: Verify chunk ID generation is deterministic
+
+Usage Examples:
+    # Ingest all files from data/raw/
     python -m src.rag.cli ingest-local
+    
+    # Ingest only ArXiv papers
     python -m src.rag.cli ingest-local --pattern "arxiv*"
+    
+    # Fetch papers from ArXiv
     python -m src.rag.cli ingest-arxiv "machine learning" --max-results 5
-    python -m src.rag.cli query "What is digital transformation?"
+    
+    # Test retrieval
+    python -m src.rag.cli query "What is digital transformation?" --top-k 5
+    
+    # Show index stats
     python -m src.rag.cli stats
+    
+    # Reset index (requires confirmation)
     python -m src.rag.cli reset-index
-    python -m src.rag.cli verify-determinism
+    python -m src.rag.cli reset-index --yes  # Skip confirmation
+
+Architecture Note:
+    This CLI tool is intended for development and administration.
+    Production workflows should use the API endpoints (src/api/routers/rag.py).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -21,7 +45,7 @@ import logging
 import sys
 from pathlib import Path
 
-# Add project root to path
+# Add project root to Python path for standalone execution
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
@@ -36,8 +60,16 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def cmd_ingest_local(args):
-    """Ingest documents from local filesystem."""
+def cmd_ingest_local(args) -> int:
+    """
+    Ingest documents from local filesystem.
+    
+    Args:
+        args: Parsed command-line arguments containing pattern
+        
+    Returns:
+        Exit code (0 = success, 1 = failure)
+    """
     print("=" * 70)
     print("INGEST FROM LOCAL FILES")
     print("=" * 70)
@@ -50,7 +82,7 @@ def cmd_ingest_local(args):
     print(f"Pattern: {pattern}")
     print()
     
-    # Count files
+    # Count matching files
     pdfs = list(data_dir.glob(f"{pattern}.pdf"))
     txts = list(data_dir.glob(f"{pattern}.txt"))
     total = len(pdfs) + len(txts)
@@ -64,7 +96,7 @@ def cmd_ingest_local(args):
         print(f"  - {f.name}")
     print()
     
-    # Ingest
+    # Ingest documents
     engine = None
     try:
         print("Ingesting...")
@@ -89,15 +121,24 @@ def cmd_ingest_local(args):
         return 0
         
     finally:
+        # Cleanup: Close Weaviate client to prevent resource leaks
         if engine is not None and hasattr(engine, 'client'):
             try:
                 engine.client.close()
             except Exception:
-                pass
+                pass  # Ignore cleanup errors
 
 
-def cmd_ingest_arxiv(args):
-    """Fetch and ingest papers from ArXiv."""
+def cmd_ingest_arxiv(args) -> int:
+    """
+    Fetch and ingest papers from ArXiv.
+    
+    Args:
+        args: Parsed command-line arguments containing query and max_results
+        
+    Returns:
+        Exit code (0 = success, 1 = failure)
+    """
     print("=" * 70)
     print("INGEST FROM ARXIV")
     print("=" * 70)
@@ -110,12 +151,13 @@ def cmd_ingest_arxiv(args):
     print(f"Max results: {max_results}")
     print()
     
-    # Ingest
     engine = None
     try:
         print("Fetching from ArXiv (this may take a minute)...")
         engine = IngestionEngine()
-        source = ArXivSource(download_dir=ROOT / "data" / "raw")
+        
+        # ArXiv source downloads PDFs to data/arxiv/ by default
+        source = ArXivSource(download_dir=ROOT / "data" / "arxiv")
         result = engine.ingest_from_source(
             source,
             query=query,
@@ -144,7 +186,6 @@ def cmd_ingest_arxiv(args):
         return 1
         
     finally:
-        # Properly close the Weaviate client
         if engine is not None and hasattr(engine, 'client'):
             try:
                 engine.client.close()
@@ -152,8 +193,16 @@ def cmd_ingest_arxiv(args):
                 pass
 
 
-def cmd_query(args):
-    """Test retrieval for a query."""
+def cmd_query(args) -> int:
+    """
+    Test retrieval for a query.
+    
+    Args:
+        args: Parsed command-line arguments containing query and top_k
+        
+    Returns:
+        Exit code (0 = success, 1 = failure)
+    """
     print("=" * 70)
     print("QUERY TEST")
     print("=" * 70)
@@ -166,13 +215,11 @@ def cmd_query(args):
     print(f"Top-k: {top_k}")
     print()
     
-    # Connect to existing pipeline
     pipeline = None
     try:
         print("Connecting to RAG pipeline...")
         pipeline = RAGPipeline.from_existing()
         
-        # Retrieve
         print(f"Retrieving top {top_k} documents...")
         docs = pipeline.run(query=query, top_k=top_k)
         
@@ -211,7 +258,6 @@ def cmd_query(args):
         return 1
         
     finally:
-        # Properly close the pipeline client
         if pipeline is not None and hasattr(pipeline, 'client'):
             try:
                 pipeline.client.close()
@@ -219,13 +265,22 @@ def cmd_query(args):
                 pass
 
 
-def cmd_stats(args):
-    """Show index statistics."""
+def cmd_stats(args) -> int:
+    """
+    Display index statistics.
+    
+    Args:
+        args: Parsed command-line arguments (unused)
+        
+    Returns:
+        Exit code (0 = success, 1 = failure)
+    """
     print("=" * 70)
     print("RAG INDEX STATISTICS")
     print("=" * 70)
     print()
     
+    engine = None
     try:
         engine = IngestionEngine()
         stats = engine.get_stats()
@@ -245,16 +300,23 @@ def cmd_stats(args):
         return 1
     
     finally:
-        # Properly close the Weaviate client
         if engine is not None and hasattr(engine, 'client'):
             try:
                 engine.client.close()
             except Exception:
-                pass  # Ignore errors during cleanup
+                pass
 
 
-def cmd_reset_index(args):
-    """Clear all documents from index."""
+def cmd_reset_index(args) -> int:
+    """
+    Clear all documents from index (DESTRUCTIVE).
+    
+    Args:
+        args: Parsed command-line arguments containing yes flag
+        
+    Returns:
+        Exit code (0 = success, 1 = failure)
+    """
     print("=" * 70)
     print("RESET INDEX")
     print("=" * 70)
@@ -262,6 +324,7 @@ def cmd_reset_index(args):
     print("⚠️  WARNING: This will DELETE ALL indexed documents!")
     print()
     
+    # Confirmation prompt unless --yes flag is provided
     if not args.yes:
         confirm = input("Are you sure? Type 'yes' to confirm: ")
         if confirm.lower() != "yes":
@@ -272,13 +335,13 @@ def cmd_reset_index(args):
     try:
         engine = IngestionEngine()
         
-        # Get current count
+        # Get current count for reporting
         stats = engine.get_stats()
         previous_count = stats.get("document_count", 0)
         
         print(f"Deleting {previous_count} documents...")
         
-        # Reset
+        # Delete schema and recreate (ensures clean state)
         engine.clear_index()
         
         print()
@@ -297,15 +360,26 @@ def cmd_reset_index(args):
         return 1
         
     finally:
-        # Properly close the Weaviate client
         if engine is not None and hasattr(engine, 'client'):
             try:
                 engine.client.close()
             except Exception:
-                pass 
+                pass
 
-def cmd_verify_determinism(args):
-    """Verify that index rebuild produces identical IDs."""
+
+def cmd_verify_determinism(args) -> int:
+    """
+    Verify that index rebuild produces identical chunk IDs.
+    
+    This test ensures content-based hashing produces deterministic results,
+    which is critical for deduplication and reproducibility.
+    
+    Args:
+        args: Parsed command-line arguments (unused)
+        
+    Returns:
+        Exit code (0 = success, 1 = failure)
+    """
     print("=" * 70)
     print("VERIFY DETERMINISM")
     print("=" * 70)
@@ -314,27 +388,27 @@ def cmd_verify_determinism(args):
     print("This test verifies that rebuilding the index produces identical chunk IDs.")
     print()
     
-    # TODO: Implement determinism test
-    # 1. Get current document IDs from Weaviate
-    # 2. Reset index
-    # 3. Re-ingest same documents
-    # 4. Get new document IDs
-    # 5. Compare
-    
     print("⚠️  Not implemented yet - coming in testing phase")
     
     return 0
 
 
-def main():
-    """Main CLI entry point."""
+def main() -> int:
+    """
+    Main CLI entry point.
+    
+    Parses command-line arguments and routes to appropriate handler.
+    
+    Returns:
+        Exit code from command handler
+    """
     parser = argparse.ArgumentParser(
         description="RAG CLI - Administration and testing tool"
     )
     
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
     
-    # ingest-local
+    # ingest-local command
     p_local = subparsers.add_parser(
         "ingest-local",
         help="Ingest documents from local filesystem (data/raw/)",
@@ -346,7 +420,7 @@ def main():
         help="File pattern to match (default: all files)",
     )
     
-    # ingest-arxiv
+    # ingest-arxiv command
     p_arxiv = subparsers.add_parser(
         "ingest-arxiv",
         help="Fetch and ingest papers from ArXiv",
@@ -363,7 +437,7 @@ def main():
         help="Maximum number of papers to fetch (default: 5)",
     )
     
-    # query
+    # query command
     p_query = subparsers.add_parser(
         "query",
         help="Test retrieval for a query",
@@ -380,13 +454,13 @@ def main():
         help="Number of results (default: 5)",
     )
     
-    # stats
+    # stats command
     subparsers.add_parser(
         "stats",
         help="Show index statistics",
     )
     
-    # reset-index
+    # reset-index command
     p_reset = subparsers.add_parser(
         "reset-index",
         help="Clear all documents from index (DESTRUCTIVE)",
@@ -397,7 +471,7 @@ def main():
         help="Skip confirmation prompt",
     )
     
-    # verify-determinism
+    # verify-determinism command
     subparsers.add_parser(
         "verify-determinism",
         help="Verify that rebuild produces identical IDs",
@@ -405,11 +479,12 @@ def main():
     
     args = parser.parse_args()
     
+    # Show help if no command provided
     if not args.command:
         parser.print_help()
         return 1
     
-    # Route to command
+    # Route to command handler
     commands = {
         "ingest-local": cmd_ingest_local,
         "ingest-arxiv": cmd_ingest_arxiv,

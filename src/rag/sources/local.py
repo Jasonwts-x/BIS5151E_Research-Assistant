@@ -1,7 +1,8 @@
 """
-Local File Source
+Local File Source.
 
 Load documents from local filesystem directories.
+Supports PDF and TXT files with glob pattern matching.
 """
 from __future__ import annotations
 
@@ -20,7 +21,15 @@ logger = logging.getLogger(__name__)
 class LocalFileSource(DocumentSource):
     """
     Load documents from local filesystem.
-    Supports: PDF, TXT files from multiple directories
+    
+    Supports:
+        - PDF files (via PyPDFToDocument)
+        - TXT files (via TextFileToDocument)
+        - Multiple directories
+        - Glob pattern matching
+    
+    Attributes:
+        data_dirs: List of directories to search for documents
     """
 
     def __init__(self, data_dirs: List[Path] | Path):
@@ -49,35 +58,35 @@ class LocalFileSource(DocumentSource):
             List of documents with normalized metadata
         """
         docs: List[Document] = []
-        
+
         # Collect files from all directories
         all_pdfs = []
         all_txts = []
-        
+
         for data_dir in self.data_dirs:
             if not data_dir.exists():
                 logger.warning("Directory does not exist: %s", data_dir)
                 continue
-                
+
             pdfs = sorted(data_dir.glob(f"{pattern}.pdf"))
             txts = sorted(data_dir.glob(f"{pattern}.txt"))
-            
+
             all_pdfs.extend(pdfs)
             all_txts.extend(txts)
-            
+
             logger.info(
                 "Found %d PDFs and %d TXT files in %s",
                 len(pdfs),
                 len(txts),
                 data_dir,
             )
-        
+
         logger.info(
             "Total: Found %d PDFs and %d TXT files across all directories",
             len(all_pdfs),
             len(all_txts),
         )
-        
+
         # Load PDFs
         if all_pdfs:
             pdf_conv = PyPDFToDocument()
@@ -87,7 +96,7 @@ class LocalFileSource(DocumentSource):
                     docs.extend(result["documents"])
                 except Exception as e:
                     logger.warning("Failed to load PDF %s: %s", pdf.name, e)
-        
+
         # Load TXT files
         if all_txts:
             txt_conv = TextFileToDocument(encoding="utf-8")
@@ -97,29 +106,41 @@ class LocalFileSource(DocumentSource):
                     docs.extend(result["documents"])
                 except Exception as e:
                     logger.warning("Failed to load TXT %s: %s", txt.name, e)
-        
+
         # Normalize metadata
         for doc in docs:
             self._normalize_metadata(doc)
-        
+
         logger.info("Loaded %d documents from local files", len(docs))
-        
+
         return docs
 
     def _normalize_metadata(self, doc: Document) -> None:
-        """Ensure consistent metadata structure."""
-        meta = doc.meta or {}
+        """
+        Ensure consistent metadata structure.
         
+        Extracts filename from various metadata fields and normalizes to "source".
+        
+        Args:
+            doc: Document to normalize (modified in-place)
+        """
+        meta = doc.meta or {}
+
         # Extract source filename
         source_path = meta.get("file_path") or meta.get("file_name") or meta.get("source")
         if source_path:
             meta["source"] = Path(source_path).name
         else:
             meta["source"] = "unknown"
-        
+
         doc.meta = meta
 
     def get_source_name(self) -> str:
-        """Get human-readable source name."""
+        """
+        Get human-readable source name.
+        
+        Returns:
+            Source name with directory paths
+        """
         dir_names = ", ".join(str(d) for d in self.data_dirs)
         return f"LocalFiles({dir_names})"

@@ -10,18 +10,15 @@ from dataclasses import dataclass
 class ArXivConfig:
     """Configuration for ArXiv document source."""
     
-    # Relevance scoring
     min_relevance_score: float = 0.3
     """Minimum relevance score threshold (0.0-1.0)"""
     
-    # Query construction
     max_keywords: int = 5
     """Maximum number of keywords to use in ArXiv query"""
     
     stop_words: set = None
     """Stop words to remove from queries"""
     
-    # Scoring weights
     exact_phrase_title_weight: float = 1.0
     """Weight for exact phrase match in title"""
     
@@ -45,6 +42,4 @@ class ArXivConfig:
                 'what', 'how', 'when', 'where', 'why', 'which'
             }
 
-
-# Default configuration instance
 DEFAULT_ARXIV_CONFIG = ArXivConfig()

@@ -1,7 +1,13 @@
 """
-ArXiv Document Source
+ArXiv Document Source.
 
-Fetches academic papers from ArXiv API with improved relevance filtering.
+Fetches academic papers from ArXiv API with intelligent relevance filtering.
+
+Features:
+    - Smart query construction (stop word removal, keyword optimization)
+    - Relevance scoring (exact phrase matching, keyword matching, category bonus)
+    - Metadata enrichment (authors, abstract, publication date, categories)
+    - Duplicate detection via filename checking
 """
 from __future__ import annotations
 
@@ -24,15 +30,17 @@ class ArXivSource(DocumentSource):
     """
     Fetches papers from ArXiv with intelligent relevance filtering.
     
-    Features:
-    - Smart query construction
-    - Relevance scoring
-    - Metadata enrichment
-    - Duplicate detection
+    Attributes:
+        download_dir: Directory for saving PDFs
+        min_relevance_score: Minimum score threshold (0.0-1.0) for filtering papers
+    
+    Architecture Note:
+        Uses ArXiv's API to search papers, then applies custom relevance scoring
+        to filter results. Downloads PDFs and extracts metadata before ingestion.
     """
 
     def __init__(
-        self, 
+        self,
         download_dir: Optional[Path] = None,
         min_relevance_score: float = 0.3
     ):
@@ -47,7 +55,7 @@ class ArXivSource(DocumentSource):
             from ...utils.config import load_config
             root = Path(__file__).resolve().parents[3]
             download_dir = root / "data" / "arxiv"
-        
+
         self.download_dir = download_dir
         self.download_dir.mkdir(parents=True, exist_ok=True)
         self.min_relevance_score = min_relevance_score
@@ -74,98 +82,100 @@ class ArXivSource(DocumentSource):
         if not cleaned_query or len(cleaned_query) < 3:
             logger.error("Invalid query after cleaning: '%s'", query)
             return []
-        
+
         logger.info(
-            "Fetching ArXiv papers: query='%s', max_results=%d", 
-            cleaned_query, 
+            "Fetching ArXiv papers: query='%s', max_results=%d",
+            cleaned_query,
             max_results
         )
-        
+
         # Construct optimized ArXiv query
         arxiv_query = self._construct_arxiv_query(cleaned_query)
         logger.info("Constructed ArXiv query: %s", arxiv_query)
-        
-        # Search ArXiv (fetch more than needed for filtering)
+
+        # Search ArXiv (fetch extra for filtering)
         search = arxiv.Search(
             query=arxiv_query,
-            max_results=max_results * 3,  # Fetch extra for filtering
+            max_results=max_results * 3,  # Fetch 3x for relevance filtering
             sort_by=sort_by,
             sort_order=arxiv.SortOrder.Descending,
         )
-        
+
         # Collect papers with relevance scores
         papers_with_scores: List[Tuple[arxiv.Result, float]] = []
-        
+
         for result in search.results():
             try:
                 # Calculate relevance score
                 score = self._calculate_relevance(cleaned_query, result)
-                
+
                 if score >= self.min_relevance_score:
                     papers_with_scores.append((result, score))
                     logger.debug(
-                        "Paper '%s' scored %.2f (accepted)", 
-                        result.title[:50], 
+                        "Paper '%s' scored %.2f (accepted)",
+                        result.title[:50],
                         score
                     )
                 else:
                     logger.debug(
-                        "Paper '%s' scored %.2f (rejected)", 
-                        result.title[:50], 
+                        "Paper '%s' scored %.2f (rejected)",
+                        result.title[:50],
                         score
                     )
-                    
+
             except Exception as e:
                 logger.warning("Error scoring paper %s: %s", result.get_short_id(), e)
-        
+
         # Sort by relevance score
         papers_with_scores.sort(key=lambda x: x[1], reverse=True)
-        
+
         # Take top N papers
         top_papers = papers_with_scores[:max_results]
-        
+
         if not top_papers:
             logger.warning(
-                "No papers met relevance threshold (%.2f) for query: %s", 
+                "No papers met relevance threshold (%.2f) for query: %s",
                 self.min_relevance_score,
                 cleaned_query
             )
             return []
-        
+
         logger.info(
             "Found %d relevant papers (from %d candidates) for query: %s",
             len(top_papers),
             len(papers_with_scores),
             cleaned_query
         )
-        
+
         # Download and convert papers
         documents = []
         for paper, score in top_papers:
             try:
                 # Download PDF
                 pdf_path = self._download_pdf(paper)
-                
+
                 # Convert PDF to document
                 doc = self._pdf_to_document(pdf_path, paper, score)
-                
+
                 if doc:
                     documents.append(doc)
-                    
+
             except Exception as e:
                 logger.warning(
                     "Failed to process ArXiv paper %s: %s",
                     paper.get_short_id(),
                     e,
                 )
-        
+
         logger.info("Successfully fetched %d documents from ArXiv", len(documents))
-        
+
         return documents
 
     def _clean_query(self, query: str) -> str:
         """
         Clean and validate the query string.
+        
+        Removes special characters that might break ArXiv search.
         
         Args:
             query: Raw query string
@@ -184,10 +194,10 @@ class ArXivSource(DocumentSource):
         Construct optimized ArXiv query from user topic.
         
         Strategies:
-        1. Search in title and abstract
-        2. Use OR between keywords for broader results
-        3. Remove stop words
-        4. Limit to first 5 keywords
+            1. Search in title and abstract
+            2. Use AND between keywords for broader results
+            3. Remove stop words
+            4. Limit to first 5 keywords
         
         Args:
             query: Cleaned user query
@@ -197,30 +207,30 @@ class ArXivSource(DocumentSource):
         """
         # Split into keywords
         keywords = query.lower().split()
-        
+
         # Remove common stop words
         stop_words = {
-            'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 
+            'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at',
             'to', 'for', 'of', 'with', 'by', 'from', 'as', 'is', 'was',
             'what', 'how', 'when', 'where', 'why', 'which'
         }
         keywords = [k for k in keywords if k not in stop_words and len(k) > 2]
-        
+
         if not keywords:
             # Fallback: use original query
             return query
-        
+
         # Limit to first 5 most relevant keywords
         keywords = keywords[:5]
-        
+
         # Construct query - prioritize title, then abstract
         # Use OR between keywords for broader coverage
         query_parts = []
         for kw in keywords:
             query_parts.append(f'(ti:"{kw}" OR abs:"{kw}")')
-        
+
         arxiv_query = ' AND '.join(query_parts)
-        
+
         return arxiv_query
 
     def _calculate_relevance(self, query: str, paper: arxiv.Result) -> float:
@@ -228,10 +238,11 @@ class ArXivSource(DocumentSource):
         Calculate relevance score between query and paper.
         
         Scoring factors:
-        - Exact phrase match in title: high weight
-        - Exact phrase match in abstract: medium weight
-        - Individual keyword matches: lower weight
-        - Category match: bonus
+            - Exact phrase match in title: 1.0
+            - Exact phrase match in abstract: 0.6
+            - Individual keyword matches in title: 0.4 * (matches/total)
+            - Individual keyword matches in abstract: 0.2 * (matches/total)
+            - Category bonus: 0.1
         
         Args:
             query: Original query string
@@ -242,12 +253,12 @@ class ArXivSource(DocumentSource):
         """
         query_lower = query.lower()
         query_words = set(self._clean_query(query).lower().split())
-        
+
         title_lower = paper.title.lower()
         abstract_lower = paper.summary.lower()
-        
+
         score = 0.0
-        
+
         # 1. Exact phrase match (very high weight)
         if query_lower in title_lower:
             score += 1.0
@@ -255,19 +266,19 @@ class ArXivSource(DocumentSource):
         elif query_lower in abstract_lower:
             score += 0.6
             logger.debug("Exact phrase match in abstract: +0.6")
-        
+
         # 2. Individual keyword matches
         title_words = set(re.findall(r'\w+', title_lower))
         abstract_words = set(re.findall(r'\w+', abstract_lower))
-        
+
         # Title keyword matches (high weight)
         title_matches = len(query_words.intersection(title_words))
         if len(query_words) > 0:
             title_score = (title_matches / len(query_words)) * 0.4
             score += title_score
-            logger.debug("Title keyword matches: %d/%d = +%.2f", 
+            logger.debug("Title keyword matches: %d/%d = +%.2f",
                         title_matches, len(query_words), title_score)
-        
+
         # Abstract keyword matches (medium weight)
         abstract_matches = len(query_words.intersection(abstract_words))
         if len(query_words) > 0:
@@ -275,22 +286,24 @@ class ArXivSource(DocumentSource):
             score += abstract_score
             logger.debug("Abstract keyword matches: %d/%d = +%.2f",
                         abstract_matches, len(query_words), abstract_score)
-        
+
         # 3. Category relevance bonus
         category = paper.primary_category.lower() if paper.primary_category else ""
         relevant_categories = ['cs.', 'stat.', 'math.', 'physics.', 'econ.', 'q-bio.']
         if any(cat in category for cat in relevant_categories):
             score += 0.1
             logger.debug("Category bonus: +0.1")
-        
+
         # Normalize score to 0-1 range
         score = min(score, 1.0)
-        
+
         return score
 
     def _download_pdf(self, result: arxiv.Result) -> Path:
         """
         Download PDF from ArXiv.
+        
+        Skips download if file already exists (based on filename).
         
         Args:
             result: ArXiv search result
@@ -302,23 +315,23 @@ class ArXivSource(DocumentSource):
         title_slug = self._slugify(result.title)
         filename = f"arxiv-{paper_id}-{title_slug}.pdf"
         target = self.download_dir / filename
-        
+
         if target.exists():
             logger.info("PDF already exists: %s", filename)
             return target
-        
+
         logger.info("Downloading %s -> %s", result.pdf_url, filename)
-        
+
         response = requests.get(result.pdf_url, timeout=60)
         response.raise_for_status()
-        
+
         target.write_bytes(response.content)
-        
+
         return target
 
     def _pdf_to_document(
-        self, 
-        pdf_path: Path, 
+        self,
+        pdf_path: Path,
         arxiv_result: arxiv.Result,
         relevance_score: float
     ) -> Optional[Document]:
@@ -335,15 +348,15 @@ class ArXivSource(DocumentSource):
         """
         converter = PyPDFToDocument()
         result = converter.run(sources=[str(pdf_path)])
-        
+
         if not result["documents"]:
             logger.warning("Failed to extract text from %s", pdf_path.name)
             return None
-        
+
         # Haystack may return multiple docs (one per page)
         # We merge them into one document
         doc = self._merge_pages(result["documents"])
-        
+
         # Enrich with ArXiv metadata
         meta = doc.meta or {}
         meta.update({
@@ -355,40 +368,58 @@ class ArXivSource(DocumentSource):
             "abstract": arxiv_result.summary,
             "title": arxiv_result.title,
             "pdf_url": arxiv_result.pdf_url,
-            "relevance_score": relevance_score,  # Add relevance score to metadata
+            "relevance_score": relevance_score,
         })
         doc.meta = meta
-        
+
         logger.info(
-            "Processed ArXiv paper: %s (relevance: %.2f)", 
+            "Processed ArXiv paper: %s (relevance: %.2f)",
             arxiv_result.title,
             relevance_score
         )
-        
+
         return doc
 
     @staticmethod
     def _merge_pages(documents: List[Document]) -> Document:
-        """Merge multi-page PDF into single document."""
+        """
+        Merge multi-page PDF into single document.
+        
+        Args:
+            documents: List of page documents
+            
+        Returns:
+            Single merged document
+        """
         if len(documents) == 1:
             return documents[0]
-        
+
         # Merge content
         merged_content = "\n\n".join(doc.content for doc in documents)
-        
+
         # Use first document's metadata
         merged = documents[0]
         merged.content = merged_content
-        
+
         return merged
 
     @staticmethod
     def _slugify(text: str, max_len: int = 60) -> str:
-        """Convert title to filesystem-safe slug."""
+        """
+        Convert title to filesystem-safe slug.
+        
+        Args:
+            text: Title text to slugify
+            max_len: Maximum length of slug
+            
+        Returns:
+            Slugified string
+        """
         text = text.lower()
         text = re.sub(r"[^a-z0-9]+", "-", text)
         text = re.sub(r"-+", "-", text).strip("-")
         return text[:max_len] or "paper"
 
     def get_source_name(self) -> str:
+        """Get human-readable source name."""
         return "ArXiv"

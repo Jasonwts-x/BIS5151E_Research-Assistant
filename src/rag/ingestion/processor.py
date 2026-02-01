@@ -1,8 +1,14 @@
 """
-Document Processing and Content Hashing
+Document Processing and Content Hashing.
 
 Handles deterministic document chunking and ID generation.
 Ensures rebuild produces identical IDs for identical content.
+
+Key Features:
+    - Content-hash based IDs (deterministic)
+    - Stable chunk ordering
+    - Metadata preservation
+    - Automatic deduplication via ID collision detection
 """
 from __future__ import annotations
 
@@ -21,8 +27,16 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ProcessedChunk:
-    """Represents a processed document chunk with metadata."""
+    """
+    Represents a processed document chunk with metadata.
     
+    Attributes:
+        id: Deterministic content-hash based ID
+        content: Chunk text content
+        embedding: Vector embedding (optional)
+        properties: Weaviate properties dict
+    """
+
     id: str
     content: str
     embedding: Optional[List[float]]
@@ -33,11 +47,9 @@ class DocumentProcessor:
     """
     Processes documents into chunks with deterministic IDs.
     
-    Key Features:
-    - Content-hash based IDs (deterministic)
-    - Stable chunk ordering
-    - Metadata preservation
-    - Automatic deduplication via ID collision detection
+    Attributes:
+        chunk_size: Target size for chunks (in words)
+        chunk_overlap: Overlap between chunks (in words)
     """
 
     def __init__(self, chunk_size: int = 350, chunk_overlap: int = 60):
@@ -99,17 +111,27 @@ class DocumentProcessor:
         embedding: Optional[List[float]],
         doc_chunk_counts: Dict[str, int],
     ) -> ProcessedChunk:
-        """Process a single chunk with metadata."""
-        meta = doc.meta or {}
+        """
+        Process a single chunk with metadata.
         
+        Args:
+            doc: Haystack document
+            embedding: Optional embedding vector
+            doc_chunk_counts: Dictionary of chunk counts per document
+            
+        Returns:
+            ProcessedChunk with deterministic ID
+        """
+        meta = doc.meta or {}
+
         # Extract core metadata
         source = meta.get("source", "unknown")
         doc_id = self._extract_document_id(doc)
         chunk_index = meta.get("_split_id", 0)
-        
+
         # Generate deterministic chunk ID
         chunk_id = self._generate_chunk_id(source, doc.content, chunk_index)
-        
+
         # Build properties dict for Weaviate
         properties = {
             "content": doc.content.strip(),
@@ -121,23 +143,23 @@ class DocumentProcessor:
             "ingestion_timestamp": datetime.utcnow().isoformat(),
             "schema_version": SCHEMA_VERSION,
         }
-        
+
         # Add optional metadata (ArXiv enrichment)
         if meta.get("authors"):
             properties["authors"] = meta["authors"]
-        
+
         if meta.get("publication_date"):
             properties["publication_date"] = meta["publication_date"]
-        
+
         if meta.get("arxiv_id"):
             properties["arxiv_id"] = meta["arxiv_id"]
-        
+
         if meta.get("arxiv_category"):
             properties["arxiv_category"] = meta["arxiv_category"]
-        
+
         if meta.get("abstract"):
             properties["abstract"] = meta["abstract"]
-        
+
         return ProcessedChunk(
             id=chunk_id,
             content=doc.content,
@@ -150,14 +172,20 @@ class DocumentProcessor:
         Extract or generate document ID.
         
         Priority:
-        1. Explicit document_id in metadata
-        2. Hash of source filename
+            1. Explicit document_id in metadata
+            2. Hash of source filename
+        
+        Args:
+            doc: Haystack document
+            
+        Returns:
+            Document ID string
         """
         meta = doc.meta or {}
-        
+
         if "document_id" in meta:
             return meta["document_id"]
-        
+
         source = meta.get("source", "unknown")
         return hashlib.sha256(source.encode()).hexdigest()[:16]
 
@@ -169,9 +197,17 @@ class DocumentProcessor:
         Truncated to 16 chars for readability
         
         This ensures:
-        - Same content → same ID
-        - Different content → different ID
-        - Rebuild produces identical IDs
+            - Same content → same ID
+            - Different content → different ID
+            - Rebuild produces identical IDs
+        
+        Args:
+            source: Source filename
+            content: Chunk text content
+            chunk_index: Sequential chunk index
+            
+        Returns:
+            16-character deterministic ID
         """
         hash_input = f"{source}::{content}::{chunk_index}"
         return hashlib.sha256(hash_input.encode()).hexdigest()[:16]
@@ -186,8 +222,8 @@ class DocumentProcessor:
         Chunk documents with stable ordering.
         
         Uses Haystack's DocumentSplitter but ensures:
-        - Documents are sorted by source (deterministic order)
-        - Chunks maintain sequential IDs
+            - Documents are sorted by source (deterministic order)
+            - Chunks maintain sequential IDs
         
         Args:
             documents: Raw documents to chunk
@@ -198,20 +234,20 @@ class DocumentProcessor:
             Chunked documents with stable _split_id metadata
         """
         from haystack.components.preprocessors import DocumentSplitter
-        
+
         # Sort documents by source for deterministic ordering
         sorted_docs = sorted(documents, key=lambda d: d.meta.get("source", ""))
-        
+
         # Chunk using Haystack
         splitter = DocumentSplitter(
             split_by="word",
             split_length=chunk_size,
             split_overlap=chunk_overlap,
         )
-        
+
         result = splitter.run(documents=sorted_docs)
         chunks = result["documents"]
-        
+
         logger.info("Chunked %d documents into %d chunks", len(sorted_docs), len(chunks))
-        
+
         return chunks

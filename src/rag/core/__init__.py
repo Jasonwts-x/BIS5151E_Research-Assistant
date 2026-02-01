@@ -1,7 +1,8 @@
 """
-RAG Core Module
+RAG Core Module.
 
 Core infrastructure for retrieval-augmented generation.
+Provides the main pipeline, schema management, and service layer.
 """
 from __future__ import annotations
 
