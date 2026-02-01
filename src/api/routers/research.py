@@ -2,27 +2,7 @@
 Research API Router
 
 Primary user-facing endpoints for research queries.
-Orchestrates the complete RAG + CrewAI workflow.
-
-This router provides the main value proposition of the system:
-1. Retrieve relevant academic papers from vector database
-2. Execute multi-agent workflow to generate fact-checked summaries
-3. Return high-quality research summaries with proper citations
-
-Workflow:
-    User Query
-        ↓
-    RAG Retrieval (Weaviate)
-        ↓
-    CrewAI Multi-Agent Processing
-        ├── Writer: Draft initial summary
-        ├── Reviewer: Improve clarity
-        ├── FactChecker: Verify claims
-        └── Translator: Translate (if requested)
-        ↓
-    Evaluation (TruLens + Guardrails)
-        ↓
-    Final Research Summary
+Orchestrates the complete RAG + CrewAI + Evaluation workflow.
 """
 from __future__ import annotations
 
@@ -48,10 +28,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/research", tags=[APITag.RESEARCH])
 
-# Get CrewAI service URL from environment
+# Get service URLs from environment
 CREWAI_URL = os.getenv("CREWAI_URL", "http://crewai:8100")
+EVAL_URL = os.getenv("EVAL_URL", "http://eval:8502")
 
-logger.info("Research router initialized: crewai_url=%s", CREWAI_URL)
+logger.info("Research router initialized: crewai_url=%s, eval_url=%s", CREWAI_URL, EVAL_URL)
 
 
 # ============================================================================
@@ -77,8 +58,8 @@ logger.info("Research router initialized: crewai_url=%s", CREWAI_URL)
        - Reviewer agent improves clarity and coherence
        - FactChecker agent verifies all claims against sources
        - Translator agent translates to target language (if requested)
-    3. **Evaluation**: Generate quality metrics (optional)
-    4. **Return**: Fact-checked summary with proper citations
+    3. **Evaluation**: Generate quality metrics (TruLens + Guardrails)
+    4. **Return**: Fact-checked summary with proper citations and metrics
     
     ## Performance
     
@@ -102,38 +83,43 @@ async def research_query(
         Research summary with citations, sources, and evaluation metrics
         
     Raises:
-        HTTPException: If RAG retrieval or crew execution fails
+        HTTPException: If RAG retrieval, crew execution, or evaluation fails
     """
     try:
         logger.info("Research query initiated: query='%s', language='%s'", request.query, request.language)
         
         # Step 1: RAG Retrieval
-        logger.info("Step 1/3: Retrieving relevant documents from RAG...")
+        logger.info("Step 1/4: Retrieving relevant documents from RAG...")
         
         pipeline = RAGPipeline.from_existing()
-        docs = pipeline.run(query=request.query, top_k=request.top_k or 3)
+        docs = pipeline.run(query=request.query, top_k=request.top_k or 5)
         
         logger.info("Retrieved %d documents from RAG", len(docs))
         
         if not docs:
             logger.warning("No documents retrieved for query: %s", request.query)
         
-        # Extract sources for response
+        # Extract sources and context for response
         sources = []
+        context_chunks = []
         for doc in docs:
             source = doc.meta.get("source", "unknown")
             if source not in sources:
                 sources.append(source)
+            context_chunks.append(doc.content)
+        
+        # Combine context for evaluation
+        combined_context = "\n\n".join(context_chunks)
         
         # Step 2: CrewAI Execution
-        logger.info("Step 2/3: Executing multi-agent workflow...")
+        logger.info("Step 2/4: Executing multi-agent workflow...")
         
         crew_request = CrewRunRequest(
             topic=request.query,
             language=request.language,
         )
         
-        async with httpx.AsyncClient(timeout=1500.0) as client:
+        async with httpx.AsyncClient(timeout=120.0) as client:
             response = await client.post(
                 f"{CREWAI_URL}/run",
                 json=crew_request.model_dump(),
@@ -141,43 +127,79 @@ async def research_query(
             response.raise_for_status()
             crew_result = response.json()
         
-        logger.info("Multi-agent workflow completed successfully")
+        summary = crew_result.get("summary", "")
+        metadata = crew_result.get("metadata", {})
         
-        # Step 3: Format Response
-        logger.info("Step 3/3: Formatting response...")
+        logger.info("Multi-agent workflow completed, summary length: %d chars", len(summary))
         
-        evaluation = crew_result.get("evaluation") if request.enable_evaluation else None
+        # Step 3: Evaluation (if enabled)
+        evaluation = None
+        if request.enable_evaluation:
+            logger.info("Step 3/4: Running evaluation...")
+            
+            try:
+                eval_request = {
+                    "query": request.query,
+                    "answer": summary,
+                    "context": combined_context,
+                    "language": request.language,
+                    "metadata": {
+                        "sources_count": len(sources),
+                        "chunks_retrieved": len(docs),
+                        **metadata,
+                    },
+                }
+                
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    eval_response = await client.post(
+                        f"{EVAL_URL}/metrics/evaluate",
+                        json=eval_request,
+                    )
+                    eval_response.raise_for_status()
+                    evaluation = eval_response.json()
+                
+                logger.info("Evaluation completed: record_id=%s, overall_score=%.2f",
+                           evaluation.get("record_id"),
+                           evaluation.get("summary", {}).get("overall_score", 0))
+                
+            except Exception as e:
+                logger.error("Evaluation failed (non-fatal): %s", e)
+                evaluation = {"error": str(e), "status": "failed"}
+        else:
+            logger.info("Step 3/4: Evaluation skipped (disabled)")
+        
+        # Step 4: Build response
+        logger.info("Step 4/4: Building response...")
         
         return ResearchQueryResponse(
             query=request.query,
-            summary=crew_result["answer"],
+            summary=summary,
             language=request.language,
             sources=sources,
             retrieved_chunks=len(docs),
             evaluation=evaluation,
             metadata={
-                "crew_execution_time": evaluation.get("performance", {}).get("total_time") if evaluation else None,
-                "documents_retrieved": len(docs),
-                "unique_sources": len(sources),
+                "crew_metadata": metadata,
+                "evaluation_enabled": request.enable_evaluation,
             },
         )
         
     except httpx.HTTPStatusError as e:
-        logger.error("CrewAI service error: %s - %s", e.response.status_code, e.response.text)
+        logger.error("Service returned error: %s", e.response.text)
         raise HTTPException(
             status_code=e.response.status_code,
-            detail=f"CrewAI service error: {e.response.text}",
+            detail=f"Service error: {e.response.text}",
         ) from e
         
     except httpx.RequestError as e:
-        logger.error("CrewAI service unreachable: %s", e)
+        logger.error("Failed to reach service: %s", e)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"CrewAI service unavailable: {str(e)}",
+            detail=f"Service unavailable: {str(e)}",
         ) from e
         
     except Exception as e:
-        logger.exception("Research query failed with unexpected error")
+        logger.exception("Research query failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Research query failed: {str(e)}",
@@ -234,7 +256,7 @@ async def research_query_async(
         logger.info("Retrieving documents from RAG for async query...")
         
         pipeline = RAGPipeline.from_existing()
-        docs = pipeline.run(query=request.query, top_k=request.top_k or 3)
+        docs = pipeline.run(query=request.query, top_k=request.top_k or 5)
         
         logger.info("Retrieved %d documents for async processing", len(docs))
         
@@ -261,143 +283,54 @@ async def research_query_async(
             job_id=job_id,
             status="pending",
             message=f"Research job submitted successfully. Retrieved {len(docs)} documents from RAG.",
-            estimated_time=45,  # Typical execution time
+            query=request.query,
         )
         
-    except httpx.HTTPStatusError as e:
-        logger.error("CrewAI async submission error: %s", e.response.text)
-        raise HTTPException(
-            status_code=e.response.status_code,
-            detail=f"Async submission failed: {e.response.text}",
-        ) from e
-        
-    except httpx.RequestError as e:
-        logger.error("CrewAI service unreachable: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"CrewAI service unavailable: {str(e)}",
-        ) from e
-        
     except Exception as e:
-        logger.exception("Async research query submission failed")
+        logger.exception("Failed to submit async research query")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Async submission failed: {str(e)}",
+            detail=f"Failed to submit async job: {str(e)}",
         ) from e
-
-
-# ============================================================================
-# Job Status Endpoint
-# ============================================================================
 
 
 @router.get(
     "/status/{job_id}",
     response_model=ResearchStatusResponse,
     status_code=status.HTTP_200_OK,
-    summary="Get research job status",
-    description="""
-    Check the status of an asynchronous research query.
-    
-    **Use after calling** `POST /research/query/async`
-    
-    ## Job Status Values
-    
-    - `pending`: Job is queued, waiting to start
-    - `running`: Job is currently executing
-    - `completed`: Job finished successfully ✅
-      - Result available in `result` field
-    - `failed`: Job encountered an error ❌
-      - Error message available in `error` field
-    
-    ## Polling Recommendations
-    
-    - Poll interval: **5 seconds**
-    - Timeout: **120 seconds** (typical job takes 30-60s)
-    - Stop polling when status is `completed` or `failed`
-    
-    ## Example Response (Completed)
-```json
-    {
-      "job_id": "550e8400-e29b-41d4-a716-446655440000",
-      "status": "completed",
-      "progress": 1.0,
-      "created_at": "2025-01-30T10:00:00Z",
-      "started_at": "2025-01-30T10:00:05Z",
-      "completed_at": "2025-01-30T10:00:50Z",
-      "result": {
-        "query": "What is machine learning?",
-        "summary": "Machine learning is...[1][2]",
-        "sources": ["paper1.pdf", "paper2.pdf"],
-        "retrieved_chunks": 5
-      }
-    }
-```
-    """,
+    summary="Get async job status",
 )
-async def get_research_status(job_id: str) -> ResearchStatusResponse:
+async def get_status(job_id: str) -> ResearchStatusResponse:
     """
-    Get status and results of an async research job.
+    Get status of an async research job.
     
     Args:
-        job_id: Unique job identifier from async submission
+        job_id: Job identifier from async request
         
     Returns:
-        Job status with result (if completed) or error (if failed)
+        Job status and result (if completed)
         
     Raises:
         HTTPException: If job not found or service unavailable
     """
     try:
-        logger.debug("Fetching status for job: %s", job_id)
-        
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.get(f"{CREWAI_URL}/status/{job_id}")
             response.raise_for_status()
-            crew_status = response.json()
-        
-        logger.debug("Job %s status: %s", job_id, crew_status["status"])
-        
-        # Map crew status to research status
-        result = None
-        if crew_status["status"] == "completed" and "result" in crew_status:
-            crew_result = crew_status["result"]
-            result = ResearchQueryResponse(
-                query=crew_result.get("topic", ""),
-                summary=crew_result.get("answer", ""),
-                language=crew_result.get("language", "en"),
-                sources=crew_result.get("sources", []),
-                retrieved_chunks=crew_result.get("retrieved_chunks", 0),
-                evaluation=crew_result.get("evaluation"),
-            )
-        
-        return ResearchStatusResponse(
-            job_id=job_id,
-            status=crew_status["status"],
-            progress=crew_status.get("progress", 0.0),
-            created_at=crew_status.get("created_at", ""),
-            started_at=crew_status.get("started_at"),
-            completed_at=crew_status.get("completed_at"),
-            result=result,
-            error=crew_status.get("error"),
-        )
-        
+            
+            return ResearchStatusResponse(**response.json())
+            
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 404:
-            logger.warning("Job not found: %s", job_id)
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Job {job_id} not found. It may have expired or never existed.",
+                detail=f"Job not found: {job_id}",
             ) from e
-        
-        logger.error("CrewAI service error: %s", e.response.text)
         raise HTTPException(
             status_code=e.response.status_code,
             detail=e.response.text,
         ) from e
-        
     except httpx.RequestError as e:
-        logger.error("CrewAI service unreachable: %s", e)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"CrewAI service unavailable: {str(e)}",
