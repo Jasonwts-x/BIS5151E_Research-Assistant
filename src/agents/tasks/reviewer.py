@@ -1,9 +1,27 @@
-"""Reviewer Task Definition"""
+"""
+Reviewer Task Definition.
+
+Defines the review task with instructions for improving draft quality.
+
+Architecture:
+    Task depends on writer_task output via context parameter.
+"""
+from __future__ import annotations
+
 from crewai import Task
 
 
 def create_reviewer_task(agent, writer_task) -> Task:
-    """Create reviewer task with minimal necessary instructions."""
+    """
+    Create reviewer task.
+    
+    Args:
+        agent: Reviewer agent instance
+        writer_task: Completed writer task (provides context)
+        
+    Returns:
+        Configured Task instance
+    """
 
     description = f"""
 

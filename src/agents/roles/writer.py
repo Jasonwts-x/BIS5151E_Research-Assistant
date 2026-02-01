@@ -1,8 +1,12 @@
 """
-Writer Agent Role
+Writer Agent Role.
 
 Creates the Writer agent with context retrieval capabilities.
 This agent drafts initial summaries from provided or dynamically retrieved context.
+
+Architecture:
+    Writer is the first agent in the pipeline.
+    Has access to retrieve_context tool for dynamic document retrieval.
 """
 from __future__ import annotations
 

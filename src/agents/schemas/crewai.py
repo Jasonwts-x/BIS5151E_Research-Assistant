@@ -1,7 +1,11 @@
 """
-CrewAI API Schemas
+CrewAI API Schemas.
 
 Request/response models for CrewAI endpoints.
+
+Architecture:
+    Shared between API gateway and CrewAI service.
+    Provides type-safe request/response handling.
 """
 from __future__ import annotations
 
@@ -11,7 +15,13 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class CrewRunRequest(BaseModel):
-    """Request to execute CrewAI workflow."""
+    """
+    Request to execute CrewAI workflow.
+    
+    Attributes:
+        topic: Research topic or question
+        language: Target language code
+    """
     
     topic: str = Field(
         ..., 
@@ -70,7 +80,15 @@ class CrewRunRequest(BaseModel):
 
 
 class CrewRunResponse(BaseModel):
-    """Response from CrewAI workflow."""
+    """
+    Response from CrewAI workflow.
+    
+    Attributes:
+        topic: Original research topic
+        language: Language code
+        answer: Generated research summary
+        evaluation: Evaluation metrics
+    """
     
     topic: str = Field(..., description="Original research topic")
     language: str = Field(..., description="Language code")
@@ -88,7 +106,14 @@ class CrewRunResponse(BaseModel):
 
 
 class CrewAsyncRunResponse(BaseModel):
-    """Response from async crew job submission."""
+    """
+    Response from async crew job submission.
+    
+    Attributes:
+        job_id: Job ID for tracking
+        status: Initial status
+        message: Human-readable message
+    """
     
     job_id: str = Field(..., description="Job ID for tracking execution")
     status: str = Field(..., description="Initial status (always 'pending')")
@@ -96,7 +121,22 @@ class CrewAsyncRunResponse(BaseModel):
 
 
 class CrewStatusResponse(BaseModel):
-    """Crew job status response."""
+    """
+    Crew job status response.
+    
+    Attributes:
+        job_id: Job identifier
+        status: Current status
+        topic: Research topic
+        language: Target language
+        progress: Progress from 0.0 to 1.0
+        created_at: Creation timestamp
+        started_at: Start timestamp
+        completed_at: Completion timestamp
+        result: Final result (if completed)
+        error: Error message (if failed)
+        evaluation: Evaluation metrics (if completed)
+    """
     
     job_id: str = Field(..., description="Job identifier")
     status: str = Field(

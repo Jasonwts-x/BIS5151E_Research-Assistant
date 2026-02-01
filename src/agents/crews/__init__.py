@@ -1,5 +1,6 @@
 """
-Crew Compositions
+Crew Compositions Module.
+
 Crew definitions that orchestrate multiple agents in coordinated workflows.
 """
 from __future__ import annotations

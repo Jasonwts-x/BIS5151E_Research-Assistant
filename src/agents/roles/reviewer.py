@@ -1,8 +1,12 @@
 """
-Reviewer Agent Role
+Reviewer Agent Role.
 
 Creates the Reviewer agent with text analysis capabilities.
 This agent improves clarity and coherence of drafts.
+
+Architecture:
+    Reviewer is the second agent in the pipeline.
+    Has access to analyze_text_quality tool for objective assessment.
 """
 from __future__ import annotations
 
@@ -15,13 +19,7 @@ def create_reviewer_agent(llm) -> Agent:
     """
     Create the Reviewer agent.
     
-    The Reviewer agent has access to text analysis tools
-    to objectively assess text quality.
-    
-    Responsibilities:
-    - Improve clarity, coherence, and flow
-    - Enhance academic writing style
-    - Preserve all original claims and citations
+    The Reviewer agent has access to text analysis tools to objectively assess text quality.
     
     Args:
         llm: Language model instance

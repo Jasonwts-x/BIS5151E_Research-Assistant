@@ -1,5 +1,6 @@
 """
-CrewAI Service Schemas
+CrewAI Service Schemas Module.
+
 Pydantic models for CrewAI service requests and responses.
 """
 from __future__ import annotations

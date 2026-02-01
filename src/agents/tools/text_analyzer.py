@@ -1,8 +1,12 @@
 """
-Text Quality Analysis Tool
+Text Quality Analysis Tool.
 
 Analyzes text for quality metrics to help Reviewer agent.
 Provides objective measurements for text improvement.
+
+Architecture:
+    Statistical analysis of text characteristics.
+    Generates quality score and improvement suggestions.
 """
 from __future__ import annotations
 
@@ -17,27 +21,11 @@ def analyze_text_quality(text: str) -> Dict[str, any]:
     """
     Analyze text for quality metrics.
     
-    This tool helps the Reviewer agent assess text quality objectively.
-    It calculates:
-    - Word count
-    - Sentence count
-    - Average sentence length
-    - Citation count and density
-    - Presence of references section
-    
     Args:
         text: Text to analyze
         
     Returns:
-        Dictionary with quality metrics:
-        - word_count (int): Total words
-        - sentence_count (int): Total sentences
-        - avg_sentence_length (float): Average words per sentence
-        - citation_count (int): Number of citations
-        - citation_density (float): Citations per 100 words
-        - has_references (bool): Has references section
-        - quality_score (float): Overall quality (0-1)
-        - suggestions (list): Improvement suggestions
+        Dictionary with metrics (word_count, citation_density, quality_score, suggestions)
     """
     # Word count
     words = text.split()

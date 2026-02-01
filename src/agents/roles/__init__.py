@@ -1,7 +1,8 @@
 """
-Agent Role Definitions
+Agent Role Definitions Module.
+
 Individual agent roles for the research assistant crew.
-Each role specializes in a specific task: writing, reviewing, or fact-checking.
+Each role specializes in a specific task: writing, reviewing, fact-checking, or translating.
 """
 from __future__ import annotations
 

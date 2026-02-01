@@ -1,8 +1,12 @@
 """
-FactChecker Agent Role
+FactChecker Agent Role.
 
 Creates the FactChecker agent with citation validation and context retrieval capabilities.
 This agent verifies all claims against provided context and can retrieve additional sources.
+
+Architecture:
+    FactChecker is the third agent in the pipeline.
+    Has access to validate_citation and retrieve_context tools.
 """
 from __future__ import annotations
 

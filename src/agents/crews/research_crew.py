@@ -1,3 +1,13 @@
+"""
+Research Crew Composition Module.
+
+Orchestrates Writer → Reviewer → FactChecker → (Translator) pipeline using CrewAI.
+Supports both default mode (with context) and fallback mode (without context).
+
+Architecture:
+    Manages sequential agent execution with proper task dependencies.
+    Adapts workflow based on context availability and target language.
+"""
 from __future__ import annotations
  
 from fileinput import filename
@@ -27,21 +37,29 @@ logger = logging.getLogger(__name__)
 class ResearchCrew:
     """
     Research Assistant Crew composition.
- 
-    Orchestrates Writer → Reviewer → FactChecker → (Translator) pipeline using CrewAI.
-    Supports both default mode (with context) and fallback mode (without context).
+
+    Manages the sequential execution of specialized agents and handles 
+    context-aware path selection to ensure grounded research output.
+
+    Attributes:
+        llm: The Language Model instance used by all agents.
+        writer: Agent responsible for initial drafting and citation grounding.
+        reviewer: Agent responsible for academic tone and flow.
+        factchecker: Agent responsible for cross-referencing output against context.
+        translator: Optional agent for multilingual support.
     """
  
     def __init__(self, llm):
         """
-        Initialize the crew with agents.
+        Initialize the ResearchCrew with shared LLM configuration.
  
         Args:
             llm: Language model instance (from Ollama via LangChain)
         """
         self.llm = llm
  
-        # Initialize agents
+        # Agents are initialized at class level to maintain configuration
+        # consistency throughout the lifecycle of the ResearchCrew instance.
         logger.info("Initializing ResearchCrew agents")
         self.writer = create_writer_agent(llm)
         self.reviewer = create_reviewer_agent(llm)
@@ -51,7 +69,7 @@ class ResearchCrew:
  
     def run(self, topic: str, context: str, language: str = "en") -> str:
         """
-        Execute the research crew workflow.
+        Execute the core research workflow with dynamic mode detection.
        
         Detects whether context is available and adjusts workflow accordingly:
         - WITH context: Full pipeline (Writer → Reviewer → FactChecker)
@@ -66,8 +84,9 @@ class ResearchCrew:
             Final output string
         """
         logger.info("Starting crew run for topic: %s", topic)
- 
-        # Detect if we have actual context or not
+
+        # Path selection logic: Default mode requires specific document markers 
+        # to prevent the agents from hallucinating when RAG retrieval fails.
         has_context = self._has_valid_context(context)
  
         if has_context:
@@ -79,12 +98,19 @@ class ResearchCrew:
  
     def _has_valid_context(self, context: str) -> bool:
         """
-        Check if context contains actual documents or is just a placeholder.
+        Validate if the provided context string contains usable research data.
+
+        Args:
+            context: The raw context string to evaluate.
+
+        Returns:
+            True if the context passes all sanity checks, False otherwise.
         """
         if not context:
             return False
        
-        # Check for common "no context" indicators
+        # We catch explicit strings returned by the RAG pipeline when no vector 
+        # matches are found to avoid passing "error messages" as factual context.
         no_context_indicators = [
             "⚠️ NO CONTEXT AVAILABLE ⚠️",
             "NO CONTEXT AVAILABLE",
@@ -97,72 +123,31 @@ class ResearchCrew:
                 logger.debug("Context validation failed: contains '%s'", indicator)
                 return False
        
-        # Check if context is too short (likely just a message)
+        # Strings under 100 characters are statistically likely to be metadata 
+        # or error messages rather than meaningful academic content.
         if len(context.strip()) < 100:
             logger.debug("Context validation failed: too short (%d chars)", len(context.strip()))
             return False
        
-        # Check if context contains source markers (indicating real documents)
+        # Our RAG pipeline strictly enforces 'SOURCE' headers;
+        # their absence indicates unformatted or corrupted retrieval.
         if "SOURCE" not in context:
             logger.debug("Context validation failed: no SOURCE markers found")
             return False
        
         logger.debug("Context validation passed: %d chars with SOURCE markers", len(context))
         return True
- 
-    def _summarize_sources(self, raw_context: str, topic: str) -> str:
-        """
-        Extract metadata from sources without duplicates.
-        """
-        import re
     
-        logger.info("⚡ Extracting metadata from sources...")
-    
-        # Split by SOURCE markers
-        parts = re.split(r'(SOURCE \[\d+\])', raw_context)
-    
-        seen_sources = set()
-        optimized_output = []
-        current_header = ""
-    
-        for part in parts:
-            if "SOURCE [" in part:
-                current_header = part.strip()
-            elif current_header and len(part.strip()) > 50:
-                lines = part.strip().split('\n')
-                filename = lines[0].strip()
-
-                if filename in seen_sources:
-                    current_header = ""
-                    continue
-                seen_sources.add(filename)
-
-                content = "\n".join(lines[1:]) if len(lines) > 1 else part
-            
-                # Extract metadata
-                metadata = self._extract_metadata_simple(filename, content[:500])
-            
-                # Format output
-                optimized_output.extend([
-                    current_header,
-                    filename,
-                    f"METADATA: {metadata['author']} ({metadata['year']}). {metadata['title']}",
-                    "",
-                    content[:1000],  # Reduced for speed
-                    "-" * 40,
-                    ""
-                ])
-                current_header = ""
-    
-        result = "\n".join(optimized_output)
-        logger.info(f"Metadata extracted: {len(result)} chars")
-        return result
-
-
     def _extract_metadata_simple(self, filename: str, content_preview: str) -> dict:
         """
-        Extract metadata using regex - no LLM needed.
-        Fast and reliable for common formats.
+        Perform lightweight metadata extraction using using regex patterns.
+
+        Args:
+            filename: Name of the source file.
+            content_preview: A subset of document text for pattern matching.
+
+        Returns:
+            Dictionary containing extracted 'author', 'year', and 'title'.
         """
         import re
     
@@ -170,15 +155,15 @@ class ResearchCrew:
         year_match = re.search(r'(19|20)\d{2}', filename + content_preview)
         year = year_match.group(0) if year_match else "n.d."
     
-        # Extract author from filename (before underscore/dash)
+        # Extract author from filename (before underscore/dash).
         author_match = re.match(r'^([A-Za-z]+)', filename)
         author = author_match.group(1) if author_match else "Unknown"
     
-        # Title from filename (remove extension)
+        # Cleanup filename artifacts to create a human-readable title fallback.
         title = re.sub(r'\.(pdf|txt|md|arxiv)$', '', filename, flags=re.IGNORECASE)
         title = title.replace('_', ' ').replace('-', ' ')
     
-        # Try to find better author in content (first 500 chars)
+        # Try to find better author in content (first 500 chars).
         author_patterns = [
             r'(?:Author|By):\s*([A-Z][a-z]+)',
             r'^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
@@ -194,18 +179,42 @@ class ResearchCrew:
             'year': year,
             'title': title[:100]  # Limit length
         }
- 
+   
+    def _extract_citations_count(self, text: str) -> int:
+        """
+        Identify and count formal inline citations within a text string.
+
+        Primarily used as a quality metric to verify if the Writer agent 
+        is following grounding constraints by linking facts to sources.
+
+        Args:
+            text: The generated summary or research text to analyze for [n] patterns.
+
+        Returns:
+            The total integer count of unique or repeating [n] style citations found.
+        """
+        import re
+        citations = re.findall(r'\[\d+\]', text)
+        return len(citations)
+
     def _run_default_mode(self, topic: str, context: str, language: str) -> str:
         """
-        Run full pipeline with default fact-checking against provided context.
-        Uses Pre-Summarization to speed up processing.
+        Execute the full research pipeline using retrieved local context.
+        
+        Args:
+            topic: The research subject.
+            context: Validated RAG context.
+            language: Desired output language.
+
+        Returns:
+            Formatted final output string.
         """
         logger.info("Running DEFAULT MODE - with optimized context")
        
-        # 1. OPTIMIZATION STEP: Summarize context first
+        # We summarize/clean sources before passing to CrewAI
+        # to prevent context window overflow in local LLMs (Ollama).
         optimized_context = self._summarize_sources(context, topic)
        
-        # 2. Create tasks with OPTIMIZED context
         writer_task = create_writer_task(
             agent=self.writer,
             topic=topic,
@@ -226,7 +235,8 @@ class ResearchCrew:
        
         tasks = [writer_task, reviewer_task, factchecker_task]
        
-        # Add translation if needed
+        # Translation is added as a final sequential step 
+        # to ensure the research is fully vetted in English first.
         if language != "en":
             translator_task = create_translator_task(
                 agent=self.translator,
@@ -255,10 +265,19 @@ class ResearchCrew:
    
     def _run_fallback_mode(self, topic: str, language: str) -> str:
         """
-        Run full pipeline using general knowledge (no local database context).
+        Execute a reduced pipeline using the LLM's internal general knowledge.
+        
+        Args:
+            topic: The research subject.
+            language: Desired output language.
+
+        Returns:
+            Formatted final output string.
         """
         logger.info("Running FALLBACK MODE - using general knowledge")
        
+        # In Fallback mode, we omit the FactChecker cross-reference task 
+        # because there is no local context to check against.
         writer_task = create_writer_task(
             agent=self.writer,
             topic=topic,
@@ -279,7 +298,6 @@ class ResearchCrew:
  
         tasks = [writer_task, reviewer_task, factchecker_task]
  
-        # Add translation if needed
         if language != "en":
             translator_task = create_translator_task(
                 agent=self.translator,
@@ -308,7 +326,14 @@ class ResearchCrew:
  
     def _format_output(self, result, mode: str = "default") -> str:
         """
-        Format crew output correctly, preserving citations and CLEANING unwanted artifacts.
+        Post-process agent output to remove artifacts and validate formatting.
+        
+        Args:
+            result: Crew execution result
+            mode: "default" or "fallback"
+            
+        Returns:
+            Formatted output string
         """
         logger.debug("Formatting output (mode: %s, result type: %s)", mode, type(result))
        
@@ -383,11 +408,58 @@ class ResearchCrew:
         except Exception as e:
             logger.error("❌ Error formatting output: %s. Using fallback.", e, exc_info=True)
             return str(result)
-   
-    def _extract_citations_count(self, text: str) -> int:
+        
+    def _summarize_sources(self, raw_context: str, topic: str) -> str:
         """
-        Count inline citations in text for debugging.
+        Pre-summarize sources to reduce context size.
+        
+        Args:
+            context: The full context string from the retriever.
+            topic: The research topic.
+            
+        Returns:
+            Optimized context string with enriched metadata.
         """
         import re
-        citations = re.findall(r'\[\d+\]', text)
-        return len(citations)
+    
+        logger.info("⚡ Extracting metadata from sources...")
+    
+        # Split by SOURCE markers
+        parts = re.split(r'(SOURCE \[\d+\])', raw_context)
+    
+        seen_sources = set()
+        optimized_output = []
+        current_header = ""
+    
+        for part in parts:
+            if "SOURCE [" in part:
+                current_header = part.strip()
+            elif current_header and len(part.strip()) > 50:
+                lines = part.strip().split('\n')
+                filename = lines[0].strip()
+
+                if filename in seen_sources:
+                    current_header = ""
+                    continue
+                seen_sources.add(filename)
+
+                content = "\n".join(lines[1:]) if len(lines) > 1 else part
+            
+                # Extract metadata
+                metadata = self._extract_metadata_simple(filename, content[:500])
+            
+                # Format output
+                optimized_output.extend([
+                    current_header,
+                    filename,
+                    f"METADATA: {metadata['author']} ({metadata['year']}). {metadata['title']}",
+                    "",
+                    content[:1000],  # Reduced for speed
+                    "-" * 40,
+                    ""
+                ])
+                current_header = ""
+    
+        result = "\n".join(optimized_output)
+        logger.info(f"Metadata extracted: {len(result)} chars")
+        return result

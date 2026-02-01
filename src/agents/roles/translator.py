@@ -1,8 +1,11 @@
 """
-Translator Agent Role
+Translator Agent Role.
 
 Creates the Translator agent for multilingual support.
 This agent translates summaries while preserving citations and academic tone.
+
+Architecture:
+    Translator is an optional fourth agent (only used when language != "en").
 """
 from __future__ import annotations
 
@@ -12,12 +15,6 @@ from crewai import Agent
 def create_translator_agent(llm) -> Agent:
     """
     Create the Translator agent.
-    
-    Responsibilities:
-    - Translate summaries to target language
-    - Preserve all citations exactly as written
-    - Maintain academic tone in target language
-    - Do not add or remove information
     
     Args:
         llm: Language model instance

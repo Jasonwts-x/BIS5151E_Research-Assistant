@@ -1,6 +1,11 @@
 """
-CrewAI Service Server
+CrewAI Service Server.
+
 Main FastAPI application for CrewAI multi-agent workflows.
+
+Architecture:
+    Separate service from main API gateway (microservices pattern).
+    Runs on port 8100, exposes /health, /run, /run/async, /status endpoints.
 """
 from __future__ import annotations
 
@@ -11,11 +16,9 @@ from fastapi import FastAPI
 from ...utils.logging import setup_logging
 from .routers import crewai
 
-# Configure logging once for the entire service
 setup_logging(level="INFO", service_name="crewai-service")
 logger = logging.getLogger(__name__)
 
-# Initialize FastAPI app
 app = FastAPI(
     title="Research-Assistant-CrewAI-Service",
     description="Agentic workflow service using CrewAI for multi-agent orchestration.",

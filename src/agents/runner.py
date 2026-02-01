@@ -1,8 +1,12 @@
 """
-CrewAI Runner
+CrewAI Runner.
 
 Main orchestrator for RAG + CrewAI workflow execution.
 Manages RAG retrieval, agent execution, evaluation, and output generation.
+
+Architecture:
+    Singleton pattern - initializes components once and reuses them.
+    Coordinates: RAG Pipeline → Crew Execution → Evaluation → Output.
 """
 from __future__ import annotations
 
@@ -54,13 +58,13 @@ class CrewRunner:
     (singleton pattern) and reuses them across requests for better performance.
     
     Attributes:
-        config: Application configuration (from configs/app.yaml + .env)
+        config: Application configuration
         rag_pipeline: RAG pipeline for document retrieval
-        llm: Language model instance (Ollama)
-        crew: ResearchCrew instance (Writer → Reviewer → FactChecker → Translator)
-        input_validator: Input safety validator (optional)
-        output_validator: Output safety validator (optional)
-        trulens_client: TruLens evaluation client (optional)
+        llm: Language model instance
+        crew: ResearchCrew instance
+        input_validator: Input safety validator
+        output_validator: Output safety validator
+        trulens_client: TruLens evaluation client
         performance_tracker: Performance metrics tracker
     """
 
@@ -70,7 +74,7 @@ class CrewRunner:
 
         Args:
             enable_guardrails: Enable safety checks on inputs/outputs
-            enable_monitoring: Enable TruLens monitoring (requires trulens-eval)
+            enable_monitoring: Enable TruLens monitoring
         """
         logger.info("Initializing CrewRunner...")
         
@@ -174,14 +178,6 @@ class CrewRunner:
     def run(self, topic: str, language: str = "en") -> CrewResult:
         """
         Execute the full RAG + CrewAI workflow.
-        
-        Steps:
-        1. Validate input (guardrails)
-        2. Retrieve context from RAG
-        3. Execute crew workflow (reusing singleton crew instance)
-        4. Validate output (guardrails)
-        5. Evaluate results (TruLens, performance metrics)
-        6. Return CrewResult
         
         Args:
             topic: Research topic/question
@@ -305,7 +301,7 @@ class CrewRunner:
         Retrieve relevant context from RAG pipeline.
         
         Args:
-            topic: Search query
+            topic: Research topic
             
         Returns:
             Tuple of (formatted_context, documents)
@@ -333,7 +329,7 @@ class CrewRunner:
 
     def _format_context(self, documents: List[Document]) -> str:
         """
-        Format retrieved documents into context string with source citations.
+        Format retrieved documents with citation markers.
         
         Deduplicates sources so multiple chunks from the same document
         share the same citation number.
@@ -392,14 +388,14 @@ class CrewRunner:
 
     def save_output(self, result: CrewResult, output_base_dir: Path = None) -> dict[str, Path]:
         """
-        Save crew output to multiple formats with keyword-based folder naming.
+        Save crew output to multiple formats.
         
         Args:
             result: CrewResult to save
-            output_base_dir: Base directory for outputs (default: ./outputs)
+            output_base_dir: Base directory for outputs
             
         Returns:
-            Dictionary mapping file type to saved path
+            Dictionary mapping format names to file paths
         """
         if output_base_dir is None:
             output_base_dir = Path("outputs")
@@ -450,7 +446,7 @@ class CrewRunner:
         Format result as markdown with metadata and evaluation.
         
         Args:
-            result: CrewResult
+            result: CrewResult to format
             
         Returns:
             Markdown-formatted string

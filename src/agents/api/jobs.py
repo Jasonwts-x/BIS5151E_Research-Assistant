@@ -1,5 +1,11 @@
 """
-Job management for async crew execution.
+Job Management for Async Crew Execution.
+
+Manages background job execution for async crew requests.
+
+Architecture:
+    In-memory job storage (single-instance deployments).
+    For production with multiple instances, use Redis or database.
 """
 from __future__ import annotations
 
@@ -17,7 +23,15 @@ logger = logging.getLogger(__name__)
 
 
 class JobStatus(str, Enum):
-    """Job execution status."""
+    """
+    Job execution status.
+    
+    Attributes:
+        PENDING: Job created but not started
+        RUNNING: Job currently executing
+        COMPLETED: Job finished successfully
+        FAILED: Job failed with error
+    """
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -26,7 +40,21 @@ class JobStatus(str, Enum):
 
 @dataclass
 class Job:
-    """Represents an async crew job."""
+    """
+    Represents an async crew job.
+    
+    Attributes:
+        job_id: Unique job identifier
+        topic: Research topic
+        language: Target language
+        status: Current job status
+        created_at: Job creation timestamp
+        started_at: Job start timestamp
+        completed_at: Job completion timestamp
+        result: Final result (if completed)
+        error: Error message (if failed)
+        progress: Progress from 0.0 to 1.0
+    """
     job_id: str
     topic: str
     language: str
@@ -45,9 +73,14 @@ class JobManager:
     
     Simple in-memory implementation for single-instance deployments.
     For production with multiple instances, use Redis or a database.
+
+    Attributes:
+        jobs: Dictionary of job_id -> Job
+        runner: CrewRunner instance
     """
     
     def __init__(self):
+        """Initialize job manager with empty job dictionary."""
         self.jobs: Dict[str, Job] = {}
         self.runner = CrewRunner()
     
@@ -137,11 +170,27 @@ class JobManager:
             job.progress = 0.0
     
     def get_job(self, job_id: str) -> Optional[Job]:
-        """Get job by ID."""
+        """
+        Get job by ID.
+        
+        Args:
+            job_id: Job identifier
+            
+        Returns:
+            Job instance or None if not found
+        """
         return self.jobs.get(job_id)
     
     def list_jobs(self, limit: int = 100) -> list[Job]:
-        """List recent jobs."""
+        """
+        List recent jobs.
+        
+        Args:
+            limit: Maximum number of jobs to return
+            
+        Returns:
+            List of jobs sorted by creation time (newest first)
+        """
         jobs = sorted(
             self.jobs.values(),
             key=lambda j: j.created_at,
@@ -155,7 +204,12 @@ _job_manager: Optional[JobManager] = None
 
 
 def get_job_manager() -> JobManager:
-    """Get or create the global job manager."""
+    """
+    Get or create the global job manager.
+    
+    Returns:
+        Singleton JobManager instance
+    """
     global _job_manager
     if _job_manager is None:
         _job_manager = JobManager()

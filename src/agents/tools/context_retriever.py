@@ -1,8 +1,12 @@
 """
-Context Retrieval Tool
+Context Retrieval Tool.
 
 Allows agents to dynamically retrieve additional context from the RAG knowledge base.
-This enables agents to search for specific information when the initial context is insufficient.
+Enables agents to search for specific information when initial context is insufficient.
+
+Architecture:
+    Integrates with RAG pipeline to provide on-demand document retrieval.
+    Returns formatted documents with citation numbers for easy reference.
 """
 from __future__ import annotations
 
@@ -19,20 +23,12 @@ def retrieve_context(query: str, top_k: int = 3) -> Dict[str, any]:
     """
     Retrieve additional context from the RAG knowledge base.
     
-    This tool allows agents to dynamically search the knowledge base
-    for additional context when the initially provided context is insufficient.
-    
     Args:
-        query: Search query (e.g., "transformer architecture details", "attention mechanism")
-        top_k: Number of documents to retrieve (default: 3, max: 5)
+        query: Search query
+        top_k: Number of documents to retrieve (max: 5)
         
     Returns:
-        Dictionary with:
-        - success (bool): Whether retrieval succeeded
-        - documents (list): Retrieved documents with content and source
-        - count (int): Number of documents retrieved
-        - query (str): Original query
-        - message (str): Status message
+        Dictionary with documents, count, and status message
     """
     try:
         # Import here to avoid circular imports

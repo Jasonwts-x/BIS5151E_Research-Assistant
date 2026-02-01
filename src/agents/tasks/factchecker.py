@@ -1,9 +1,28 @@
-"""FactChecker Task Definition"""
+"""
+FactChecker Task Definition.
+
+Defines the fact-checking task with strict verification requirements.
+
+Architecture:
+    Task depends on reviewer_task output and original context for verification.
+"""
+from __future__ import annotations
+
 from crewai import Task
- 
- 
+
+
 def create_factchecker_task(agent, reviewer_task, context: str) -> Task:
-    """Create fact-checking task with strict output rules."""
+    """
+    Create fact-checking task with strict output rules.
+    
+    Args:
+        agent: FactChecker agent instance
+        reviewer_task: Completed reviewer task (provides text to check)
+        context: Original retrieved context for verification
+        
+    Returns:
+        Configured Task instance
+    """
 
     description = f"""
         

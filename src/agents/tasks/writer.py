@@ -1,9 +1,30 @@
-"""Writer Task Definition"""
+"""
+Writer Task Definition.
+
+Defines the writing task with instructions and expected output.
+Supports both default mode (with context) and fallback mode (general knowledge).
+
+Architecture:
+    Task is passed to the Writer agent during crew execution.
+"""
+from __future__ import annotations
+
 from crewai import Task
 
 
 def create_writer_task(agent, topic: str, context: str, mode: str = "default") -> Task:
-    """Create writer task with minimal necessary instructions."""
+    """
+    Create writer task with mode-specific instructions.
+    
+    Args:
+        agent: Writer agent instance
+        topic: Research topic
+        context: Retrieved context (may be empty)
+        mode: "default" (with context) or "fallback" (general knowledge)
+        
+    Returns:
+        Configured Task instance
+    """
 
     if mode == "default":
         

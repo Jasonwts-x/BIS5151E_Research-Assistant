@@ -1,8 +1,12 @@
 """
-Citation Validation Tool
+Citation Validation Tool.
 
 Validates that citations in text match sources in context.
 Helps FactChecker agent verify citation accuracy programmatically.
+
+Architecture:
+    CrewAI tool decorator enables use by agents.
+    Provides structured validation feedback to guide citation corrections.
 """
 from __future__ import annotations
 
@@ -17,22 +21,13 @@ def validate_citation(text: str, citation_num: int, context: str) -> Dict[str, a
     """
     Validate that a citation [N] is properly used in text and exists in context.
     
-    This tool helps the FactChecker agent verify citations programmatically.
-    It checks:
-    1. Citation exists in text
-    2. Source exists in context
-    3. Citation is properly formatted
-    
     Args:
-        text: Text containing citation (e.g., "AI is growing [1].")
-        citation_num: Citation number to validate (e.g., 1)
+        text: Text containing citation
+        citation_num: Citation number to validate
         context: Source context with SOURCE markers
         
     Returns:
-        Dictionary with validation result:
-        - valid (bool): Whether citation is valid
-        - reason (str): Explanation of result
-        - suggestions (list): Optional suggestions for fixes
+        Dictionary with validation result and suggestions
     """
     # Check if citation exists in text
     citation_pattern = rf'\[{citation_num}\]'

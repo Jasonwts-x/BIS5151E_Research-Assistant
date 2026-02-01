@@ -1,9 +1,29 @@
-"""Translator Task Definition"""
+"""
+Translator Task Definition.
+
+Defines the translation task with language-specific formatting.
+
+Architecture:
+    Task depends on factchecker_task output.
+    Includes language-specific headers and formatting rules.
+"""
+from __future__ import annotations
+
 from crewai import Task
- 
- 
+
+
 def create_translator_task(agent, factchecker_task: Task, target_language: str) -> Task:
-    """Create translator task with minimal necessary instructions."""
+    """
+    Create translator task with language-specific instructions.
+    
+    Args:
+        agent: Translator agent instance
+        factchecker_task: Completed factchecker task (provides text to translate)
+        target_language: Target language code (de, fr, es, etc.)
+        
+    Returns:
+        Configured Task instance
+    """
     
     language_names = {
         'de': 'German',

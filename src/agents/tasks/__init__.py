@@ -1,5 +1,6 @@
 """
-Agent Task Definitions
+Agent Task Definitions Module.
+
 Task specifications for each agent role.
 Defines what each agent should do and the expected output format.
 """

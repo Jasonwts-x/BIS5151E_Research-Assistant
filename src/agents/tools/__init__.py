@@ -1,8 +1,8 @@
 """
-CrewAI Tools
+Agent Tools Module.
 
-Custom tools that agents can use during execution.
-Tools provide agents with specific capabilities beyond LLM generation.
+Custom tools for agents to perform specialized tasks.
+Includes text analysis and validation utilities.
 """
 from __future__ import annotations
 

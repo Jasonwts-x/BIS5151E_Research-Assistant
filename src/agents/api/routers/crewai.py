@@ -1,3 +1,12 @@
+"""
+CrewAI Service Router.
+
+Endpoints for synchronous and asynchronous crew execution.
+
+Architecture:
+    Provides both sync (/run) and async (/run/async) endpoints.
+    Async jobs are managed by JobManager and executed in background.
+"""
 from __future__ import annotations
 
 import logging
@@ -26,7 +35,12 @@ runner = get_crew_runner()
     summary="CrewAI service health check",
 )
 def health():
-    """Simple health check endpoint."""
+    """
+    Simple health check endpoint.
+    
+    Returns:
+        Status dictionary
+    """
     return {"status": "ok", "service": "crew"}
 
 
@@ -42,16 +56,14 @@ def run_crew_sync(request: CrewRunRequest) -> CrewRunResponse:
     
     **WARNING: This endpoint blocks for 30-60 seconds during execution.**
     
-    For non-blocking execution, use POST /run/async instead.
-    
-    Steps:
-    1. Retrieve relevant context from RAG pipeline
-    2. Run Writer agent to draft summary
-    3. Run Reviewer agent to improve clarity and coherence
-    4. Run FactChecker agent to verify all claims and citations
-    5. Evaluate output (TruLens + Guardrails + Performance)
-    6. Save outputs to outputs/ directory
-    7. Return final output with evaluation metrics
+    Args:
+        request: Crew run request with topic and language
+        
+    Returns:
+        Crew run response with final output and evaluation
+        
+    Raises:
+        HTTPException: If execution fails
     """
     try:
         logger.info(
@@ -99,14 +111,18 @@ async def run_crew_async(
     Execute the CrewAI research workflow asynchronously.
     
     **This endpoint returns immediately with a job_id.**
-    
+
     Use GET /status/{job_id} to check progress and retrieve results.
     
-    Steps:
-    1. Create job and return job_id immediately
-    2. Execute workflow in background
-    3. Poll GET /status/{job_id} to check completion
-    4. Retrieve results when status=completed
+    Args:
+        request: Crew run request
+        background_tasks: FastAPI background tasks
+        
+    Returns:
+        Async response with job_id for tracking
+        
+    Raises:
+        HTTPException: If job creation fails
     """
     try:
         logger.info(
@@ -156,11 +172,14 @@ def get_job_status(job_id: str) -> CrewStatusResponse:
     """
     Get the status of an async crew job.
     
-    Status values:
-    - **pending**: Job created but not started
-    - **running**: Job is currently executing
-    - **completed**: Job finished successfully (result available)
-    - **failed**: Job failed (error message available)
+    Args:
+        job_id: Job identifier
+        
+    Returns:
+        Job status with progress and result (if completed)
+        
+    Raises:
+        HTTPException: If job not found
     """
     try:
         logger.info("Status check requested for job: %s", job_id)

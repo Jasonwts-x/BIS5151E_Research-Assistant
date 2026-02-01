@@ -1,5 +1,6 @@
 """
-CrewAI Agents Module
+CrewAI Agents Module.
+
 Multi-agent research assistant powered by CrewAI.
 Provides crew runner for orchestrating Writer, Reviewer, and FactChecker agents.
 """
