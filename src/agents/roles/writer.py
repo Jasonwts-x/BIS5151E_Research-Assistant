@@ -43,6 +43,6 @@ def create_writer_agent(llm) -> Agent:
         allow_delegation=False,
         llm=llm,
         max_iter=1,
-        max_execution_time=300,
+        max_execution_time=600,
         tools=[retrieve_context],
     )
