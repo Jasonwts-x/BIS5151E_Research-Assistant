@@ -289,26 +289,20 @@ class ResearchCrew:
             agent=self.reviewer,
             writer_task=writer_task
         )
-       
-        factchecker_task = create_factchecker_task(
-            agent=self.factchecker,
-            reviewer_task=reviewer_task,
-            context=""
-        )
  
-        tasks = [writer_task, reviewer_task, factchecker_task]
+        tasks = [writer_task, reviewer_task]
+        agents_list = [self.writer, self.reviewer]
  
+        # Translation is added as a final sequential step if needed.
         if language != "en":
             translator_task = create_translator_task(
                 agent=self.translator,
-                factchecker_task=factchecker_task,
+                factchecker_task=reviewer_task,
                 target_language=language
             )
             tasks.append(translator_task)
-            agents_list = [self.writer, self.reviewer, self.factchecker, self.translator]
-        else:
-            agents_list = [self.writer, self.reviewer, self.factchecker]
-
+            agents_list.append(self.translator)
+        
         crew = Crew(
             agents=agents_list,
             tasks=tasks,
