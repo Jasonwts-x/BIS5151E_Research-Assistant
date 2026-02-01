@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Optional
+from typing import Optional, Generator
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
@@ -71,6 +71,12 @@ class EvaluationDatabase:
         except Exception as e:
             logger.error("Database health check failed: %s", e)
             return False
+        
+    def close(self):
+        """Close database connection."""
+        if self.engine:
+            self.engine.dispose()
+            logger.info("Database connection closed")
 
 
 # Singleton

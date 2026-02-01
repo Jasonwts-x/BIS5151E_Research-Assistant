@@ -163,38 +163,42 @@ class TruLensClient:
         metadata: Optional[Dict[str, Any]],
     ):
         """Store evaluation to database."""
-        from ..database import get_database
-        from ..models import EvaluationRecord, EvaluationScores
+        try:
+            from ..database import get_database
+            from ..models import EvaluationRecord, EvaluationScores
     
-        db = get_database()
+            db = get_database()
     
-        # Create evaluation record
-        record = EvaluationRecord(
-            record_id=record_id,
-            ts=datetime.utcnow(),
-            app_id=metadata.get("app_id", "research-assistant") if metadata else "research-assistant",
-            input=query,
-            output=answer,
-            tags=metadata.get("tags") if metadata else None,
-        )
+            # Create evaluation record
+            record = EvaluationRecord(
+                record_id=record_id,
+                ts=datetime.utcnow(),
+                app_id=metadata.get("app_id", "research-assistant") if metadata else "research-assistant",
+                input=query,
+                output=answer,
+                tags=metadata.get("tags") if metadata else None,
+            )
     
-        # Create scores record
-        trulens_data = evaluation.get("trulens", {})
-        scores = EvaluationScores(
-            record_id=record_id,
-            overall_score=evaluation.get("overall_score", 0.0),
-            groundedness=trulens_data.get("groundedness", 0.0),
-            answer_relevance=trulens_data.get("answer_relevance", 0.0),
-            context_relevance=trulens_data.get("context_relevance", 0.0),
-            citation_quality=trulens_data.get("citation_quality", 0.0),
-        )
+            # Create scores record
+            trulens_data = evaluation.get("trulens", {})
+            scores = EvaluationScores(
+                record_id=record_id,
+                overall_score=evaluation.get("overall_score", 0.0),
+                groundedness=trulens_data.get("groundedness", 0.0),
+                answer_relevance=trulens_data.get("answer_relevance", 0.0),
+                context_relevance=trulens_data.get("context_relevance", 0.0),
+                citation_quality=trulens_data.get("citation_quality", 0.0),
+            )
     
-        with db.get_session() as session:
-            session.add(record)
-            session.add(scores)
-            session.commit()
+            with db.get_session() as session:
+                session.add(record)
+                session.add(scores)
+                session.commit()
+                logger.info("✓ Stored evaluation record %s with scores to database", record_id)
     
-        logger.debug("Stored evaluation record %s with scores to database", record_id)
+        except Exception as e:
+            logger.error("Failed to store evaluation to database: %s", e, exc_info=True)
+            # Don't raise - evaluation storage failures shouldn't break the main workflow
 
     def get_leaderboard(self, limit: int = 100) -> List[Dict[str, Any]]:
         """
