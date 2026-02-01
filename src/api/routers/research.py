@@ -127,7 +127,7 @@ async def research_query(
             language=request.language,
         )
         
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with httpx.AsyncClient(timeout=1500.0) as client:
             response = await client.post(
                 f"{CREWAI_URL}/run",
                 json=crew_request.model_dump(),
@@ -158,7 +158,7 @@ async def research_query(
                     },
                 }
                 
-                async with httpx.AsyncClient(timeout=60.0) as client:
+                async with httpx.AsyncClient(timeout=600.0) as client:
                     eval_response = await client.post(
                         f"{EVAL_URL}/metrics/evaluate",
                         json=eval_request,
@@ -278,7 +278,7 @@ async def research_query_async(
             language=request.language,
         )
         
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
                 f"{CREWAI_URL}/run/async",
                 json=crew_request.model_dump(),
@@ -326,7 +326,7 @@ async def get_status(job_id: str) -> ResearchStatusResponse:
         HTTPException: If job not found or service unavailable
     """
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.get(f"{CREWAI_URL}/status/{job_id}")
             response.raise_for_status()
             
