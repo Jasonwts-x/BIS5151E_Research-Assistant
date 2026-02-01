@@ -27,7 +27,8 @@
 
 ## 🎯 Overview
 
-ResearchAssistantGPT is a **RAG-based research assistant** that generates **cited summaries** from academic papers using multi-agent AI workflows. The system combines retrieval-augmented generation with fact-checking agents to ensure accuracy and proper citation.
+Research-Assistant-GPT is a **RAG-based research assistant** that generates **cited summaries** from academic papers using multi-agent AI workflows. 
+The system combines retrieval-augmented generation with fact-checking agents to ensure accuracy and proper citation.
 
 **Key Features**:
 - 📚 **Automatic literature ingestion** from ArXiv and local files
@@ -61,7 +62,7 @@ This project demonstrates practical application of:
 1. **Literature Retrieval**: Fetch and index academic papers from ArXiv and local sources
 2. **Context-Aware Summarization**: Generate 300-word summaries grounded in source documents
 3. **Fact Verification**: Validate all claims against retrieved sources
-4. **Citation Discipline**: Ensure proper attribution with [1], [2], etc. markers
+4. **Citation Discipline**: Ensure proper citation with [1], [2], etc. markers
 5. **Quality Assurance**: Implement evaluation frameworks (TruLens, Guardrails AI)
 
 ### Learning Goals
@@ -98,7 +99,7 @@ weaviate-haystack==6.3.0     # Weaviate integration
 langchain-ollama==1.0.1      # LLM integration
 fastapi                      # Web framework
 httpx                        # Async HTTP client
-arxiv==2.1.0                # ArXiv paper fetching
+arxiv==2.1.0                 # ArXiv paper fetching
 ```
 
 ---
@@ -129,30 +130,30 @@ arxiv==2.1.0                # ArXiv paper fetching
         │                                   │
 ┌───────▼───────────────────────────────────▼──────────┐
 │                                                      │
-│  ┌─────────────┐        ┌──────────────┐            │
-│  │  Weaviate   │        │   Ollama     │            │
-│  │  Port 8080  │        │  Port 11434  │            │
-│  │             │        │              │            │
-│  │ • Hybrid    │        │ • LLM        │            │
-│  │   Search    │        │   Inference  │            │
-│  │ • Vector DB │        │ • qwen2.5:3b │            │
-│  └─────────────┘        └──────────────┘            │
-│                                                       │
-│  ┌─────────────┐                                    │
-│  │ PostgreSQL  │                                    │
-│  │  Port 5432  │                                    │
-│  │             │                                    │
-│  │ • n8n DB    │                                    │
-│  └─────────────┘                                    │
-│                                                       │
-└───────────────────────────────────────────────────────┘
+│  ┌─────────────┐        ┌──────────────┐             │
+│  │  Weaviate   │        │   Ollama     │             │
+│  │  Port 8080  │        │  Port 11434  │             │
+│  │             │        │              │             │
+│  │ • Hybrid    │        │ • LLM        │             │
+│  │   Search    │        │   Inference  │             │
+│  │ • Vector DB │        │ • qwen2.5:3b │             │
+│  └─────────────┘        └──────────────┘             │
+│                                                      │
+│  ┌─────────────┐                                     │
+│  │ PostgreSQL  │                                     │
+│  │  Port 5432  │                                     │
+│  │             │                                     │
+│  │ • n8n DB    │                                     │
+│  └─────────────┘                                     │
+│                                                      │
+└──────────────────────────────────────────────────────┘
 ```
 
 ### Request Flow
 ```
 1. User → n8n: Trigger workflow with research topic
-2. n8n → API: POST /rag/query {"query": "...", "language": "en"}
-3. API → CrewAI: POST /crew/run (proxy request)
+2. n8n → API: POST /research/query {"query": "...", "language": "en"}
+3. API → CrewAI: POST /crewai/run (proxy request)
 4. CrewAI → Weaviate: Retrieve top-k relevant chunks
 5. CrewAI → Ollama: Run multi-agent workflow:
    ├─ Writer: Draft summary from context
