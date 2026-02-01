@@ -5,16 +5,22 @@ Endpoints for retrieving evaluation metrics.
 from __future__ import annotations
 
 import logging
+import uuid
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, status
+from sqlalchemy.exc import SQLAlchemyError
 
 from ...database import get_database
+from ...models import EvaluationRecord, EvaluationScores, TruLensMetrics
 from ...schemas.evaluation import (
     EvaluationRequest,
     EvaluationResponse,
+    EvaluationSummary,
     LeaderboardEntry,
     LeaderboardResponse,
+    TruLensMetrics as TruLensMetricsSchema,
 )
 from ...trulens import TruLensClient
 
@@ -38,9 +44,13 @@ async def evaluate(request: EvaluationRequest) -> EvaluationResponse:
     - Guardrails validation results
     - Quality metrics (ROUGE, BLEU, semantic similarity)
     - Performance metrics (if available)
+    
+    CRITICAL: This now STORES evaluation to database for dashboard visibility.
     """
     try:
-        # Evaluate using TruLens client (stores to DB)
+        logger.info("Starting evaluation for query: %s", request.query[:50])
+        
+        # Step 1: Compute evaluation metrics using TruLens
         client = TruLensClient(enabled=True)
         evaluation = await client.evaluate_async(
             query=request.query,
@@ -49,30 +59,92 @@ async def evaluate(request: EvaluationRequest) -> EvaluationResponse:
             language=request.language,
             metadata=request.metadata,
         )
-
-        # Build response
-        from datetime import datetime
-
-        from ...schemas.evaluation import EvaluationSummary
-
+        
+        # Generate record ID
+        record_id = str(uuid.uuid4())
+        timestamp = datetime.utcnow()
+        
+        logger.info("Evaluation computed: record_id=%s, overall_score=%.2f", 
+                   record_id, evaluation.get("overall_score", 0))
+        
+        # Step 2: Store to database
+        db = get_database()
+        try:
+            with db.get_session() as session:
+                # Create evaluation record
+                eval_record = EvaluationRecord(
+                    record_id=record_id,
+                    timestamp=timestamp,
+                    input=request.query,
+                    output=request.answer,
+                    context=request.context,
+                    language=request.language,
+                    app_id=request.metadata.get("app_id", "research_assistant") if request.metadata else "research_assistant",
+                    metadata_json=request.metadata or {},
+                )
+                session.add(eval_record)
+                
+                # Create TruLens metrics record
+                trulens_data = evaluation.get("trulens", {})
+                trulens_record = TruLensMetrics(
+                    record_id=record_id,
+                    timestamp=timestamp,
+                    groundedness=trulens_data.get("groundedness"),
+                    groundedness_reasoning=trulens_data.get("groundedness_reasoning"),
+                    answer_relevance=trulens_data.get("answer_relevance"),
+                    answer_relevance_reasoning=trulens_data.get("answer_relevance_reasoning"),
+                    context_relevance=trulens_data.get("context_relevance"),
+                    context_relevance_reasoning=trulens_data.get("context_relevance_reasoning"),
+                    citation_quality=trulens_data.get("citation_quality"),
+                    citation_quality_reasoning=trulens_data.get("citation_quality_reasoning"),
+                )
+                session.add(trulens_record)
+                
+                # Create evaluation scores record
+                scores_record = EvaluationScores(
+                    record_id=record_id,
+                    timestamp=timestamp,
+                    overall_score=evaluation.get("overall_score", 0),
+                    groundedness=trulens_data.get("groundedness"),
+                    answer_relevance=trulens_data.get("answer_relevance"),
+                    context_relevance=trulens_data.get("context_relevance"),
+                    citation_quality=trulens_data.get("citation_quality"),
+                )
+                session.add(scores_record)
+                
+                # Commit transaction
+                session.commit()
+                logger.info("✅ Evaluation stored to database: record_id=%s", record_id)
+                
+        except SQLAlchemyError as e:
+            logger.error("❌ Failed to store evaluation to database: %s", e)
+            # Don't fail the request, just log the error
+            logger.exception("Database storage error")
+        
+        # Step 3: Build response
         summary = EvaluationSummary(
             passed=evaluation.get("overall_score", 0) >= 0.6,
             overall_score=evaluation.get("overall_score", 0),
             issues=[],
             warnings=[],
         )
-
+        
         response = EvaluationResponse(
-            record_id=evaluation["record_id"],
-            timestamp=datetime.now(),
+            record_id=record_id,
+            timestamp=timestamp,
             query=request.query,
             answer_length=len(request.answer),
             summary=summary,
-            trulens=evaluation.get("trulens"),
-            guardrails=None,
+            trulens=TruLensMetricsSchema(
+                groundedness=trulens_data.get("groundedness"),
+                answer_relevance=trulens_data.get("answer_relevance"),
+                context_relevance=trulens_data.get("context_relevance"),
+                citation_quality=trulens_data.get("citation_quality"),
+            ),
+            guardrails=None,  # TODO: Add guardrails if available
         )
-
-        logger.info("Evaluation completed: record_id=%s", evaluation["record_id"])
+        
+        logger.info("Evaluation completed successfully: record_id=%s", record_id)
         return response
 
     except Exception as e:
@@ -92,31 +164,18 @@ def get_summary():
     """
     Get aggregate statistics across all evaluations.
     
-    Returns:
-    - Total evaluation count
-    - Average scores across all metrics
-    - Success rates
+    Returns summary statistics for display on overview page.
     """
     try:
         logger.info("Summary statistics requested")
         
         db = get_database()
-        
         with db.get_session() as session:
-            from ...models import EvaluationRecord, EvaluationScores
-            from sqlalchemy import func
-
-            stats = session.query(
-                func.count(EvaluationScores.id).label('total'),
-                func.avg(EvaluationScores.overall_score).label('avg_overall'),
-                func.avg(EvaluationScores.groundedness).label('avg_groundedness'),
-                func.avg(EvaluationScores.answer_relevance).label('avg_answer_relevance'),
-                func.avg(EvaluationScores.context_relevance).label('avg_context_relevance'),
-            ).first()
+            # Count total evaluations
+            total_count = session.query(EvaluationScores).count()
             
-            total = session.query(func.count(EvaluationRecord.record_id)).scalar() or 0
-            
-            if total == 0:
+            if total_count == 0:
+                logger.info("No evaluations in database yet")
                 return {
                     "total_evaluations": 0,
                     "average_overall_score": 0.0,
@@ -125,73 +184,32 @@ def get_summary():
                     "average_context_relevance": 0.0,
                 }
             
-            return {
-                "total_evaluations": stats.total or 0,
-                "average_overall_score": round(float(stats.avg_overall or 0), 3),
-                "average_groundedness": round(float(stats.avg_groundedness or 0), 3),
-                "average_answer_relevance": round(float(stats.avg_answer_relevance or 0), 3),
-                "average_context_relevance": round(float(stats.avg_context_relevance or 0), 3),
+            # Calculate averages
+            from sqlalchemy import func
+            
+            averages = session.query(
+                func.avg(EvaluationScores.overall_score).label("avg_overall"),
+                func.avg(EvaluationScores.groundedness).label("avg_ground"),
+                func.avg(EvaluationScores.answer_relevance).label("avg_ans_rel"),
+                func.avg(EvaluationScores.context_relevance).label("avg_ctx_rel"),
+            ).first()
+            
+            result = {
+                "total_evaluations": total_count,
+                "average_overall_score": float(averages.avg_overall or 0),
+                "average_groundedness": float(averages.avg_ground or 0),
+                "average_answer_relevance": float(averages.avg_ans_rel or 0),
+                "average_context_relevance": float(averages.avg_ctx_rel or 0),
             }
             
-    except Exception as e:
-        logger.exception("Failed to fetch summary")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch summary: {str(e)}",
-        ) from e
-
-
-@router.get(
-    "/recent",
-    status_code=status.HTTP_200_OK,
-    summary="Get recent evaluations",
-)
-def get_recent(limit: int = Query(default=10, ge=1, le=100)):
-    """
-    Get most recent evaluation records.
-    
-    Args:
-        limit: Maximum number of records to return (1-100)
-        
-    Returns:
-        List of recent evaluations with basic info
-    """
-    try:
-        logger.info("Recent evaluations requested (limit=%d)", limit)
-        
-        db = get_database()
-        
-        with db.get_session() as session:
-            from ...models import EvaluationRecord
-            
-            records = (
-                session.query(EvaluationRecord)
-                .order_by(EvaluationRecord.ts.desc())
-                .limit(limit)
-                .all()
-            )
-            
-            evaluations = []
-            for record in records:
-                evaluations.append({
-                    "record_id": record.record_id,
-                    "timestamp": record.ts.isoformat() if record.ts else None,
-                    "query": record.input[:100] + "..." if len(record.input) > 100 else record.input,
-                    "answer_preview": record.output[:100] + "..." if len(record.output) > 100 else record.output,
-                    "app_id": record.app_id,
-                })
-            
-            return {
-                "total": len(evaluations),
-                "limit": limit,
-                "evaluations": evaluations
-            }
+            logger.info("Summary computed: %d evaluations", total_count)
+            return result
             
     except Exception as e:
-        logger.exception("Failed to fetch recent evaluations")
+        logger.exception("Failed to compute summary")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch recent evaluations: {str(e)}",
+            detail=f"Failed to compute summary: {str(e)}",
         ) from e
 
 
@@ -201,41 +219,65 @@ def get_recent(limit: int = Query(default=10, ge=1, le=100)):
     status_code=status.HTTP_200_OK,
     summary="Get evaluation leaderboard",
 )
-def get_leaderboard(
+def leaderboard(
     limit: int = Query(default=100, ge=1, le=1000),
     app_id: Optional[str] = Query(default=None),
 ) -> LeaderboardResponse:
     """
-    Get leaderboard of all evaluations.
-
-    Shows top-performing queries sorted by overall score.
+    Get leaderboard of all evaluations sorted by overall score.
+    
+    Shows top-performing queries based on evaluation scores.
     """
     try:
         logger.info("Leaderboard requested (limit=%d, app_id=%s)", limit, app_id)
-
-        # Get from database
-        client = TruLensClient(enabled=True)
-        records = client.get_leaderboard(limit=limit)
-
-        # Convert to leaderboard entries
-        from datetime import datetime
-
-        entries = [
-            LeaderboardEntry(
-                record_id=r["record_id"],
-                timestamp=datetime.fromisoformat(r["timestamp"]),
-                query=r["query"],
-                overall_score=0.0,  # TODO: Calculate from stored metrics
-                total_time=r.get("total_time"),
+        
+        db = get_database()
+        with db.get_session() as session:
+            # Query for leaderboard entries
+            query = (
+                session.query(
+                    EvaluationRecord.record_id,
+                    EvaluationRecord.timestamp,
+                    EvaluationRecord.input,
+                    EvaluationScores.overall_score,
+                    EvaluationScores.groundedness,
+                    EvaluationScores.answer_relevance,
+                    EvaluationScores.context_relevance,
+                )
+                .join(EvaluationScores, EvaluationRecord.record_id == EvaluationScores.record_id)
+                .order_by(EvaluationScores.overall_score.desc())
             )
-            for r in records
-        ]
-
-        return LeaderboardResponse(
-            total_records=len(entries),
-            entries=entries,
-        )
-
+            
+            if app_id:
+                query = query.filter(EvaluationRecord.app_id == app_id)
+            
+            query = query.limit(limit)
+            
+            results = query.all()
+            
+            entries = [
+                LeaderboardEntry(
+                    record_id=r.record_id,
+                    timestamp=r.timestamp,
+                    query=r.input,
+                    overall_score=float(r.overall_score or 0),
+                    groundedness=float(r.groundedness or 0),
+                    answer_relevance=float(r.answer_relevance or 0),
+                    context_relevance=float(r.context_relevance or 0),
+                    total_time=0.0,  # TODO: Add from performance metrics
+                    passed_guardrails=True,  # TODO: Add from guardrails
+                )
+                for r in results
+            ]
+            
+            logger.info("Leaderboard retrieved: %d entries", len(entries))
+            
+            return LeaderboardResponse(
+                total_records=len(entries),
+                entries=entries,
+                filters={"app_id": app_id} if app_id else {},
+            )
+            
     except Exception as e:
         logger.exception("Failed to retrieve leaderboard")
         raise HTTPException(
@@ -252,49 +294,72 @@ def get_leaderboard(
 )
 def get_record(record_id: str) -> EvaluationResponse:
     """
-    Get detailed evaluation record by ID.
-
-    Returns all metrics and metadata for a specific evaluation.
+    Get detailed evaluation metrics for a specific record.
+    
+    Returns all metrics including TruLens scores, guardrails, performance.
     """
     try:
-        logger.info("Record requested: %s", record_id)
-
-        # Get from database
-        client = TruLensClient(enabled=True)
-        record = client.get_record(record_id)
-
-        if not record:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Record not found: {record_id}",
+        logger.info("Fetching evaluation record: %s", record_id)
+        
+        db = get_database()
+        with db.get_session() as session:
+            # Query for record
+            record = (
+                session.query(EvaluationRecord)
+                .filter_by(record_id=record_id)
+                .first()
             )
-
-        # Convert to response
-        from datetime import datetime
-
-        from ...schemas.evaluation import EvaluationSummary
-
-        summary = EvaluationSummary(
-            passed=True,
-            overall_score=0.75,  # TODO: Calculate from stored metrics
-            issues=[],
-            warnings=[],
-        )
-
-        response = EvaluationResponse(
-            record_id=record_id,
-            timestamp=datetime.fromisoformat(record["timestamp"]),
-            query=record["query"],
-            answer_length=len(record["answer"]),
-            summary=summary,
-            trulens=None,
-            guardrails=None,
-            performance=record.get("performance"),
-            quality=record.get("quality"),
-        )
-
-        return response
-
+            
+            if not record:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Evaluation record not found: {record_id}",
+                )
+            
+            # Get TruLens metrics
+            trulens_record = (
+                session.query(TruLensMetrics)
+                .filter_by(record_id=record_id)
+                .first()
+            )
+            
+            # Get scores
+            scores = (
+                session.query(EvaluationScores)
+                .filter_by(record_id=record_id)
+                .first()
+            )
+            
+            # Build response
+            summary = EvaluationSummary(
+                passed=scores.overall_score >= 0.6 if scores else False,
+                overall_score=float(scores.overall_score or 0) if scores else 0.0,
+                issues=[],
+                warnings=[],
+            )
+            
+            trulens_data = None
+            if trulens_record:
+                trulens_data = TruLensMetricsSchema(
+                    groundedness=trulens_record.groundedness,
+                    answer_relevance=trulens_record.answer_relevance,
+                    context_relevance=trulens_record.context_relevance,
+                    citation_quality=trulens_record.citation_quality,
+                )
+            
+            response = EvaluationResponse(
+                record_id=record.record_id,
+                timestamp=record.timestamp,
+                query=record.input,
+                answer_length=len(record.output or ""),
+                summary=summary,
+                trulens=trulens_data,
+                guardrails=None,
+            )
+            
+            logger.info("Record retrieved: %s", record_id)
+            return response
+            
     except HTTPException:
         raise
     except Exception as e:
