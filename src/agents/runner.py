@@ -75,6 +75,7 @@ class CrewRunner:
         logger.info("Initializing CrewRunner...")
         
         self.config = load_config()
+        self.rag_pipeline = None  # Initialize to None first
         
         # Initialize RAG pipeline for document retrieval
         # Uses try-except because RAG might not be available in all environments
@@ -83,31 +84,47 @@ class CrewRunner:
             logger.info("✓ RAG pipeline initialized successfully")
         except Exception as e:
             logger.warning(
-                "Failed to initialize RAG pipeline: %s. Crew will run without context.", e
+                "Failed to initialize RAG pipeline: %s.", e
+            )
+            logger.info(
+                "RAG pipeline will be initialized on first use. "
+                "Collection will be created when you run ingestion."
             )
             self.rag_pipeline = None
         
-        # Initialize LLM with configuration
-        # CrewAI requires "ollama/" prefix for Ollama models
-        llm_config = self.config.llm
-        agent_config = self.config.agents.llm
+        # Initialize LLM
+        try:
+            llm_config = self.config.agents.llm
+            llm_base_url = llm_config.base_url
+            llm_model = llm_config.model
+            
+            self.llm = LLM(
+                model=f"ollama/{llm_model}",
+                base_url=llm_base_url,
+                temperature=llm_config.temperature,
+            )
+            logger.info("✓ LLM initialized: %s", llm_model)
+        except Exception as e:
+            # If LLM init fails, clean up pipeline before re-raising
+            if self.rag_pipeline is not None:
+                try:
+                    self.rag_pipeline.close()
+                except Exception:
+                    pass
+            raise RuntimeError(f"Failed to initialize LLM: {e}") from e
         
-        self.llm = LLM(
-            model=f"ollama/{llm_config.model}",
-            base_url=llm_config.host,
-            temperature=agent_config.temperature,
-        )
-        logger.info(
-            "✓ LLM initialized: model=%s, host=%s, temp=%.2f",
-            llm_config.model,
-            llm_config.host,
-            agent_config.temperature,
-        )
-        
-        # Initialize crew once (singleton pattern for better performance)
-        logger.info("Initializing ResearchCrew (singleton)...")
-        self.crew = ResearchCrew(llm=self.llm)
-        logger.info("✓ Research crew initialized with 4 agents")
+        # Initialize crew (reused across requests)
+        try:
+            self.crew = ResearchCrew(self.llm)
+            logger.info("✓ ResearchCrew initialized")
+        except Exception as e:
+            # Clean up on failure
+            if self.rag_pipeline is not None:
+                try:
+                    self.rag_pipeline.close()
+                except Exception:
+                    pass
+            raise RuntimeError(f"Failed to initialize crew: {e}") from e
         
         # Initialize optional safety and monitoring components
         self.input_validator = None
@@ -142,17 +159,17 @@ class CrewRunner:
         logger.info("=" * 70)
 
     def __del__(self):
-        """
-        Cleanup resources on garbage collection.
-        
-        Closes RAG pipeline connection to prevent resource leaks.
-        """
+        """Destructor - cleanup resources."""
+        self.close()
+
+    def close(self):
+        """Close and cleanup all resources."""
         if self.rag_pipeline is not None:
             try:
                 self.rag_pipeline.close()
                 logger.debug("RAG pipeline closed")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Error closing RAG pipeline: %s", e)
 
     def run(self, topic: str, language: str = "en") -> CrewResult:
         """
