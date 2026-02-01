@@ -422,3 +422,95 @@ def reset_index() -> ResetIndexResponse:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to reset index: {str(e)}",
         ) from e
+    
+
+@router.get(
+    "/debug/weaviate-direct",
+    status_code=status.HTTP_200_OK,
+    summary="🔧 Debug: Direct Weaviate query (bypass Python client)",
+)
+def debug_weaviate_direct():
+    """
+    Bypass Python client and query Weaviate directly via GraphQL.
+    
+    This helps diagnose if documents are in Weaviate but the Python client
+    is not seeing them due to connection/caching issues.
+    
+    Returns:
+        Direct count from Weaviate GraphQL API
+    """
+    import httpx
+    
+    try:
+        # GraphQL query to count documents
+        graphql_query = {
+            "query": """
+            {
+              Aggregate {
+                ResearchDocument {
+                  meta {
+                    count
+                  }
+                }
+              }
+            }
+            """
+        }
+        
+        # Query Weaviate directly via HTTP
+        response = httpx.post(
+            "http://weaviate:8080/v1/graphql",
+            json=graphql_query,
+            timeout=10.0
+        )
+        response.raise_for_status()
+        result = response.json()
+        
+        count = result.get("data", {}).get("Aggregate", {}).get("ResearchDocument", {}).get("meta", {}).get("count", 0)
+        
+        # Also try fetching sample objects
+        sample_query = {
+            "query": """
+            {
+              Get {
+                ResearchDocument(limit: 3) {
+                  content
+                  source
+                  chunk_index
+                }
+              }
+            }
+            """
+        }
+        
+        sample_response = httpx.post(
+            "http://weaviate:8080/v1/graphql",
+            json=sample_query,
+            timeout=10.0
+        )
+        sample_result = sample_response.json()
+        samples = sample_result.get("data", {}).get("Get", {}).get("ResearchDocument", [])
+        
+        return {
+            "success": True,
+            "method": "Direct GraphQL to Weaviate",
+            "document_count": count,
+            "sample_documents_fetched": len(samples),
+            "samples": [
+                {
+                    "source": s.get("source"),
+                    "chunk_index": s.get("chunk_index"),
+                    "content_preview": s.get("content", "")[:100] + "..."
+                }
+                for s in samples[:3]
+            ] if samples else [],
+            "message": f"Direct Weaviate query: {count} documents found" if count > 0 else "No documents found in Weaviate"
+        }
+        
+    except Exception as e:
+        logger.exception("Direct Weaviate query failed")
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "Failed to query Weaviate directly"
+        }

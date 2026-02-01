@@ -293,16 +293,31 @@ class SchemaManager:
     def get_stats(self) -> Dict[str, Any]:
         """
         Get index statistics.
-        
+    
         Returns:
             Dictionary with document count, schema version, existence status, etc.
         """
         try:
             collection = self.client.collections.get(self.collection_name)
 
-            # Count documents
-            result = collection.aggregate.over_all(total_count=True)
-            doc_count = result.total_count
+            # Method 1: Try aggregate.over_all() first
+            try:
+                result = collection.aggregate.over_all(total_count=True)
+                doc_count = result.total_count if result and hasattr(result, 'total_count') else 0
+            except Exception as agg_error:
+                logger.warning("aggregate.over_all() failed: %s, trying alternative method", agg_error)
+                doc_count = 0
+        
+            # Method 2: If aggregate returns 0, try querying with limit
+            if doc_count == 0:
+                try:
+                    # Query with limit to get actual count
+                    query_result = collection.query.fetch_objects(limit=10000)
+                    doc_count = len(query_result.objects) if query_result else 0
+                    logger.info("Used fetch_objects() for count: %d documents", doc_count)
+                except Exception as fetch_error:
+                    logger.warning("fetch_objects() also failed: %s", fetch_error)
+                    doc_count = 0
 
             return {
                 "collection_name": self.collection_name,
@@ -311,7 +326,7 @@ class SchemaManager:
                 "exists": True,
             }
         except Exception as e:
-            logger.error("Failed to get stats: %s", e)
+            logger.error("Failed to get stats: %s", e, exc_info=True)
             return {
                 "collection_name": self.collection_name,
                 "exists": False,

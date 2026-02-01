@@ -241,6 +241,14 @@ class IngestionEngine:
                 skipped,
             )
 
+            try:
+                collection = self.client.collections.get(self.schema_manager.collection_name)
+                test_fetch = collection.query.fetch_objects(limit=5)
+                actual_count = len(test_fetch.objects) if test_fetch and test_fetch.objects else 0
+                logger.info("POST-INGESTION VERIFICATION: Collection now has %d documents (sampled)", actual_count)
+            except Exception as verify_error:
+                logger.warning("Post-ingestion verification failed: %s", verify_error)            
+
             return IngestionResult(
                 source=source.get_source_name(),
                 documents_loaded=len(documents),

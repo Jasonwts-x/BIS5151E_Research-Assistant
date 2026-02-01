@@ -276,6 +276,24 @@ class RAGPipeline:
         # Get Weaviate collection
         collection = self.client.collections.get(self.collection_name)
 
+        # DIAGNOSTIC: Check if collection has any documents before querying
+        try:
+            # Quick sanity check - fetch 1 object to verify collection has data
+            test_fetch = collection.query.fetch_objects(limit=1)
+            collection_has_data = test_fetch and len(test_fetch.objects) > 0
+            logger.info(
+                "Pre-query diagnostic: collection '%s' has data: %s",
+                self.collection_name,
+                collection_has_data
+            )
+            if not collection_has_data:
+                logger.warning(
+                    "Collection '%s' appears empty! No documents will be retrieved.",
+                    self.collection_name
+                )
+        except Exception as diag_error:
+            logger.warning("Pre-query diagnostic failed: %s", diag_error)
+
         # Hybrid search: alpha=0.55 favors vector search over BM25
         # This balances semantic understanding with keyword matching
         response = collection.query.hybrid(
@@ -285,6 +303,10 @@ class RAGPipeline:
             limit=top_k,
             return_metadata=['score'],
         )
+
+        # DIAGNOSTIC: Log response details
+        result_count = len(response.objects) if response and response.objects else 0
+        logger.info("Hybrid search returned %d results (requested top_k=%d)", result_count, top_k)
 
         # Convert Weaviate objects to Haystack Documents with smart truncation
         docs = []
