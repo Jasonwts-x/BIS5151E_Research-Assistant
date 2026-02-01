@@ -1,8 +1,13 @@
 """
-Main API Gateway Server
+Main API Gateway Server.
 
 FastAPI application serving as the primary entry point for all services.
 Routes requests to research, RAG, CrewAI, Ollama, and system endpoints.
+
+Architecture:
+    - Initializes FastAPI app with OpenAPI documentation
+    - Registers routers in priority order (system → research → services)
+    - Provides centralized logging and health monitoring
 """
 from __future__ import annotations
 

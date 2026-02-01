@@ -1,8 +1,12 @@
 """
-Research API Schemas
+Research API Schemas.
 
 Schemas for the primary research workflow endpoints.
 These provide a clean, user-friendly interface for research queries.
+
+Architecture Note:
+    These schemas are designed for end users and abstract away
+    the underlying RAG + CrewAI + Evaluation complexity.
 """
 from __future__ import annotations
 
@@ -86,13 +90,13 @@ class ResearchQueryResponse(BaseModel):
 
 class ResearchAsyncResponse(BaseModel):
     """
-    Response from async research query.
+    Response from async research query submission.
     
     Attributes:
         job_id: Unique job identifier for status tracking
         status: Current job status (pending, running, completed, failed)
         message: Human-readable status message
-        estimated_time: Estimated completion time in seconds
+        query: Original research question
     """
     job_id: str = Field(..., description="Unique job identifier")
     status: str = Field(
@@ -100,10 +104,7 @@ class ResearchAsyncResponse(BaseModel):
         description="Job status (pending, running, completed, failed)",
     )
     message: str = Field(..., description="Human-readable status message")
-    estimated_time: Optional[int] = Field(
-        None,
-        description="Estimated completion time in seconds",
-    )
+    query: Optional[str] = Field(None, description="Original research question")
 
 
 class ResearchStatusResponse(BaseModel):
@@ -113,7 +114,7 @@ class ResearchStatusResponse(BaseModel):
     Attributes:
         job_id: Unique job identifier
         status: Current job status
-        progress: Progress percentage (0-100)
+        progress: Progress percentage (0.0-1.0)
         created_at: Job creation timestamp
         started_at: Job start timestamp (if started)
         completed_at: Job completion timestamp (if completed)

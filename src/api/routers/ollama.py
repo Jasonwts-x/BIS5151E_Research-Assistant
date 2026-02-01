@@ -1,3 +1,14 @@
+"""
+Ollama Router.
+
+Endpoints for interacting with the Ollama LLM service.
+Provides model management and direct chat completion.
+
+Architecture Note:
+    This router provides low-level access to Ollama for testing/debugging.
+    For production research queries, use /research/query which includes
+    RAG retrieval and multi-agent processing.
+"""
 from __future__ import annotations
 
 import logging
@@ -43,11 +54,17 @@ def ollama_info(
     Returns Ollama service status, configured model, and list of available models.
     
     Useful for debugging and verifying Ollama connectivity.
+    
+    Args:
+        cfg: Application configuration (injected dependency)
+        
+    Returns:
+        Ollama service information with health status and available models
     """
     base_url = cfg.llm.host
     configured_model = cfg.llm.model
 
-    # Check health
+    # Check Ollama health via /api/tags endpoint
     try:
         resp = requests.get(f"{base_url.rstrip('/')}/api/tags", timeout=5)
         is_healthy = resp.status_code == 200
@@ -55,13 +72,13 @@ def ollama_info(
         logger.error("Failed to reach Ollama at %s: %s", base_url, e)
         is_healthy = False
 
-    # Get available models
+    # Get available models if service is healthy
     available_models: list[str] = []
     if is_healthy:
         try:
             models_data = ollama_list()
             available_models = [
-                m.get("name") or m.get("model", "") 
+                m.get("name") or m.get("model", "")
                 for m in models_data.get("models", [])
             ]
         except Exception as e:
@@ -86,6 +103,13 @@ def list_models() -> OllamaModelsResponse:
     Returns detailed information about all models available in Ollama.
     
     Equivalent to running `ollama list` in the CLI.
+    Includes model name, size, digest, and modification timestamp.
+    
+    Returns:
+        List of available models with metadata
+        
+    Raises:
+        HTTPException: If Ollama service is unavailable
     """
     try:
         data = ollama_list()
@@ -109,7 +133,7 @@ def list_models() -> OllamaModelsResponse:
 
 
 # ============================================================================
-# Chat Completion (Placeholder for Step D)
+# Chat Completion
 # ============================================================================
 
 
@@ -127,22 +151,35 @@ def chat_completion(
     Direct chat completion endpoint using Ollama.
     
     **Note**: This is a low-level endpoint for testing/debugging.
-    For production use, prefer the `/rag/query` endpoint which includes
+    For production use, prefer the `/research/query` endpoint which includes
     retrieval-augmented generation and multi-agent processing.
     
+    Args:
+        payload: Chat request with messages and optional parameters
+        cfg: Application configuration (injected dependency)
+        
+    Returns:
+        Chat completion response with generated message
+        
+    Raises:
+        HTTPException: If chat completion fails
+    
     TODO (Step D - CrewAI Integration):
-    - Add streaming support
-    - Integrate with CrewAI tool calling if needed
+        - Add streaming support
+        - Integrate with CrewAI tool calling if needed
     """
     model = payload.model or cfg.llm.model
 
     try:
+        # Convert Pydantic models to Ollama format
         messages = [{"role": m.role, "content": m.content} for m in payload.messages]
-        
+
+        # Build options dict
         options = {}
         if payload.temperature is not None:
             options["temperature"] = payload.temperature
 
+        # Call Ollama
         response = chat(
             model=model,
             messages=messages,
@@ -181,11 +218,20 @@ def pull_model(payload: OllamaPullRequest) -> OllamaPullResponse:
     """
     Trigger download of a new model.
     
+    Args:
+        payload: Pull request with model name
+        
+    Returns:
+        Pull status response
+        
+    Raises:
+        HTTPException: Not implemented (501)
+    
     TODO (Step G - QoL):
-    - Implement actual model pulling
-    - Consider making this async (long-running operation)
-    - Add progress tracking endpoint
-    - Add webhook/callback when complete
+        - Implement actual model pulling
+        - Consider making this async (long-running operation)
+        - Add progress tracking endpoint
+        - Add webhook/callback when complete
     """
     raise HTTPException(
         status_code=status.HTTP_501_NOT_IMPLEMENTED,

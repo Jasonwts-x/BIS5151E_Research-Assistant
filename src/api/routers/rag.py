@@ -1,7 +1,12 @@
 """
-RAG API Router
+RAG API Router.
 
 Endpoints for querying and managing the RAG system.
+Handles document ingestion, retrieval, and index management.
+
+Architecture Note:
+    This router provides retrieval-only operations. For complete research
+    workflows with multi-agent processing, use /research/query instead.
 """
 from __future__ import annotations
 
@@ -32,10 +37,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/rag", tags=[APITag.RAG])
 
-# ============================================================================
-# Configuration - Data Directories
-# ============================================================================
-
+# Data directory configuration
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DATA_RAW_DIR = PROJECT_ROOT / "data" / "raw"
 DATA_ARXIV_DIR = PROJECT_ROOT / "data" / "arxiv"
@@ -94,6 +96,9 @@ async def rag_query(
         
     Returns:
         Retrieved documents with sources (no answer generated)
+        
+    Raises:
+        HTTPException: If retrieval fails
     """
     try:
         logger.info("RAG retrieval-only query: %s", payload.query)
@@ -111,9 +116,9 @@ async def rag_query(
             if source not in sources:
                 sources.append(source)
         
-        # Format document excerpts for preview
+        # Format document excerpts for preview (first 3 chunks)
         excerpts = []
-        for i, doc in enumerate(docs[:3], 1):  # Show first 3 excerpts
+        for i, doc in enumerate(docs[:3], 1):
             excerpt = doc.content[:200] + "..." if len(doc.content) > 200 else doc.content
             excerpts.append(f"[{i}] {excerpt}")
         
@@ -141,7 +146,7 @@ async def rag_query(
 
 
 # ============================================================================
-# Schema Endpoints - Manage Schemas
+# Schema Endpoints
 # ============================================================================
 
 
@@ -154,62 +159,33 @@ def create_schema():
     """
     Create the Weaviate collection schema if it doesn't exist.
     
-    This is useful to initialize the database before ingesting documents.
+    Useful to initialize the database before ingesting documents.
     Safe to call multiple times - won't recreate if already exists.
+    
+    Returns:
+        Success message with schema details
     """
     try:
-        from ...rag.ingestion.schema import SchemaManager
-        from ...utils.config import load_config
-        import weaviate
-        
-        cfg = load_config()
-        
-        # Connect to Weaviate
-        logger.info("Connecting to Weaviate at %s", cfg.weaviate.url)
-        
-        from urllib.parse import urlparse
-        parsed = urlparse(cfg.weaviate.url if cfg.weaviate.url.startswith('http') else f'http://{cfg.weaviate.url}')
-        host = parsed.hostname or 'weaviate'
-        port = parsed.port or 8080
-        
-        client = weaviate.connect_to_local(host=host, port=port)
-        
-        # Check if collection exists
-        collection_name = cfg.weaviate.index_name
-        exists = client.collections.exists(collection_name)
-        
-        if exists:
-            logger.info("Collection '%s' already exists", collection_name)
-            return {
-                "status": "already_exists",
-                "collection_name": collection_name,
-                "message": f"Collection '{collection_name}' already exists"
-            }
-        
-        # Create schema
-        logger.info("Creating collection '%s'", collection_name)
-        schema_manager = SchemaManager(
-            client=client,
-            collection_name=collection_name,
-            embedding_model=cfg.weaviate.embedding_model
-        )
-        schema_manager.create_schema()
-        
-        client.close()
-        
-        logger.info("✓ Collection '%s' created successfully", collection_name)
-        
-        return {
-            "status": "created",
-            "collection_name": collection_name,
-            "message": f"Collection '{collection_name}' created successfully"
-        }
-        
+        with IngestionEngine() as engine:
+            stats = engine.get_stats()
+            
+            if stats["exists"]:
+                return {
+                    "message": "Schema already exists",
+                    "collection_name": stats["collection_name"],
+                    "schema_version": stats["schema_version"],
+                }
+            else:
+                return {
+                    "message": "Schema created",
+                    "collection_name": stats["collection_name"],
+                    "schema_version": stats["schema_version"],
+                }
     except Exception as e:
-        logger.exception("Failed to create schema")
+        logger.exception("Schema creation failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create schema: {str(e)}"
+            detail=f"Schema creation failed: {str(e)}",
         ) from e
 
 
@@ -225,7 +201,21 @@ def create_schema():
     summary="Ingest documents from local filesystem",
 )
 def ingest_local(payload: IngestLocalRequest) -> IngestionResponse:
-    """Ingest documents from local filesystem."""
+    """
+    Ingest documents from data/raw/ directory.
+    
+    Supports PDF and TXT files with glob pattern matching.
+    Automatically skips duplicate documents based on content hash.
+    
+    Args:
+        payload: Ingestion request with file pattern
+        
+    Returns:
+        Ingestion statistics (documents loaded, chunks created/ingested/skipped)
+        
+    Raises:
+        HTTPException: If ingestion fails
+    """
     try:
         logger.info("Starting local ingestion with pattern: %s", payload.pattern)
         
@@ -241,7 +231,7 @@ def ingest_local(payload: IngestLocalRequest) -> IngestionResponse:
                 result = engine.ingest_from_source(source, pattern=payload.pattern)
                 results.append(result)
             
-            # Aggregate results
+            # Aggregate results from all directories
             total_docs = sum(r.documents_loaded for r in results)
             total_chunks_created = sum(r.chunks_created for r in results)
             total_chunks_ingested = sum(r.chunks_ingested for r in results)
@@ -282,7 +272,21 @@ def ingest_local(payload: IngestLocalRequest) -> IngestionResponse:
     summary="Download and ingest papers from ArXiv",
 )
 def ingest_arxiv(payload: IngestArxivRequest) -> IngestionResponse:
-    """Download and ingest papers from ArXiv."""
+    """
+    Download and ingest papers from ArXiv.
+    
+    Fetches papers matching the search query, downloads PDFs,
+    extracts metadata, and ingests into the vector database.
+    
+    Args:
+        payload: ArXiv search request with query and max_results
+        
+    Returns:
+        Ingestion statistics with paper metadata
+        
+    Raises:
+        HTTPException: If ingestion fails
+    """
     try:
         logger.info(
             "Starting ArXiv ingestion: query='%s', max_results=%d",
@@ -333,7 +337,17 @@ def ingest_arxiv(payload: IngestArxivRequest) -> IngestionResponse:
     summary="Get RAG index statistics",
 )
 def get_stats() -> RAGStatsResponse:
-    """Get information about the RAG vector database."""
+    """
+    Get information about the RAG vector database.
+    
+    Returns collection name, schema version, and document count.
+    
+    Returns:
+        Index statistics
+        
+    Raises:
+        HTTPException: If stats retrieval fails
+    """
     # Use context manager for temporary connection
     with IngestionEngine() as engine:
         stats = engine.get_stats()
@@ -379,6 +393,9 @@ def reset_index() -> ResetIndexResponse:
     
     Returns:
         Success status and number of documents deleted
+        
+    Raises:
+        HTTPException: If reset fails
     """
     try:
         logger.warning("Reset index requested - all documents will be deleted!")

@@ -1,3 +1,14 @@
+"""
+System Router.
+
+Health checks and system status endpoints for the API gateway.
+
+Endpoints:
+    - GET /health: Liveness check (process responsive)
+    - GET /version: Service version and runtime info
+    - GET /ready: Readiness check (dependencies reachable)
+    - GET /health/services: Aggregated health of all downstream services
+"""
 from __future__ import annotations
 
 import logging
@@ -22,6 +33,11 @@ router = APIRouter(tags=[APITag.SYSTEM])
     summary="Liveness check: confirms the API process is responsive.",
 )
 def health() -> HealthResponse:
+    """
+    Simple liveness check.
+    
+    Returns OK if the process is running and can handle requests.
+    """
     return HealthResponse(status="ok")
 
 
@@ -32,6 +48,12 @@ def health() -> HealthResponse:
     summary="Service, version and basic runtime info.",
 )
 def version() -> VersionResponse:
+    """
+    Get service version and runtime information.
+    
+    Returns:
+        Service name, API version, and Python version
+    """
     return VersionResponse(
         service="research-assistant-api",
         api_version="0.2.0",
@@ -46,6 +68,16 @@ def version() -> VersionResponse:
     summary="Readiness check: verifies dependent services are reachable.",
 )
 def ready() -> ReadyResponse:
+    """
+    Check if API is ready to handle requests.
+    
+    Verifies connectivity to critical dependencies:
+        - Weaviate (required): Vector database for RAG
+        - Ollama (optional): LLM service
+    
+    Returns:
+        Status ("ok" or "degraded") with individual service checks
+    """
     cfg = load_config()
 
     weaviate_ok = _check_weaviate(cfg.weaviate.url)
@@ -60,6 +92,15 @@ def ready() -> ReadyResponse:
 
 
 def _check_weaviate(base_url: str) -> bool:
+    """
+    Check Weaviate availability.
+    
+    Args:
+        base_url: Weaviate base URL
+        
+    Returns:
+        True if Weaviate is reachable
+    """
     base = base_url.rstrip("/")
     try:
         r = requests.get(f"{base}/v1/.well-known/ready", timeout=2)
@@ -70,9 +111,17 @@ def _check_weaviate(base_url: str) -> bool:
 
 def _check_ollama_optional(host: str) -> bool | None:
     """
+    Check Ollama availability (optional dependency).
+    
     In Step B, Ollama is not guaranteed to exist.
     If it's not configured, we consider it 'ok' for readiness.
-    We'll tighten this in Step C when Ollama becomes a real service.
+    Tightened in Step C when Ollama becomes a required service.
+    
+    Args:
+        host: Ollama host URL
+        
+    Returns:
+        True if reachable, False if unreachable, None if not configured
     """
     base = (host or "").rstrip("/")
     if not base:
@@ -100,24 +149,27 @@ def health_services():
     Check health of all downstream services.
     
     Returns status for:
-    - Weaviate (vector database)
-    - Ollama (LLM service)
-    - CrewAI (agent service)
-    - Eval (evaluation service)
+        - Weaviate (vector database)
+        - Ollama (LLM service)
+        - CrewAI (agent service)
+        - Eval (evaluation service)
     
     Useful for monitoring and debugging the entire system.
+    
+    Returns:
+        Dictionary with overall status and individual service checks
     """
     import os
-    
+
     services_status = {}
-    
+
     # Check Weaviate
     cfg = load_config()
     services_status["weaviate"] = {
         "healthy": _check_weaviate(cfg.weaviate.url),
         "url": cfg.weaviate.url,
     }
-    
+
     # Check Ollama
     ollama_healthy = _check_ollama_optional(cfg.llm.host)
     services_status["ollama"] = {
@@ -125,7 +177,7 @@ def health_services():
         "url": cfg.llm.host,
         "optional": ollama_healthy is None,
     }
-    
+
     # Check CrewAI service
     crewai_url = os.getenv("CREWAI_URL", "http://crewai:8100")
     try:
@@ -133,12 +185,12 @@ def health_services():
         crewai_healthy = r.status_code == 200
     except Exception:
         crewai_healthy = False
-    
+
     services_status["crewai"] = {
         "healthy": crewai_healthy,
         "url": crewai_url,
     }
-    
+
     # Check Eval service
     eval_url = os.getenv("EVAL_SERVICE_URL", "http://eval:8502")
     try:
@@ -146,19 +198,19 @@ def health_services():
         eval_healthy = r.status_code == 200
     except Exception:
         eval_healthy = False
-    
+
     services_status["eval"] = {
         "healthy": eval_healthy,
         "url": eval_url,
     }
-    
-    # Overall status
+
+    # Overall status - all non-optional services must be healthy
     all_healthy = all(
-        service["healthy"] 
+        service["healthy"]
         for service in services_status.values()
         if not service.get("optional", False)
     )
-    
+
     return {
         "status": "healthy" if all_healthy else "degraded",
         "services": services_status,

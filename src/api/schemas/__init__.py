@@ -1,7 +1,15 @@
 """
-API Schemas
+API Schemas.
 
-Pydantic models for API requests and responses.
+Pydantic models for API requests and responses across all endpoint groups.
+
+Organization:
+    - system: Health, version, status schemas
+    - research: Complete workflow request/response
+    - crewai: Agent execution schemas
+    - rag: Ingestion and retrieval schemas
+    - ollama: LLM interaction schemas
+    - eval: Evaluation metrics schemas
 """
 from __future__ import annotations
 
@@ -51,19 +59,19 @@ __all__ = [
     "HealthResponse",
     "ReadyResponse",
     "VersionResponse",
-    
+
     # --- Research ---
     "ResearchAsyncResponse",
     "ResearchQueryRequest",
     "ResearchQueryResponse",
     "ResearchStatusResponse",
-    
+
     # --- CrewAI ---
     "CrewAsyncRunResponse",
     "CrewRunRequest",
     "CrewRunResponse",
     "CrewStatusResponse",
-    
+
     # --- RAG ---
     "IngestArxivRequest",
     "IngestLocalRequest",
@@ -72,7 +80,7 @@ __all__ = [
     "RAGQueryResponse",
     "RAGStatsResponse",
     "ResetIndexResponse",
-    
+
     # --- Ollama ---
     "OllamaChatRequest",
     "OllamaChatResponse",
@@ -81,7 +89,7 @@ __all__ = [
     "OllamaModelsResponse",
     "OllamaPullRequest",
     "OllamaPullResponse",
-    
+
     # --- Evaluation ---
     "EvaluationRequest",
     "EvaluationResponse",

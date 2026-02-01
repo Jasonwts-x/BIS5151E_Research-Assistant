@@ -1,7 +1,8 @@
 """
-Evaluation Service Router - API Gateway Proxy
+Evaluation Service Router - API Gateway Proxy.
 
 Proxies evaluation requests to the evaluation service.
+Provides quality metrics, guardrails validation, and leaderboard access.
 """
 from __future__ import annotations
 
@@ -42,6 +43,12 @@ logger.info("Eval router configured: eval_url=%s", EVAL_URL)
 async def health():
     """
     Proxy health check to evaluation service.
+    
+    Returns:
+        Health status from evaluation service
+        
+    Raises:
+        HTTPException: If evaluation service is unreachable
     """
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -72,6 +79,12 @@ async def ready():
     
     Checks if evaluation service is ready to accept requests.
     Verifies database connectivity and TruLens initialization.
+    
+    Returns:
+        Readiness status with component checks
+        
+    Raises:
+        HTTPException: If service is not ready
     """
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -107,16 +120,20 @@ async def evaluate(request: EvaluationRequest) -> EvaluationResponse:
     """
     Evaluate a query/answer pair with full metrics.
     
-    Forwards request to evaluation service which returns:
-    - TruLens scores (groundedness, relevance)
-    - Guardrails validation results  
-    - Quality metrics (ROUGE, BLEU, similarity)
-    - Performance metrics
+    Runs comprehensive evaluation including:
+        - TruLens metrics (groundedness, answer relevance, context relevance)
+        - Guardrails validation (safety, policy compliance)
+        - Performance metrics (latency, resource usage)
+        - Quality metrics (ROUGE, coherence)
     
-    This endpoint is useful for:
-    - Testing evaluation metrics on specific outputs
-    - Comparing different answer variations
-    - Debugging quality issues
+    Args:
+        request: Evaluation request with query, answer, and context
+        
+    Returns:
+        Complete evaluation results with scores and issues
+        
+    Raises:
+        HTTPException: If evaluation fails
     """
     try:
         logger.info("Proxying evaluation request to eval service")
@@ -159,13 +176,17 @@ async def leaderboard(
     app_id: Optional[str] = Query(default=None),
 ) -> LeaderboardResponse:
     """
-    Get leaderboard of all evaluations sorted by score.
+    Get evaluation leaderboard with top-performing queries.
     
-    Shows top-performing queries based on overall evaluation scores.
-    Useful for:
-    - Identifying best-performing prompts
-    - Comparing query variations
-    - Quality monitoring over time
+    Args:
+        limit: Maximum number of entries to return (1-1000)
+        min_score: Optional minimum score filter (0.0-1.0)
+        
+    Returns:
+        Leaderboard with ranked evaluation results
+        
+    Raises:
+        HTTPException: If leaderboard fetch fails
     """
     try:
         logger.info("Fetching evaluation leaderboard (limit=%d)", limit)

@@ -1,7 +1,12 @@
 """
-OpenAPI Configuration
+OpenAPI Configuration.
 
-Defines API metadata, tags, and documentation structure.
+Defines API metadata, tags, and documentation structure for the gateway.
+
+Architecture:
+    - APITag enum: Organizes endpoints into logical groups
+    - openapi_tags(): Provides descriptions for each tag group
+    - Order determines display order in /docs UI
 """
 from __future__ import annotations
 
@@ -10,11 +15,14 @@ from typing import Any
 
 
 class APITag(StrEnum):
-    """API endpoint tags for OpenAPI documentation."""
+    """
+    API endpoint tags for OpenAPI documentation.
     
+    Used to organize endpoints into logical groups in the Swagger UI.
+    """
+
     SYSTEM = "system"
     RESEARCH = "research"
-
     CREWAI = "crewai"
     OLLAMA = "ollama"
     EVAL = "eval"
@@ -25,8 +33,11 @@ def openapi_tags() -> list[dict[str, Any]]:
     """
     Return OpenAPI tags with descriptions.
     
-    Tags organize endpoints in the API documentation.
-    Order here determines display order in /docs.
+    Tags organize endpoints in the API documentation (/docs).
+    Order here determines display order in the Swagger UI.
+    
+    Returns:
+        List of tag dictionaries with name and description
     """
     return [
         {

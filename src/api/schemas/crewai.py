@@ -1,7 +1,12 @@
 """
-CrewAI Schemas - Gateway Re-export
-Re-exports CrewAI schemas from the service for gateway use.
+CrewAI Schemas - Gateway Re-export.
+
+Re-exports CrewAI schemas from the agents service for gateway use.
 This provides a single import point for gateway routers.
+
+Architecture Note:
+    The actual schema definitions live in src/agents/schemas/crewai.py.
+    This file exists to maintain clean import paths in the API gateway.
 """
 from __future__ import annotations
 

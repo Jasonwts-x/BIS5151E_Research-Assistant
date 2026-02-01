@@ -1,8 +1,14 @@
 """
-Research API Router
+Research API Router.
 
 Primary user-facing endpoints for research queries.
 Orchestrates the complete RAG + CrewAI + Evaluation workflow.
+
+Architecture:
+    This router is the main entry point for end users. It coordinates:
+    1. RAG Pipeline: Document retrieval
+    2. CrewAI Service: Multi-agent summary generation
+    3. Eval Service: Quality metrics and guardrails
 """
 from __future__ import annotations
 
@@ -74,6 +80,8 @@ async def research_query(
 ) -> ResearchQueryResponse:
     """
     Execute complete research workflow (synchronous).
+    
+    Coordinates RAG retrieval, multi-agent generation, and evaluation.
     
     Args:
         request: Research query request with query, language, and options
@@ -239,6 +247,8 @@ async def research_query_async(
     """
     Execute complete research workflow (asynchronous).
     
+    Returns job_id immediately; workflow executes in background.
+    
     Args:
         request: Research query request
         rag: RAG service dependency (injected)
@@ -303,6 +313,8 @@ async def research_query_async(
 async def get_status(job_id: str) -> ResearchStatusResponse:
     """
     Get status of an async research job.
+    
+    Poll this endpoint to check job progress and retrieve results.
     
     Args:
         job_id: Job identifier from async request
