@@ -35,8 +35,8 @@ def main():
     )
 
     # Title
-    st.sidebar.title("📊 Evaluation Dashboard")
-    st.sidebar.markdown("**Research Assistant GPT**")
+    st.sidebar.title("Research Assistant")
+    st.sidebar.markdown("**📊 Evaluation Dashboard**")
     st.sidebar.markdown("---")
     
     # Navigation
