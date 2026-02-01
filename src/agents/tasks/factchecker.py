@@ -26,16 +26,26 @@ def create_factchecker_task(agent, reviewer_task, context: str) -> Task:
 
     description = f"""
         
-TASK: VERIFY every citation in the text matches a source. 
+TASK: VERIFY every claim in the text matches text against sources. 
 REMOVE unsupported claims. ADD References section.
 
 SOURCES:
 {context}
 
-STEPS:
-1. Check that every citation [1], [2], etc. matches a source in SOURCES.
-2. Remove any unsupported claims that lack citations.
-3. Add a "## References" section at the end with ALL cited sources.
+ACTIONS:
+1. Verify every claim has an inline citation ([1], [2], etc.).
+2. Cross-check each claim against the corresponding source in the SOURCES.
+3. Remove any unsupported claims.
+4. Create a "## References" section at the end with ALL cited sources.
+5. Format each reference in APA7 style.
+
+REQUIREMENTS:
+1. Every citation [n] must match source [n] in the SOURCES.
+2. Only remove unsupported claims or fix citation mismatches.
+3. Maintain original meaning and tone of the text.
+4. Output properly cited text exactly as is.
+5. Start directly with summary text (no preamble). Don't include meta-commentary.
+6. Use title case (not ALL CAPS) for titles.
 
 APA7 FORMAT:
 [1] Author, A. B. (Year). Paper title. Journal/Source.
@@ -43,29 +53,25 @@ APA7 FORMAT:
 For arXiv: [1] Author, A. (Year). Title. arXiv:XXXX.XXXXX.
 For unknown: [1] Unknown. (n.d.). [Filename].
 
-
-CRITICAL RULES:
-- Start output directly with the summary text (no preamble).
-- Every citation [n] must correspond to SOURCE [n] from above.
-- Remove unsupported claims or fix citation mismatches.
-- Maintain original meaning and tone of the text.
-- You MUST create the ## References section. This is mandatory.
+CRITICAL: You MUST create the ## References section. This is mandatory.
 
 
-OUTPUT EXAMPLE:
-Artificial Intelligence is... [1]. Machine learning approaches... [2].
+OUTPUT STRUCTURE:
+[Summary text with citations [1], [2], etc.]
 
 ## References
-[1] Smith, J. (2020). AI fundamentals. arXiv:2001.12345.
-[2] Jones, M. (2021). Machine learning. arXiv:2102.54321.
+[1] First source in APA7 format.
+[2] Second source in APA7 format.
+[3] Third source in APA7 format.
 
 """
     
     expected_output = f"""
         
-Fact-checked text with verified citations. 
-MUST include ## References section in APA7 format.
-Start with summary text, then blank line, then ## References.
+Fact-checked text with verified claims. 
+All claims verified against sources.
+MUST include ## References section with APA7 citations.
+Format: Summary text, then blank line, then ## References, then list of sources.
 
 """
     
