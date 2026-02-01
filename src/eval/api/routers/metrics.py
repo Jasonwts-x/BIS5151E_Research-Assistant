@@ -13,15 +13,15 @@ from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy.exc import SQLAlchemyError
 
 from ...database import get_database
-from ...models import EvaluationRecord, EvaluationScores, TruLensMetrics
+from ...models import EvaluationRecord, EvaluationScores
 from ...schemas.evaluation import (
     EvaluationRequest,
     EvaluationResponse,
     EvaluationSummary,
     LeaderboardEntry,
     LeaderboardResponse,
-    TruLensMetrics as TruLensMetricsSchema,
 )
+from ...schemas.metrics import TruLensMetrics as TruLensMetricsSchema
 from ...trulens import TruLensClient
 
 logger = logging.getLogger(__name__)
@@ -64,8 +64,11 @@ async def evaluate(request: EvaluationRequest) -> EvaluationResponse:
         record_id = str(uuid.uuid4())
         timestamp = datetime.utcnow()
         
+        trulens_data = evaluation.get("trulens", {})
+        overall_score = evaluation.get("overall_score", 0)
+        
         logger.info("Evaluation computed: record_id=%s, overall_score=%.2f", 
-                   record_id, evaluation.get("overall_score", 0))
+                   record_id, overall_score)
         
         # Step 2: Store to database
         db = get_database()
@@ -74,37 +77,19 @@ async def evaluate(request: EvaluationRequest) -> EvaluationResponse:
                 # Create evaluation record
                 eval_record = EvaluationRecord(
                     record_id=record_id,
-                    timestamp=timestamp,
+                    ts=timestamp,
+                    app_id=request.metadata.get("app_id", "research_assistant") if request.metadata else "research_assistant",
                     input=request.query,
                     output=request.answer,
-                    context=request.context,
-                    language=request.language,
-                    app_id=request.metadata.get("app_id", "research_assistant") if request.metadata else "research_assistant",
-                    metadata_json=request.metadata or {},
+                    tags=request.language,
                 )
                 session.add(eval_record)
                 
-                # Create TruLens metrics record
-                trulens_data = evaluation.get("trulens", {})
-                trulens_record = TruLensMetrics(
-                    record_id=record_id,
-                    timestamp=timestamp,
-                    groundedness=trulens_data.get("groundedness"),
-                    groundedness_reasoning=trulens_data.get("groundedness_reasoning"),
-                    answer_relevance=trulens_data.get("answer_relevance"),
-                    answer_relevance_reasoning=trulens_data.get("answer_relevance_reasoning"),
-                    context_relevance=trulens_data.get("context_relevance"),
-                    context_relevance_reasoning=trulens_data.get("context_relevance_reasoning"),
-                    citation_quality=trulens_data.get("citation_quality"),
-                    citation_quality_reasoning=trulens_data.get("citation_quality_reasoning"),
-                )
-                session.add(trulens_record)
-                
-                # Create evaluation scores record
+                # Create evaluation scores record (contains TruLens metrics)
                 scores_record = EvaluationScores(
                     record_id=record_id,
                     timestamp=timestamp,
-                    overall_score=evaluation.get("overall_score", 0),
+                    overall_score=overall_score,
                     groundedness=trulens_data.get("groundedness"),
                     answer_relevance=trulens_data.get("answer_relevance"),
                     context_relevance=trulens_data.get("context_relevance"),
@@ -118,13 +103,13 @@ async def evaluate(request: EvaluationRequest) -> EvaluationResponse:
                 
         except SQLAlchemyError as e:
             logger.error("❌ Failed to store evaluation to database: %s", e)
-            # Don't fail the request, just log the error
             logger.exception("Database storage error")
+            # Don't fail the request, just log the error
         
         # Step 3: Build response
         summary = EvaluationSummary(
-            passed=evaluation.get("overall_score", 0) >= 0.6,
-            overall_score=evaluation.get("overall_score", 0),
+            passed=overall_score >= 0.6,
+            overall_score=overall_score,
             issues=[],
             warnings=[],
         )
@@ -135,13 +120,15 @@ async def evaluate(request: EvaluationRequest) -> EvaluationResponse:
             query=request.query,
             answer_length=len(request.answer),
             summary=summary,
-            trulens=TruLensMetricsSchema(
-                groundedness=trulens_data.get("groundedness"),
-                answer_relevance=trulens_data.get("answer_relevance"),
-                context_relevance=trulens_data.get("context_relevance"),
-                citation_quality=trulens_data.get("citation_quality"),
-            ),
-            guardrails=None,  # TODO: Add guardrails if available
+            trulens={
+                "groundedness": trulens_data.get("groundedness"),
+                "answer_relevance": trulens_data.get("answer_relevance"),
+                "context_relevance": trulens_data.get("context_relevance"),
+                "citation_quality": trulens_data.get("citation_quality"),
+            },
+            guardrails=None,
+            performance=None,
+            quality=None,
         )
         
         logger.info("Evaluation completed successfully: record_id=%s", record_id)
@@ -237,7 +224,7 @@ def leaderboard(
             query = (
                 session.query(
                     EvaluationRecord.record_id,
-                    EvaluationRecord.timestamp,
+                    EvaluationRecord.ts,
                     EvaluationRecord.input,
                     EvaluationScores.overall_score,
                     EvaluationScores.groundedness,
@@ -258,14 +245,14 @@ def leaderboard(
             entries = [
                 LeaderboardEntry(
                     record_id=r.record_id,
-                    timestamp=r.timestamp,
+                    timestamp=r.ts,
                     query=r.input,
                     overall_score=float(r.overall_score or 0),
-                    groundedness=float(r.groundedness or 0),
-                    answer_relevance=float(r.answer_relevance or 0),
-                    context_relevance=float(r.context_relevance or 0),
-                    total_time=0.0,  # TODO: Add from performance metrics
-                    passed_guardrails=True,  # TODO: Add from guardrails
+                    groundedness=float(r.groundedness or 0) if r.groundedness else None,
+                    answer_relevance=float(r.answer_relevance or 0) if r.answer_relevance else None,
+                    context_relevance=float(r.context_relevance or 0) if r.context_relevance else None,
+                    total_time=0.0,
+                    passed_guardrails=True,
                 )
                 for r in results
             ]
@@ -316,14 +303,7 @@ def get_record(record_id: str) -> EvaluationResponse:
                     detail=f"Evaluation record not found: {record_id}",
                 )
             
-            # Get TruLens metrics
-            trulens_record = (
-                session.query(TruLensMetrics)
-                .filter_by(record_id=record_id)
-                .first()
-            )
-            
-            # Get scores
+            # Get scores (contains TruLens metrics)
             scores = (
                 session.query(EvaluationScores)
                 .filter_by(record_id=record_id)
@@ -339,22 +319,24 @@ def get_record(record_id: str) -> EvaluationResponse:
             )
             
             trulens_data = None
-            if trulens_record:
-                trulens_data = TruLensMetricsSchema(
-                    groundedness=trulens_record.groundedness,
-                    answer_relevance=trulens_record.answer_relevance,
-                    context_relevance=trulens_record.context_relevance,
-                    citation_quality=trulens_record.citation_quality,
-                )
+            if scores:
+                trulens_data = {
+                    "groundedness": scores.groundedness,
+                    "answer_relevance": scores.answer_relevance,
+                    "context_relevance": scores.context_relevance,
+                    "citation_quality": scores.citation_quality,
+                }
             
             response = EvaluationResponse(
                 record_id=record.record_id,
-                timestamp=record.timestamp,
+                timestamp=record.ts,
                 query=record.input,
                 answer_length=len(record.output or ""),
                 summary=summary,
                 trulens=trulens_data,
                 guardrails=None,
+                performance=None,
+                quality=None,
             )
             
             logger.info("Record retrieved: %s", record_id)
