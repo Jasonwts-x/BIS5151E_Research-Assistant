@@ -67,7 +67,11 @@ class AgentLLMConfig:
         temperature: Sampling temperature (0.0 = deterministic, 1.0 = creative)
         max_iterations: Maximum agent execution iterations
         verbose: Enable verbose agent logging
-        timeout: Agent execution timeout in seconds
+        timeout: Default agent execution timeout in seconds
+        writer_timeout: Writer agent specific timeout
+        reviewer_timeout: Reviewer agent specific timeout
+        factchecker_timeout: FactChecker agent specific timeout
+        translator_timeout: Translator agent specific timeout
     """
     temperature: float = 0.3
     max_iterations: int = 1
