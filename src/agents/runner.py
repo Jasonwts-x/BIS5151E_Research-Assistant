@@ -94,16 +94,16 @@ class CrewRunner:
         
         # Initialize LLM
         try:
-            llm_config = self.config.agents.llm
-            llm_base_url = llm_config.base_url
-            llm_model = llm_config.model
+            llm_host = self.config.llm.host
+            llm_model = self.config.llm.model
+            agent_temperature = self.config.agents.llm.temperature
             
             self.llm = LLM(
                 model=f"ollama/{llm_model}",
-                base_url=llm_base_url,
-                temperature=llm_config.temperature,
+                base_url=llm_host,
+                temperature=agent_temperature,
             )
-            logger.info("✓ LLM initialized: %s", llm_model)
+            logger.info("✓ LLM initialized: %s at %s", llm_model, llm_host)
         except Exception as e:
             # If LLM init fails, clean up pipeline before re-raising
             if self.rag_pipeline is not None:

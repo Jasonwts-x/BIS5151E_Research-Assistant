@@ -81,7 +81,10 @@ class RAGPipeline:
     
         # Connect to Weaviate
         client = cls._create_weaviate_client(cfg)
-    
+
+        # Initialize collection_name with default before try block
+        collection_name = "ResearchDocument"  # Default fallback        
+
         try:
             # Get collection name from schema definition
             from ..ingestion.schema import RESEARCH_DOCUMENT_SCHEMA
