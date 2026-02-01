@@ -65,52 +65,75 @@ class RAGPipeline:
     def from_existing(cls) -> "RAGPipeline":
         """
         Connect to existing Weaviate index for querying.
- 
+    
+        Auto-creates schema if collection doesn't exist yet.
         This is a QUERY operation - used frequently by API/CrewAI.
-        Does NOT rebuild index.
- 
+    
         Returns:
             RAGPipeline instance ready for querying
+        
+        Raises:
+            RuntimeError: If Weaviate connection fails
         """
         cfg = load_config()
-   
-        # Connect to existing Weaviate
+    
+        logger.info("Connecting to Weaviate index at %s", cfg.weaviate.url)
+    
+        # Connect to Weaviate
         client = cls._create_weaviate_client(cfg)
-   
+    
         try:
-            # Get collection
-            from .schema import RESEARCH_DOCUMENT_SCHEMA
+            # Get collection name from schema definition
+            from ..ingestion.schema import RESEARCH_DOCUMENT_SCHEMA
             collection_name = RESEARCH_DOCUMENT_SCHEMA["class"]
-       
+        
             # Check if collection exists
             if not client.collections.exists(collection_name):
-                client.close()
-                raise RuntimeError(
-                    f"Collection '{collection_name}' does not exist in Weaviate!\n"
-                    f"Please build the index first:\n"
-                    f"  - python -m src.rag.cli ingest-local\n"
-                    f"  - python -m src.rag.cli ingest-arxiv <query>\n"
-                    f"  - POST /rag/ingest/local\n"
-                    f"  - POST /rag/ingest/arxiv"
+                logger.warning(
+                    "Collection '%s' does not exist. Creating schema automatically...",
+                    collection_name
                 )
-       
+            
+                # Auto-create schema
+                from ..ingestion.schema import SchemaManager
+                schema_manager = SchemaManager(
+                    client=client,
+                    collection_name=collection_name,
+                    embedding_model=cfg.weaviate.embedding_model
+                )
+                schema_manager.create_schema()
+            
+                logger.info("✓ Collection '%s' created successfully", collection_name)
+            else:
+                logger.info("✓ Collection '%s' exists", collection_name)
+        
             # Text embedder (for queries)
             embedding_model = cfg.weaviate.embedding_model
             text_embedder = SentenceTransformersTextEmbedder(model=embedding_model)
             text_embedder.warm_up()
-       
+        
             logger.info("RAGPipeline connected to existing index (collection: %s)", collection_name)
-       
+        
             return cls(
                 client=client,
-                retriever=None,  # We'll use raw Weaviate client instead
+                retriever=None,  # We use raw Weaviate client for queries
                 text_embedder=text_embedder,
                 collection_name=collection_name,
             )
-        except Exception:
-            # Cleanup on error
-            client.close()
-            raise
+        
+        except Exception as e:
+            # Cleanup client on error to prevent resource leak
+            logger.error("Failed to initialize RAGPipeline: %s", e)
+            try:
+                client.close()
+                logger.debug("Weaviate client closed after error")
+            except Exception as close_error:
+                logger.warning("Failed to close Weaviate client: %s", close_error)
+            raise RuntimeError(
+                f"Failed to initialize RAGPipeline: {e}\n"
+                f"Collection: {collection_name}"
+
+            ) from e
  
     @classmethod
     def build_index_from_local(
@@ -126,21 +149,20 @@ class RAGPipeline:
        
         logger.info("Building index from local files: %s", data_dir)
        
-        # Create ingestion engine
-        engine = IngestionEngine()
-       
-        # Ingest from local source
-        source = LocalFileSource(data_dir)
-        result = engine.ingest_from_source(source, pattern=pattern)
-       
-        logger.info(
-            "Index build complete: %d docs, %d chunks ingested",
-            result.documents_loaded,
-            result.chunks_ingested,
-        )
-       
-        if result.errors:
-            logger.warning("Errors during ingestion: %s", result.errors)
+        # Use context manager to ensure cleanup
+        with IngestionEngine() as engine:
+            source = LocalFileSource(data_dir)
+            result = engine.ingest_from_source(source, pattern=pattern)
+        
+            logger.info(
+                "Index build complete: %d docs, %d chunks ingested",
+                result.documents_loaded,
+                result.chunks_ingested,
+            )
+        
+            if result.errors:
+                logger.warning("Errors during ingestion: %s", result.errors)
+
  
     @classmethod
     def build_index_from_arxiv(
@@ -153,25 +175,23 @@ class RAGPipeline:
         """
         logger.info("Building index from ArXiv: query='%s', max=%d", query, max_results)
        
-        # Create ingestion engine
-        engine = IngestionEngine()
-       
-        # Ingest from ArXiv source
-        source = ArXivSource()
-        result = engine.ingest_from_source(
-            source,
-            query=query,
-            max_results=max_results,
-        )
-       
-        logger.info(
-            "Index build complete: %d papers, %d chunks ingested",
-            result.documents_loaded,
-            result.chunks_ingested,
-        )
-       
-        if result.errors:
-            logger.warning("Errors during ingestion: %s", result.errors)
+        # Use context manager to ensure cleanup
+        with IngestionEngine() as engine:
+            source = ArXivSource()
+            result = engine.ingest_from_source(
+                source,
+                query=query,
+                max_results=max_results,
+            )
+        
+            logger.info(
+                "Index build complete: %d papers, %d chunks ingested",
+                result.documents_loaded,
+                result.chunks_ingested,
+            )
+        
+            if result.errors:
+                logger.warning("Errors during ingestion: %s", result.errors)
  
     def run(self, query: str, top_k: int = 5) -> List[Document]:
         """
