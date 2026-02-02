@@ -1,238 +1,144 @@
 {
-    "name": "Research Assistant Workflow",
+    "name": "ResearchAssistantGPT",
     "nodes": [
         {
-            "parameters": {},
-            "id": "webhook-trigger",
-            "name": "When Called",
-            "type": "n8n-nodes-base.manualTrigger",
-            "typeVersion": 1,
-            "position": [
-                250,
-                300
-            ]
-        },
-        {
             "parameters": {
-                "values": {
-                    "string": [
+                "formTitle": "ResearchAssistantGPT",
+                "formFields": {
+                    "values": [
                         {
-                            "name": "topic",
-                            "value": "={{ $json.topic || 'What are transformer architectures in deep learning?' }}"
+                            "fieldLabel": "Topic",
+                            "requiredField": true
                         },
                         {
-                            "name": "language",
-                            "value": "={{ $json.language || 'en' }}"
-                        }
-                    ]
-                }
-            },
-            "id": "set-params",
-            "name": "Set Parameters",
-            "type": "n8n-nodes-base.set",
-            "typeVersion": 1,
-            "position": [
-                450,
-                300
-            ]
-        },
-        {
-            "parameters": {
-                "url": "=http://api:8000/crewai/run/async",
-                "method": "POST",
-                "sendBody": true,
-                "bodyParameters": {
-                    "parameters": [
-                        {
-                            "name": "topic",
-                            "value": "={{ $json.topic }}"
-                        },
-                        {
-                            "name": "language",
-                            "value": "={{ $json.language }}"
+                            "fieldLabel": "Language",
+                            "requiredField": true
                         }
                     ]
                 },
                 "options": {}
             },
-            "id": "submit-job",
-            "name": "Submit Async Job",
-            "type": "n8n-nodes-base.httpRequest",
-            "typeVersion": 3,
+            "type": "n8n-nodes-base.formTrigger",
+            "typeVersion": 2.3,
             "position": [
-                650,
-                300
-            ]
+                0,
+                0
+            ],
+            "id": "3a38a677-d17c-494a-a7b2-4886d5bc09bb",
+            "name": "On form submission",
+            "webhookId": "36bf114e-070e-4c47-8aaf-c8bda41c78dd"
         },
         {
             "parameters": {
-                "amount": 5,
-                "unit": "seconds"
-            },
-            "id": "wait-5s",
-            "name": "Wait 5 Seconds",
-            "type": "n8n-nodes-base.wait",
-            "typeVersion": 1,
-            "position": [
-                850,
-                300
-            ]
-        },
-        {
-            "parameters": {
-                "url": "=http://api:8000/crewai/status/{{ $('Submit Async Job').item.json.job_id }}",
-                "method": "GET",
+                "method": "POST",
+                "url": "http://host.docker.internal:8000/rag/ingest/arxiv",
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "=query",
+                            "value": "={{ $json.Topic }}"
+                        },
+                        {
+                            "name": "language",
+                            "value": "={{ $json.Language }}"
+                        }
+                    ]
+                },
                 "options": {}
             },
-            "id": "check-status",
-            "name": "Check Job Status",
             "type": "n8n-nodes-base.httpRequest",
-            "typeVersion": 3,
+            "typeVersion": 4.3,
             "position": [
-                1050,
-                300
-            ]
+                208,
+                0
+            ],
+            "id": "9ebf2291-5015-4fe9-9ea9-467a7f9e5e77",
+            "name": "HTTP Request"
         },
         {
             "parameters": {
-                "conditions": {
-                    "string": [
+                "method": "POST",
+                "url": "http://host.docker.internal:8000/research/query",
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
                         {
-                            "value1": "={{ $json.status }}",
-                            "operation": "equals",
-                            "value2": "completed"
+                            "name": "query",
+                            "value": "={{ $('On form submission').item.json.Topic }}"
+                        },
+                        {
+                            "name": "language",
+                            "value": "={{ $('On form submission').item.json.Language }}"
                         }
                     ]
+                },
+                "options": {
+                    "response": {
+                        "response": {
+                            "fullResponse": true,
+                            "responseFormat": "json"
+                        }
+                    },
+                    "timeout": 100000000
                 }
             },
-            "id": "is-completed",
-            "name": "Is Completed?",
-            "type": "n8n-nodes-base.if",
-            "typeVersion": 1,
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.3,
             "position": [
-                1250,
-                300
-            ]
+                416,
+                0
+            ],
+            "id": "6b32fe1e-e776-4bb5-9a0e-3a11e252282d",
+            "name": "HTTP Request1"
         },
         {
             "parameters": {
-                "values": {
-                    "string": [
-                        {
-                            "name": "result",
-                            "value": "={{ $json.result }}"
-                        },
-                        {
-                            "name": "topic",
-                            "value": "={{ $json.topic }}"
-                        },
-                        {
-                            "name": "status",
-                            "value": "={{ $json.status }}"
-                        }
-                    ]
-                }
+                "operation": "completion",
+                "completionTitle": "Ready",
+                "completionMessage": "={{ $json.body.summary }}",
+                "options": {}
             },
-            "id": "format-result",
-            "name": "Format Result",
-            "type": "n8n-nodes-base.set",
-            "typeVersion": 1,
+            "type": "n8n-nodes-base.form",
+            "typeVersion": 2.3,
             "position": [
-                1450,
-                200
-            ]
-        },
-        {
-            "parameters": {},
-            "id": "loop-back",
-            "name": "Loop Back",
-            "type": "n8n-nodes-base.noOp",
-            "typeVersion": 1,
-            "position": [
-                1450,
-                400
-            ]
+                928,
+                0
+            ],
+            "id": "d2d6f059-aadb-4811-9b78-d7748ff1aed8",
+            "name": "Form",
+            "webhookId": "49e53493-3dde-4c22-97e7-1ca1f6b7c1ae"
         }
     ],
+    "pinData": {},
     "connections": {
-        "When Called": {
+        "On form submission": {
             "main": [
                 [
                     {
-                        "node": "Set Parameters",
+                        "node": "HTTP Request",
                         "type": "main",
                         "index": 0
                     }
                 ]
             ]
         },
-        "Set Parameters": {
+        "HTTP Request": {
             "main": [
                 [
                     {
-                        "node": "Submit Async Job",
+                        "node": "HTTP Request1",
                         "type": "main",
                         "index": 0
                     }
                 ]
             ]
         },
-        "Submit Async Job": {
+        "HTTP Request1": {
             "main": [
                 [
                     {
-                        "node": "Wait 5 Seconds",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "Wait 5 Seconds": {
-            "main": [
-                [
-                    {
-                        "node": "Check Job Status",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "Check Job Status": {
-            "main": [
-                [
-                    {
-                        "node": "Is Completed?",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "Is Completed?": {
-            "main": [
-                [
-                    {
-                        "node": "Format Result",
-                        "type": "main",
-                        "index": 0
-                    }
-                ],
-                [
-                    {
-                        "node": "Loop Back",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "Loop Back": {
-            "main": [
-                [
-                    {
-                        "node": "Wait 5 Seconds",
+                        "node": "Form",
                         "type": "main",
                         "index": 0
                     }
@@ -240,8 +146,14 @@
             ]
         }
     },
-    "settings": {},
-    "staticData": null,
-    "pinData": {},
-    "versionId": "1"
+    "active": false,
+    "settings": {
+        "executionOrder": "v1"
+    },
+    "versionId": "48043e93-0dc9-4554-a64b-0d79346bf911",
+    "meta": {
+        "instanceId": "9a3dbce0855c560add1a69685d8095ae8d38aa4b032d6d97aba964f31a63f454"
+    },
+    "id": "AoD1yzwW6vClliym",
+    "tags": []
 }
