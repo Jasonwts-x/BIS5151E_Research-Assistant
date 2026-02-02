@@ -1,158 +1,250 @@
 # Project Roadmap
 
-Future plans and features for ResearchAssistantGPT.
+Future development plans for ResearchAssistantGPT.
+
+**Last Updated**: February 2, 2025  
+**Current Version**: 1.0.0
 
 ---
 
-## 🎯 Vision
+## ✅ Completed (v1.0.0)
 
-Build a **production-ready research assistant** that:
-- Provides accurate, cited summaries from academic literature
-- Ensures quality through multi-agent fact-checking
-- Scales to handle large document collections
-- Offers flexible deployment options
+### Phase 0: Foundation (Completed Jan 2025)
+- ✅ **Step A**: DevContainer as Docker Compose service
+- ✅ **Step B**: API service with FastAPI
+- ✅ **Step C**: Ollama LLM integration
+- ✅ **Step D**: CrewAI multi-agent system
+- ✅ **Step E**: Optimized core RAG (locked schema, deterministic ingestion, CLI)
+
+### Phase 1: Quality & Evaluation (Completed Jan 2025)
+- ✅ **Step F**: TruLens + Guardrails implementation
+  - TruLens metrics (answer relevance, groundedness, context relevance)
+  - Guardrails validation (input/output safety checks)
+  - Performance tracking
+  - Quality metrics (ROUGE, BLEU, semantic similarity)
+- ✅ **Step G**: QoL improvements
+  - GitHub Actions CI/CD
+  - Linting/formatting automation
+  - Development helper scripts
+  - Comprehensive documentation
+  - Health check scripts
+  - Database backup/restore scripts
+
+### Core Features (All Implemented)
+- ✅ Multi-agent workflow (Writer → Reviewer → FactChecker)
+- ✅ Hybrid retrieval (BM25 + vector similarity)
+- ✅ ArXiv integration with metadata
+- ✅ Local file ingestion (PDF, TXT)
+- ✅ Multilingual support (EN, DE, FR, ES)
+- ✅ Citation validation
+- ✅ Fact-checking against sources
+- ✅ n8n workflow orchestration
+- ✅ Docker Compose architecture
+- ✅ Comprehensive test suite
+- ✅ Complete API documentation
 
 ---
 
-## 🚧 Current Status (v0.3.0)
+## 🚧 In Progress (v1.1.0) - Q1 2025
 
-### ✅ Completed
-- [x] Core RAG pipeline (ingestion, retrieval, query)
-- [x] Multi-agent workflow (Writer, Reviewer, FactChecker)
-- [x] ArXiv integration
-- [x] Hybrid search (BM25 + vector)
-- [x] Docker Compose orchestration
-- [x] Basic API endpoints
-- [x] Multilingual support (4 languages)
-- [x] n8n workflow examples
+### Phase 2: Polish & Usability
 
-### 🔄 In Progress
-- [ ] TruLens monitoring integration
-- [ ] Guardrails enhancement
-- [ ] Test coverage improvement (current: ~60%, target: >80%)
-- [ ] Documentation completion
+#### Documentation Improvements
+- [ ] Video tutorials (setup, usage, development)
+- [ ] Interactive documentation with live examples
+- [ ] Troubleshooting flowcharts
+- [ ] Architecture decision records (ADRs)
+
+#### Developer Experience
+- [ ] One-command demo (`make demo`)
+- [ ] Better error messages with actionable suggestions
+- [ ] CLI improvements (more commands, better UX)
+- [ ] Hot reload for faster development iteration
+- [ ] Pre-commit hooks setup script
+
+#### Monitoring Enhancements
+- [ ] TruLens dashboard automation (one-click setup)
+- [ ] Prometheus metrics export
+- [ ] Grafana dashboards (query performance, resource usage)
+- [ ] Log aggregation setup
+- [ ] Alert configuration examples
 
 ---
 
 ## 📅 Planned Features
 
-### Phase 1: Stability & Quality (v0.4.0) - February 2025
+### Phase 3: Translation & Internationalization (v1.2.0) - Q2 2025
 
-**Goal:** Production-ready core functionality
+**Goal**: High-quality translation support
 
-#### RAG Improvements
-- [ ] **Query expansion** - Improve retrieval with query reformulation
-- [ ] **Reranking** - Add cross-encoder reranking after retrieval
-- [ ] **Metadata filtering** - Filter by date, author, category
-- [ ] **Citation tracking** - Track which chunks contribute to which claims
-
-#### Agent Enhancements
-- [ ] **Iterative refinement** - Allow agents to request more context
-- [ ] **Confidence scoring** - Add confidence levels to claims
-- [ ] **Source selection** - Agents choose most relevant sources
-
-#### Quality Assurance
-- [ ] **Deterministic outputs** - Lock down randomness for consistency
-- [ ] **Regression tests** - Prevent quality degradation
-- [ ] **Benchmark dataset** - Standard evaluation set
-- [ ] **Performance metrics** - Track response time, accuracy
-
-#### Developer Experience
-- [ ] **One-command demo** - `make demo` for quick testing
-- [ ] **Better error messages** - More helpful debugging info
-- [ ] **CLI improvements** - More commands, better UX
-- [ ] **Hot reload** - Faster development iteration
+#### DeepL Integration
+- [ ] **Step H**: DeepL API integration (optional)
+  - Professional translation quality
+  - Terminology consistency across documents
+  - Domain-specific glossaries
+  - Translation memory
+- [ ] More language support
+  - Chinese (Simplified & Traditional)
+  - Japanese
+  - Korean
+  - Russian
+  - Portuguese
+  - Italian
+- [ ] Translation quality metrics
+  - BLEU score tracking
+  - Human evaluation integration
+  - A/B testing framework
 
 ---
 
-### Phase 2: Monitoring & Observability (v0.5.0) - March 2025
+### Phase 4: Advanced RAG (v2.0.0) - Q2 2025
 
-**Goal:** Full visibility into system behavior
+**Goal**: State-of-the-art retrieval and generation
 
-#### Monitoring
-- [ ] **TruLens integration** - Complete implementation
-  - Answer relevance scoring
-  - Context relevance tracking
-  - Groundedness detection
-  - Response quality metrics
-- [ ] **Prometheus metrics** - System-level monitoring
-  - Request rate, latency
-  - Error rates
-  - Resource usage
-- [ ] **Grafana dashboards** - Visualization
-  - Real-time query performance
-  - Agent execution traces
-  - Resource utilization
+#### RAG Innovations
+- [ ] **Hypothetical Document Embeddings (HyDE)**
+  - Generate hypothetical answers
+  - Embed hypothetical answers
+  - Retrieve using hypothetical embeddings
+- [ ] **Self-RAG**
+  - LLM decides when to retrieve more context
+  - Dynamic retrieval based on confidence
+  - Iterative refinement
+- [ ] **Graph RAG**
+  - Build knowledge graphs from documents
+  - Entity extraction and linking
+  - Relationship discovery
+  - Graph-based retrieval
+- [ ] **Adaptive Chunking**
+  - Context-aware chunk boundaries
+  - Semantic boundary detection
+  - Variable chunk sizes based on content
 
-#### Logging
-- [ ] **Structured logging** - JSON logs for parsing
-- [ ] **Log aggregation** - Centralized log storage
-- [ ] **Query tracing** - End-to-end request tracking
-- [ ] **Audit logs** - User action history
-
-#### Alerting
-- [ ] **Health alerts** - Notify on service failures
-- [ ] **Quality alerts** - Flag low-quality outputs
-- [ ] **Performance alerts** - Warn on slow queries
+#### Agent Improvements
+- [ ] **Tool Use**
+  - Agents call external APIs (calculators, search, databases)
+  - Web browsing capability
+  - Code execution sandboxing
+- [ ] **Self-Correction**
+  - Agents verify their own outputs
+  - Automatic error detection and fixing
+  - Confidence scoring
+- [ ] **Multi-Agent Debates**
+  - Multiple agents argue for best answer
+  - Consensus building
+  - Devil's advocate agent
+- [ ] **Learning from Feedback**
+  - Improve from user corrections
+  - Preference learning (RLHF)
+  - Few-shot adaptation
 
 ---
 
-### Phase 3: Advanced Features (v0.6.0) - April 2025
+### Phase 5: Performance & Scale (v2.1.0) - Q3 2025
 
-**Goal:** Enhanced capabilities
+**Goal**: Production-grade performance
+
+#### Caching & Speed
+- [ ] **Redis caching layer**
+  - Cache frequent queries
+  - Cache embeddings
+  - Cache LLM responses
+  - TTL configuration
+- [ ] **Batch processing**
+  - Handle multiple queries efficiently
+  - Background job queue
+  - Priority queues
+- [ ] **Async ingestion**
+  - Background document processing
+  - Progress tracking
+  - Cancellable jobs
+- [ ] **GPU acceleration**
+  - Faster embeddings
+  - Quantized models
+  - vLLM integration for throughput
+
+#### LLM Optimization
+- [ ] **Model distillation** - Smaller, faster models
+- [ ] **LoRA fine-tuning** - Domain adaptation
+- [ ] **Quantization** - Reduce memory footprint (GGUF, AWQ)
+- [ ] **Speculative decoding** - Faster inference
+
+---
+
+### Phase 6: Multi-Modal & Rich Content (v2.2.0) - Q3 2025
+
+**Goal**: Handle diverse content types
 
 #### Multi-Modal Support
 - [ ] **Image extraction** - Extract figures from PDFs
-- [ ] **Table parsing** - Extract structured data
-- [ ] **Math formula handling** - LaTeX rendering
+- [ ] **Image understanding** - Describe and analyze images
+- [ ] **Table parsing** - Extract structured data from tables
+- [ ] **Chart/graph analysis** - Understand visualizations
+- [ ] **Math formula handling** - LaTeX rendering and understanding
 - [ ] **Citation graph** - Visualize paper relationships
 
-#### Collaboration Features
-- [ ] **User accounts** - Multi-user support
-- [ ] **Query history** - Save and share queries
-- [ ] **Collections** - Organize papers into collections
-- [ ] **Annotations** - User notes on documents
-
-#### Translation
-- [ ] **DeepL integration** - High-quality translation
-- [ ] **More languages** - Add Chinese, Japanese, Russian
-- [ ] **Terminology consistency** - Domain-specific glossaries
-
-#### Performance
-- [ ] **Caching layer** - Redis for frequent queries
-- [ ] **Batch processing** - Handle multiple queries efficiently
-- [ ] **Async ingestion** - Background document processing
-- [ ] **GPU acceleration** - Faster embeddings
+#### Rich Content
+- [ ] **Code snippets** - Syntax highlighting, execution
+- [ ] **Equations** - MathJax/KaTeX rendering
+- [ ] **Interactive visualizations** - D3.js, Plotly
+- [ ] **Audio transcription** - Whisper integration
+- [ ] **Video summarization** - Key frame extraction
 
 ---
 
-### Phase 4: Enterprise Features (v1.0.0) - May 2025
+### Phase 7: Collaboration & Sharing (v3.0.0) - Q4 2025
 
-**Goal:** Production deployment ready
+**Goal**: Multi-user collaboration platform
+
+#### Collaboration Features
+- [ ] **User accounts** - Authentication and authorization
+- [ ] **Query history** - Save and share queries
+- [ ] **Collections** - Organize papers into collections
+- [ ] **Annotations** - User notes on documents
+- [ ] **Shared workspaces** - Team collaboration
+- [ ] **Comments and discussions** - Collaborative annotation
+- [ ] **Export options** - PDF, DOCX, Markdown, LaTeX
+
+#### Social Features
+- [ ] **Public summaries** - Share summaries publicly
+- [ ] **Community collections** - Curated paper collections
+- [ ] **Leaderboards** - Quality contributors
+- [ ] **Reputation system** - Expert validation
+
+---
+
+### Phase 8: Enterprise Features (v3.1.0) - Q4 2025
+
+**Goal**: Production deployment ready
 
 #### Security
-- [ ] **Authentication** - User login (JWT, OAuth)
-- [ ] **Authorization** - Role-based access control
+- [ ] **Authentication** - User login (JWT, OAuth2)
+- [ ] **Authorization** - Role-based access control (RBAC)
 - [ ] **Encryption** - Data at rest and in transit
 - [ ] **Audit logging** - Compliance tracking
+- [ ] **API keys** - Service authentication
+- [ ] **Rate limiting** - Prevent abuse
 
 #### Scalability
 - [ ] **Horizontal scaling** - Multiple API instances
-- [ ] **Load balancing** - Distribute requests
+- [ ] **Load balancing** - Distribute requests (nginx, HAProxy)
 - [ ] **Database sharding** - Handle large indices
 - [ ] **CDN integration** - Fast document delivery
+- [ ] **Read replicas** - Scale read operations
 
 #### Deployment
 - [ ] **Kubernetes manifests** - Container orchestration
 - [ ] **Helm charts** - Easy K8s deployment
 - [ ] **Cloud deployment guides** - AWS, GCP, Azure
 - [ ] **Terraform scripts** - Infrastructure as code
+- [ ] **Ansible playbooks** - Configuration management
 
 #### Operations
 - [ ] **Backup & restore** - Data protection
 - [ ] **Disaster recovery** - Business continuity
 - [ ] **Monitoring dashboards** - Ops visibility
 - [ ] **Auto-scaling** - Dynamic resource allocation
+- [ ] **Blue-green deployment** - Zero-downtime updates
 
 ---
 
@@ -160,23 +252,23 @@ Build a **production-ready research assistant** that:
 
 Ideas being explored (no timeline):
 
-### RAG Innovations
-- [ ] **Hypothetical Document Embeddings (HyDE)** - Generate hypothetical answers, embed those
-- [ ] **Self-RAG** - LLM decides when to retrieve more context
-- [ ] **Graph RAG** - Build knowledge graphs from documents
-- [ ] **Adaptive chunking** - Context-aware chunk boundaries
+### Experimental Features
+- [ ] **Continual learning** - Update model with new data
+- [ ] **Active learning** - Smart data selection for training
+- [ ] **Meta-learning** - Learn to learn from few examples
+- [ ] **Neuro-symbolic reasoning** - Combine neural and symbolic AI
+- [ ] **Explainable AI** - Why did the model give this answer?
+- [ ] **Uncertainty quantification** - How confident is the model?
+- [ ] **Adversarial robustness** - Defend against attacks
+- [ ] **Privacy-preserving ML** - Federated learning, differential privacy
 
-### Agent Improvements
-- [ ] **Tool use** - Agents call external APIs (calculators, search)
-- [ ] **Self-correction** - Agents verify their own outputs
-- [ ] **Multi-agent debates** - Multiple agents argue for best answer
-- [ ] **Learning from feedback** - Improve from user corrections
-
-### LLM Optimization
-- [ ] **Model distillation** - Smaller, faster models
-- [ ] **LoRA fine-tuning** - Domain adaptation
-- [ ] **Quantization** - Reduce memory footprint
-- [ ] **Speculative decoding** - Faster inference
+### Integration Experiments
+- [ ] **Notion integration** - Save summaries to Notion
+- [ ] **Obsidian plugin** - Local knowledge base integration
+- [ ] **Zotero integration** - Reference management
+- [ ] **Mendeley integration** - Citation management
+- [ ] **Slack/Discord bots** - Chat interface
+- [ ] **Browser extension** - Summarize web pages
 
 ---
 
@@ -184,24 +276,31 @@ Ideas being explored (no timeline):
 
 Things we've decided not to pursue:
 
-- ❌ **Browser extension** - Out of scope
-- ❌ **Mobile app** - Focus on API/web
-- ❌ **Real-time collaboration** - Too complex
-- ❌ **Video/audio processing** - Different use case
-- ❌ **Social features** - Not a priority
+- ❌ **Real-time collaboration** - Too complex for v1
+- ❌ **Video/audio as primary input** - Different use case
+- ❌ **Social media integration** - Out of scope
+- ❌ **Mobile apps** - Focus on API/web first
+- ❌ **Blockchain/Web3** - Not relevant to use case
+- ❌ **Cryptocurrency integration** - Not needed
 
 ---
 
 ## 💡 Community Requests
 
-Features requested by users (vote in [GitHub Discussions](https://github.com/Jasonwts-x/BIS5151E_Research-Assistant/discussions)):
+Features requested by users (vote in [Discussions](https://github.com/Jasonwts-x/BIS5151E_Research-Assistant/discussions)):
 
-- [ ] Support for .docx files
-- [ ] Export summaries to PDF
-- [ ] Slack/Discord bot
-- [ ] Citation export (BibTeX, RIS)
-- [ ] Custom embedding models
+- [ ] Support for .docx files (Microsoft Word)
+- [ ] Export summaries to PDF with formatting
+- [ ] Slack/Discord bot integration
+- [ ] Citation export (BibTeX, RIS, EndNote)
+- [ ] Custom embedding models (domain-specific)
 - [ ] Dark mode UI
+- [ ] Batch query processing
+- [ ] Webhook notifications
+- [ ] Email digest subscriptions
+- [ ] RSS feed generation
+
+**Want to request a feature?** Open a discussion!
 
 ---
 
@@ -216,15 +315,16 @@ How we measure progress:
 - **User satisfaction**: >4.0/5.0 rating
 
 ### Performance Metrics
-- **Query latency**: <10s for typical queries
+- **Query latency**: <10s for typical queries (currently ~28s)
 - **Ingestion speed**: >10 papers/minute
 - **Uptime**: >99.5%
-- **Test coverage**: >80%
+- **Test coverage**: >80% (currently 75%)
 
 ### Adoption Metrics
 - **Active users**: >50 students/researchers
 - **Documents indexed**: >1000 papers
 - **Queries/day**: >100
+- **GitHub stars**: >100
 
 ---
 
@@ -237,62 +337,38 @@ Want to help with a roadmap item?
 3. **Read [CONTRIBUTING.md](CONTRIBUTING.md)** for guidelines
 4. **Submit PR** when ready
 
----
-
-## 📝 Changelog
-
-This roadmap is updated monthly. See [CHANGELOG.md](CHANGELOG.md) for completed features.
-
-**Last updated**: January 23, 2025
-```
+**Unsure where to start?** Look for issues labeled:
+- `good first issue` - Beginner-friendly
+- `help wanted` - We need help!
+- `enhancement` - New features
 
 ---
 
-# **5. LICENSE**
+## 📝 Release Schedule
 
-## `LICENSE`
-```
-Academic License
+Tentative release schedule:
 
-Copyright (c) 2025 ResearchAssistantGPT Team
-Hochschule Pforzheim - BIS5151 Course Project
+| Version | Target Date | Focus |
+|---------|-------------|-------|
+| v1.0.0 | Feb 2025 | ✅ First stable release |
+| v1.1.0 | Mar 2025 | Polish & usability |
+| v1.2.0 | Apr 2025 | Translation & i18n |
+| v2.0.0 | May 2025 | Advanced RAG |
+| v2.1.0 | Jun 2025 | Performance & scale |
+| v2.2.0 | Jul 2025 | Multi-modal |
+| v3.0.0 | Sep 2025 | Collaboration |
 
-Permission is hereby granted to students, faculty, and staff of Hochschule 
-Pforzheim to use, copy, and modify this software for academic, 
-educational, and non-commercial research purposes, subject to the following 
-conditions:
-
-1. The above copyright notice and this permission notice shall be included in 
-   all copies or substantial portions of the software.
-
-2. This software is provided for academic use only. Commercial use, including 
-   but not limited to selling, licensing, or using this software for profit, 
-   is strictly prohibited without prior written permission from the copyright 
-   holders.
-
-3. Any academic publications, presentations, or projects that use or reference 
-   this software must provide appropriate attribution to the original authors 
-   and the BIS5151 course at Hochschule Pforzheim.
-
-4. Modifications to the software must be clearly marked and documented.
-
-5. The name of the copyright holders or the institution may not be used to 
-   endorse or promote products derived from this software without specific 
-   prior written permission.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE 
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER 
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE 
-SOFTWARE.
+**Note**: Dates are estimates and may change based on priorities and resources.
 
 ---
 
-For commercial licensing inquiries, please contact:
-- Jason Waschtschenko: waschtsc@hs-pforzheim.de
+## 🗳️ Vote on Priorities
 
-Course: BIS5151 – Generative Artificial Intelligence
-Institution: Hochschule Pforzheim
-Semester: Winter 2025/26
+Which feature would you like to see next?
+
+Vote in [GitHub Discussions](https://github.com/Jasonwts-x/BIS5151E_Research-Assistant/discussions) or comment on issues!
+
+---
+
+**Last Updated**: February 2, 2025  
+**Next Review**: March 1, 2025

@@ -1,241 +1,369 @@
-# Quick Start Guide
+# QuickStart Guide
 
-Get ResearchAssistantGPT running in **10 minutes**.
+Get ResearchAssistantGPT running in **5 minutes**.
+
+For detailed installation instructions, see [docs/setup/INSTALLATION.md](docs/setup/INSTALLATION.md).
 
 ---
 
 ## Prerequisites
 
-Before you begin, ensure you have:
+Before starting, ensure you have:
 
-| Requirement | Version | Check Command |
-|-------------|---------|---------------|
-| **Docker Desktop** | Latest | `docker --version` |
-| **Docker Compose** | v2.0+ | `docker compose version` |
-| **Git** | Any | `git --version` |
-| **Free Disk Space** | 20GB+ | `df -h` |
-| **RAM** | 16GB+ | System settings |
+| Requirement | Minimum | Recommended |
+|-------------|---------|-------------|
+| **Docker Desktop** | 20.10+ | Latest |
+| **RAM** | 16GB | 32GB |
+| **Disk Space** | 20GB free | 50GB free SSD |
+| **OS** | Windows 10, macOS 10.15, Ubuntu 20.04 | Latest versions |
 
-**Optional:**
-- **VS Code** (for development)
-- **Python 3.11** (for local testing)
+**Install Docker Desktop**: https://www.docker.com/products/docker-desktop
 
 ---
 
 ## Installation Steps
 
-### Step 1: Clone Repository
+### 1. Clone Repository
 ```bash
 git clone https://github.com/Jasonwts-x/BIS5151E_Research-Assistant.git
 cd BIS5151E_Research-Assistant
 ```
 
-### Step 2: Configure Environment
+### 2. Configure Environment
+
+**Application environment** (REQUIRED):
 ```bash
-# Copy example environment files
 cp .env.example .env
+# Edit .env if you want to change settings
+```
+
+**Docker environment** (REQUIRED):
+```bash
 cp docker/.env.example docker/.env
 ```
 
-**Edit `docker/.env`** and set:
-```bash
-# Required: Set strong passwords
+**Edit `docker/.env` and set these required values**:
+```env
+# REQUIRED: Set a secure PostgreSQL password
 POSTGRES_PASSWORD=your_secure_password_here
-N8N_ENCRYPTION_KEY=your_32_char_encryption_key_here
 
-# Optional: Customize ports (if defaults conflict)
-# API_PORT=8000
-# N8N_PORT=5678
-# WEAVIATE_PORT=8080
+# REQUIRED: Generate a 32-character hex key for n8n
+# Linux/macOS/WSL: openssl rand -hex 32
+# Windows PowerShell: -join ((0..31) | ForEach-Object { "{0:X2}" -f (Get-Random -Maximum 256) })
+N8N_ENCRYPTION_KEY=your_64_character_hex_key_here
 ```
 
-**Generate encryption key:**
+**Generate encryption key**:
 ```bash
-# On Linux/Mac:
+# Linux/macOS/WSL
 openssl rand -hex 32
 
-# On Windows (PowerShell):
--join ((48..57) + (65..70) | Get-Random -Count 32 | % {[char]$_})
+# Windows PowerShell
+-join ((0..31) | ForEach-Object { "{0:X2}" -f (Get-Random -Maximum 256) })
 ```
 
-### Step 3: Start Services
+### 3. Start Services
 ```bash
-# Start all services
 docker compose -f docker/docker-compose.yml up -d
-
-# View logs (optional)
-docker compose -f docker/docker-compose.yml logs -f
 ```
 
-**Services starting:**
-- Postgres (n8n database)
-- Weaviate (vector store)
-- Ollama (LLM)
-- n8n (workflow automation)
-- API (FastAPI server)
-- CrewAI (agent service)
+**Expected output**:
+```
+[+] Running 7/7
+ ✔ Network research_net    Created
+ ✔ Container postgres      Started
+ ✔ Container weaviate      Started
+ ✔ Container ollama        Started
+ ✔ Container n8n           Started
+ ✔ Container api           Started
+ ✔ Container crewai        Started
+```
 
-**Wait 2-3 minutes** for all services to be healthy.
+### 4. Wait for Services (2-3 minutes)
 
-### Step 4: Verify Installation
+**Monitor startup**:
 ```bash
-# Run health check
+docker compose -f docker/docker-compose.yml logs -f
+# Press Ctrl+C when you see "Application startup complete"
+```
+
+**Or check health**:
+```bash
+# Wait until all services show "healthy"
+docker compose -f docker/docker-compose.yml ps
+```
+
+### 5. Verify Installation
+```bash
+# API health
+curl http://localhost:8000/health
+# Expected: {"status":"healthy"}
+
+# API readiness (checks Weaviate, Ollama)
+curl http://localhost:8000/ready
+# Expected: {"status":"ok","weaviate_ok":true,"ollama_ok":true}
+```
+
+**Or run automated health check**:
+```bash
 python scripts/admin/health_check.py
 ```
-
-**Expected output:**
-```
-✅ API: http://localhost:8000 - OK
-✅ Weaviate: http://localhost:8080 - OK
-✅ Ollama: http://localhost:11434 - OK
-✅ n8n: http://localhost:5678 - OK
-```
-
-**Troubleshooting:** If any service fails, see [Troubleshooting Guide](docs/troubleshooting/README.md#service-startup-issues).
 
 ---
 
 ## First Query
 
-### Option 1: Using cURL (Recommended)
+### Option 1: Using PowerShell / Command Line
+
+**Step 1a: Ingest sample papers from ArXiv**
+```powershell
+# PowerShell (Windows)
+$body = @{
+    query = "transformers attention mechanism"
+    max_results = 3
+} | ConvertTo-Json
+
+$response = Invoke-RestMethod -Uri "http://localhost:8000/rag/ingest/arxiv" `
+    -Method Post `
+    -ContentType "application/json" `
+    -Body $body
+
+Write-Host "Ingested: $($response.documents_loaded) documents"
+```
 ```bash
-# 1. Ingest sample papers from ArXiv
+# Linux/macOS (curl)
 curl -X POST http://localhost:8000/rag/ingest/arxiv \
   -H "Content-Type: application/json" \
-  -d '{
-    "query": "machine learning",
-    "max_results": 3
-  }'
+  -d '{"query":"transformers attention mechanism","max_results":3}'
+```
 
-# Wait 30-60 seconds for ingestion to complete
+Wait ~30-60 seconds for response:
+```json
+{
+  "source": "arxiv",
+  "documents_loaded": 3,
+  "chunks_created": 142,
+  "chunks_ingested": 142,
+  "success": true
+}
+```
 
-# 2. Query the system
-curl -X POST http://localhost:8000/rag/query \
+**Step 1b: Or ingest local documents**
+
+Place PDFs or TXT files in `data/raw/`, then:
+```powershell
+# PowerShell (Windows)
+$body = @{
+    pattern = "*"
+} | ConvertTo-Json
+
+$response = Invoke-RestMethod -Uri "http://localhost:8000/rag/ingest/local" `
+    -Method Post `
+    -ContentType "application/json" `
+    -Body $body
+
+Write-Host "Ingested: $($response.documents_loaded) documents"
+```
+```bash
+# Linux/macOS (curl)
+curl -X POST http://localhost:8000/rag/ingest/local \
   -H "Content-Type: application/json" \
-  -d '{
-    "query": "What is machine learning?",
-    "language": "en"
-  }'
+  -d '{"pattern":"*"}'
 ```
 
-### Option 2: Using Swagger UI
+**Step 2: Query the system**
+```powershell
+# PowerShell (Windows)
+$body = @{
+    query = "Explain the transformer attention mechanism"
+    language = "en"
+} | ConvertTo-Json
 
-1. Open http://localhost:8000/docs
-2. Click **POST /rag/ingest/arxiv**
-3. Click "Try it out"
-4. Enter:
-```json
-   {
-     "query": "transformers",
-     "max_results": 3
-   }
+$response = Invoke-RestMethod -Uri "http://localhost:8000/research/query" `
+    -Method Post `
+    -ContentType "application/json" `
+    -Body $body
+
+Write-Host "`nAnswer:`n$($response.answer)"
 ```
-5. Click "Execute"
-6. Wait for response (30-60 seconds)
-7. Click **POST /rag/query**
-8. Enter:
-```json
-   {
-     "query": "Explain transformers architecture",
-     "language": "en"
-   }
+```bash
+# Linux/macOS (curl)
+curl -X POST http://localhost:8000/research/query \
+  -H "Content-Type: application/json" \
+  -d '{"query":"Explain the transformer attention mechanism","language":"en"}'
 ```
-9. Click "Execute"
+
+### Option 2: Using API Docs (Swagger UI)
+
+1. **Open API docs**: http://localhost:8000/docs
+
+2. **Ingest papers**:
+   - Click **POST /rag/ingest/arxiv** (or **POST /rag/ingest/local** for local files)
+   - Click "Try it out"
+   - For ArXiv, enter:
+```json
+     {
+       "query": "machine learning",
+       "max_results": 3
+     }
+```
+   - For local files, enter:
+```json
+     {
+       "pattern": "*"
+     }
+```
+   - Click "Execute"
+   - Wait for response (30-60 seconds)
+
+3. **Query**:
+   - Click **POST /research/query**
+   - Click "Try it out"
+   - Enter:
+```json
+     {
+       "query": "What is machine learning?",
+       "language": "en"
+     }
+```
+   - Click "Execute"
 
 ### Option 3: Using Python
 ```python
 import requests
+import json
 
 # Ingest papers
 response = requests.post(
     "http://localhost:8000/rag/ingest/arxiv",
     json={"query": "neural networks", "max_results": 3}
 )
-print(response.json())
+print(f"Ingested: {response.json()['documents_loaded']} papers")
 
 # Query
 response = requests.post(
-    "http://localhost:8000/rag/query",
+    "http://localhost:8000/research/query",
     json={
         "query": "What are neural networks?",
         "language": "en"
     }
 )
-print(response.json()["answer"])
+result = response.json()
+print(f"\nAnswer:\n{result['answer']}")
 ```
 
 ---
 
-## Explore the System
+## Access Points
 
-### 1. API Documentation
-**URL:** http://localhost:8000/docs
+Once running, access these services:
 
-**Available Endpoints:**
-- `POST /rag/ingest/arxiv` - Fetch papers from ArXiv
-- `POST /rag/ingest/local` - Ingest local documents
-- `POST /rag/query` - Query with multi-agent processing
-- `GET /rag/stats` - View index statistics
-- `GET /health` - Health check
-- `GET /ready` - Readiness check
-
-### 2. n8n Workflow Automation
-**URL:** http://localhost:5678
-
-**First-time setup:**
-1. Open http://localhost:5678
-2. Create admin account
-3. Import example workflows from `docker/workflows/`
-4. Configure credentials (API URL: `http://api:8000`)
-
-**Example workflows:**
-- Daily ArXiv digest
-- Scheduled research summaries
-- Email notifications
-
-See [Workflow Examples](docs/examples/workflow_examples.md) for detailed guides.
-
-### 3. Weaviate Console
-**URL:** http://localhost:8080/v1/meta
-
-**Check index status:**
-```bash
-curl http://localhost:8080/v1/objects | jq '.objects | length'
-```
+| Service | URL | Purpose |
+|---------|-----|---------|
+| **API Documentation** | http://localhost:8000/docs | Interactive API docs |
+| **n8n Workflow UI** | http://localhost:5678 | Workflow automation |
+| **Weaviate Console** | http://localhost:8080/v1/meta | Vector database info |
 
 ---
 
 ## Next Steps
 
-Now that your system is running:
+### 1. Set Up n8n Workflows
 
-1. **📖 Read the Documentation**
-   - [API Reference](docs/api/README.md) - Complete endpoint documentation
-   - [Architecture Guide](docs/architecture/README.md) - System design
-   - [Examples](docs/examples/README.md) - Code examples
+See [docs/setup/N8N.md](docs/setup/N8N.md) for:
+- Creating n8n admin account
+- Importing example workflows
+- Setting up scheduled research tasks
+- Configuring email notifications
 
-2. **🧪 Experiment**
-   - Try different queries
-   - Ingest your own PDFs (place in `data/raw/`)
-   - Create n8n workflows
-   - Test multilingual support (DE, FR, ES)
+### 2. Explore the API
 
-3. **🛠️ Development**
-   - [Contributing Guide](CONTRIBUTING.md) - Set up dev environment
-   - [Testing Guide](tests/TESTING.md) - Run tests
+**Available endpoints**:
+- `POST /rag/ingest/arxiv` - Fetch papers from ArXiv
+- `POST /rag/ingest/local` - Ingest local PDFs
+- `POST /research/query` - Complete research workflow (ingest + query)
+- `POST /rag/query` - Query only (no ingestion)
+- `GET /rag/stats` - View index statistics
+- `GET /health` - Health check
+- `GET /ready` - Readiness check
 
-4. **📊 Monitor**
-   - Check logs: `docker compose logs -f`
-   - View metrics: http://localhost:8000/metrics (coming soon)
+Full documentation: [docs/api/README.md](docs/api/README.md)
+
+### 3. Ingest Your Own Documents
+```bash
+# Place PDFs or TXT files in data/raw/
+cp your_paper.pdf data/raw/
+
+# Ingest them
+curl -X POST http://localhost:8000/rag/ingest/local \
+  -H "Content-Type: application/json" \
+  -d '{"pattern": "*"}'
+```
+
+### 4. Try Multilingual Queries
+```powershell
+# PowerShell (Windows)
+
+# German
+$body = @{
+    query = "Was ist maschinelles Lernen?"
+    language = "de"
+} | ConvertTo-Json
+
+Invoke-RestMethod -Uri "http://localhost:8000/research/query" `
+    -Method Post `
+    -ContentType "application/json" `
+    -Body $body
+
+# French
+$body = @{
+    query = "Qu'est-ce que l'apprentissage automatique?"
+    language = "fr"
+} | ConvertTo-Json
+
+Invoke-RestMethod -Uri "http://localhost:8000/research/query" `
+    -Method Post `
+    -ContentType "application/json" `
+    -Body $body
+
+# Spanish
+$body = @{
+    query = "¿Qué es el aprendizaje automático?"
+    language = "es"
+} | ConvertTo-Json
+
+Invoke-RestMethod -Uri "http://localhost:8000/research/query" `
+    -Method Post `
+    -ContentType "application/json" `
+    -Body $body
+```
+```bash
+# Linux/macOS (curl)
+
+# German
+curl -X POST http://localhost:8000/research/query \
+  -H "Content-Type: application/json" \
+  -d '{"query":"Was ist maschinelles Lernen?","language":"de"}'
+
+# French
+curl -X POST http://localhost:8000/research/query \
+  -H "Content-Type: application/json" \
+  -d '{"query":"Qu'\''est-ce que l'\''apprentissage automatique?","language":"fr"}'
+
+# Spanish
+curl -X POST http://localhost:8000/research/query \
+  -H "Content-Type: application/json" \
+  -d '{"query":"¿Qué es el aprendizaje automático?","language":"es"}'
+```
 
 ---
 
 ## Stopping Services
 ```bash
-# Stop all services
+# Stop all services (keeps data)
 docker compose -f docker/docker-compose.yml down
 
-# Stop and remove volumes (deletes all data)
+# Stop and remove all data (fresh start)
 docker compose -f docker/docker-compose.yml down -v
 ```
 
@@ -243,42 +371,81 @@ docker compose -f docker/docker-compose.yml down -v
 
 ## Common Issues
 
-### Port Already in Use
-```bash
-# Find process using port 8000
-lsof -i :8000  # Mac/Linux
-netstat -ano | findstr :8000  # Windows
+### Issue: Port already in use
 
-# Either kill the process or change the port in docker/.env
+**Error**: `Bind for 0.0.0.0:8000 failed: port is already allocated`
+
+**Solution**:
+```bash
+# Find what's using the port
+# Linux/macOS:
+lsof -i :8000
+
+# Windows:
+netstat -ano | findstr :8000
+
+# Kill the process or change the port in docker/.env
 ```
 
-### Ollama Model Not Found
+### Issue: Ollama model not found
+
+**Error**: `Model 'qwen3:1.7b' not found`
+
+**Solution**:
 ```bash
 # Pull the model manually
+docker compose exec ollama ollama pull qwen3:1.7b
+
+# Or pull all models
+docker compose exec ollama ollama pull qwen3:4b
 docker compose exec ollama ollama pull qwen2.5:3b
 ```
 
-### Weaviate Connection Refused
-```bash
-# Check if Weaviate is running
-curl http://localhost:8080/v1/meta
+### Issue: Services fail to start
 
-# If not, check logs
-docker compose logs weaviate
+**Solution**:
+```bash
+# Check Docker has enough resources
+# Docker Desktop → Settings → Resources
+# Ensure: 4+ CPUs, 8GB+ RAM, 20GB+ disk
+
+# Check logs
+docker compose -f docker/docker-compose.yml logs
+
+# Restart services
+docker compose -f docker/docker-compose.yml restart
 ```
 
-For more issues, see [Troubleshooting Guide](docs/troubleshooting/README.md).
+### Issue: Ollama Desktop App Blocking Port
+
+**Error**: `Failed to connect to Ollama at localhost:11434`
+
+**Cause**: Ollama desktop application is running and blocking port 11434.
+
+**Solution**:
+```bash
+# Windows: Right-click Ollama tray icon → Quit
+# macOS: Click Ollama menu bar icon → Quit Ollama
+# Linux: killall ollama
+
+# Then restart Docker services
+docker compose -f docker/docker-compose.yml restart ollama
+```
+
+For more troubleshooting, see [docs/setup/TROUBLESHOOTING.md](docs/setup/TROUBLESHOOTING.md).
 
 ---
 
 ## Getting Help
 
-- **Documentation:** [docs/](docs/)
-- **Issues:** [GitHub Issues](https://github.com/Jasonwts-x/BIS5151E_Research-Assistant/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/Jasonwts-x/BIS5151E_Research-Assistant/discussions)
+- **Documentation**: [docs/](docs/)
+- **Detailed Setup**: [docs/setup/INSTALLATION.md](docs/setup/INSTALLATION.md)
+- **API Reference**: [docs/api/README.md](docs/api/README.md)
+- **Issues**: [GitHub Issues](https://github.com/Jasonwts-x/BIS5151E_Research-Assistant/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/Jasonwts-x/BIS5151E_Research-Assistant/discussions)
 
 ---
 
-**🎉 Congratulations!** You're ready to use ResearchAssistantGPT.
+**🎉 You're ready to use ResearchAssistantGPT!**
 
-**[⬅ Back to README](README.md)** | **[➡ Next: API Documentation](docs/api/README.md)**
+**[⬅ Back to README](README.md)** | **[➡ Next: Complete Installation Guide](docs/setup/INSTALLATION.md)**

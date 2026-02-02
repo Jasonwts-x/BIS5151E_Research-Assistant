@@ -2,7 +2,7 @@
 
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/)
 [![Docker](https://img.shields.io/badge/docker-required-blue.svg)](https://www.docker.com/)
-[![License](https://img.shields.io/badge/license-Academic-green.svg)]()
+[![License](https://img.shields.io/badge/license-Academic-green.svg)](LICENSE)
 
 > AI-powered research assistant with RAG and multi-agent workflows for academic literature review
 
@@ -13,13 +13,13 @@
 - [Overview](#-overview)
 - [Course Context](#-course-context)
 - [Project Objectives](#-project-objectives)
+- [Key Features](#-key-features)
 - [Technical Stack](#%EF%B8%8F-technical-stack)
-- [Architecture](#%EF%B8%8F-architecture)
+- [System Architecture](#%EF%B8%8F-system-architecture)
 - [Folder Structure](#-folder-structure)
-- [Quick Start](#-quick-start)
+- [Getting Started](#-getting-started)
 - [Documentation](#-documentation)
-- [Development](#%EF%B8%8F-development)
-- [Usage Examples](#-usage-examples)
+- [Evaluation & Quality](#-evaluation--quality)
 - [Team](#-team)
 - [License](#-license)
 
@@ -27,16 +27,10 @@
 
 ## 🎯 Overview
 
-Research-Assistant-GPT is a **RAG-based research assistant** that generates **cited summaries** from academic papers using multi-agent AI workflows. 
+ResearchAssistantGPT is a **RAG-based research assistant** that generates **cited summaries** from academic papers using multi-agent AI workflows. 
 The system combines retrieval-augmented generation with fact-checking agents to ensure accuracy and proper citation.
 
-**Key Features**:
-- 📚 **Automatic literature ingestion** from ArXiv and local files
-- 🔍 **Hybrid retrieval** using Weaviate vector database
-- 🤖 **Multi-agent workflow** (Writer → Reviewer → FactChecker)
-- ✅ **Citation validation** and fact-checking
-- 🌐 **Multilingual support** (English, German, French, Spanish)
-- 🔒 **Privacy-preserving** (runs entirely on local infrastructure)
+Built as a course project for BIS5151 (Generative AI) at Hochschule Pforzheim, this system demonstrates practical application of modern AI techniques in an academic context.
 
 ---
 
@@ -50,9 +44,10 @@ The system combines retrieval-augmented generation with fact-checking agents to 
 
 This project demonstrates practical application of:
 - Retrieval-Augmented Generation (RAG)
-- Multi-agent AI systems
-- LLM orchestration and governance
-- AI evaluation frameworks
+- Multi-agent AI systems (CrewAI)
+- LLM orchestration with n8n
+- AI evaluation frameworks (TruLens, Guardrails)
+- Docker microservices architecture
 
 ---
 
@@ -61,226 +56,317 @@ This project demonstrates practical application of:
 ### Core Objectives
 1. **Literature Retrieval**: Fetch and index academic papers from ArXiv and local sources
 2. **Context-Aware Summarization**: Generate 300-word summaries grounded in source documents
-3. **Fact Verification**: Validate all claims against retrieved sources
+3. **Fact Verification**: Validate all claims against retrieved sources with FactChecker agent
 4. **Citation Discipline**: Ensure proper citation with [1], [2], etc. markers
-5. **Quality Assurance**: Implement evaluation frameworks (TruLens, Guardrails AI)
+5. **Multilingual Support**: Summarize in English, German, French, and Spanish
+6. **Quality Assurance**: Implement evaluation metrics and safety guardrails
 
-### Learning Goals
-- Hands-on experience with modern RAG architectures
-- Understanding of agent-based AI systems (CrewAI)
-- Practical knowledge of LLM evaluation and governance
-- Workflow orchestration with n8n
+### Technical Objectives
+1. **Microservices Architecture**: Separate services for API, agents, RAG, and orchestration
+2. **Hybrid Retrieval**: Combine BM25 lexical search with semantic vector search
+3. **Agent Collaboration**: Multi-agent workflow (Writer → Reviewer → FactChecker)
+4. **Scalability**: Docker-based deployment ready for production
+5. **Privacy**: Run entirely on local infrastructure (no external API calls)
+
+---
+
+## ✨ Key Features
+
+- 📚 **Automatic Ingestion** - Fetch papers from ArXiv or ingest local PDFs/TXT files
+- 🔍 **Hybrid Search** - BM25 + vector similarity using Weaviate vector database
+- 🤖 **Multi-Agent System** - Three specialized agents (Writer, Reviewer, FactChecker)
+- ✅ **Fact Checking** - Validate claims against source documents
+- 📝 **Citation Management** - Automatic citation insertion and validation
+- 🌐 **Multilingual** - Summarize in EN, DE, FR, ES
+- 🔒 **Privacy-First** - Runs entirely locally (no data leaves your machine)
+- 🐳 **Docker-Native** - One-command deployment with Docker Compose
+- 🔄 **n8n Orchestration** - Workflow automation for scheduled tasks
+- 📊 **Quality Monitoring** - TruLens evaluation and Guardrails safety checks (experimental)
 
 ---
 
 ## 🛠️ Technical Stack
 
-### Core Technologies
+### Core Services (Docker Compose)
 
-| Component | Technology | Purpose |
-|-----------|-----------|---------|
-| **Language** | Python 3.11 | Core development |
-| **API Framework** | FastAPI + Uvicorn | REST API gateway |
-| **RAG Framework** | Haystack 2.x | Document processing & retrieval |
-| **Vector Database** | Weaviate | Hybrid search (lexical + semantic) |
-| **LLM Runtime** | Ollama (qwen2.5:3b) | Local inference |
-| **Agent Framework** | CrewAI 1.3.0 | Multi-agent orchestration |
-| **Workflow Engine** | n8n | End-to-end automation |
-| **Database** | PostgreSQL 15 | n8n workflow storage |
-| **Embeddings** | Sentence-Transformers | Document vectorization |
-| **Evaluation** | TruLens + Guardrails AI | Quality assurance |
-| **Containerization** | Docker + Docker Compose | Service orchestration |
+| Service | Technology | Purpose | Port |
+|---------|-----------|---------|------|
+| **API Gateway** | FastAPI + Uvicorn | Main REST API | 8000 |
+| **CrewAI Service** | CrewAI 1.3.0 | Multi-agent workflow | 8100 |
+| **Vector Database** | Weaviate 1.23.0 | Hybrid search (BM25 + vector) | 8080 |
+| **LLM Runtime** | Ollama | Local LLM inference | 11434 |
+| **Orchestrator** | n8n | Workflow automation | 5678 |
+| **Database** | PostgreSQL 15 | n8n persistence | 5432 |
+| **DevContainer** | Python 3.11 | Development environment | - |
 
 ### Python Libraries
-```python
-crewai==1.3.0                # Multi-agent framework
-haystack-ai==2.18.1          # RAG pipeline
-weaviate-haystack==6.3.0     # Weaviate integration
-langchain-ollama==1.0.1      # LLM integration
-fastapi                      # Web framework
-httpx                        # Async HTTP client
-arxiv==2.1.0                 # ArXiv paper fetching
-```
+
+**Core Framework**:
+- **Haystack 2.x** - RAG pipeline framework
+- **CrewAI 1.3.0** - Multi-agent collaboration
+- **FastAPI** - Modern async API framework
+- **Uvicorn** - ASGI server
+- **Pydantic 2.x** - Data validation
+
+**AI/ML**:
+- **LangChain-Ollama** - LLM integration
+- **sentence-transformers** - Text embeddings (`all-MiniLM-L6-v2`)
+- **weaviate-client** - Vector database client
+- **haystack-weaviate** - Weaviate document store
+
+**Data Processing**:
+- **PyPDF** - PDF parsing
+- **arxiv** - ArXiv API client
+- **requests** - HTTP client
+- **python-dotenv** - Environment management
+
+**Evaluation** (Experimental):
+- **trulens-eval 0.19.0** - RAG quality metrics
+- **guardrails-ai** - Input/output validation
+- **rouge-score** - Summarization metrics
+- **sacrebleu** - Translation quality (BLEU)
+
+**Development**:
+- **pytest** - Testing framework
+- **ruff** - Fast Python linter
+- **black** - Code formatter
+- **mypy** - Type checking
+
+### LLM Configuration
+
+**Default Model**: `qwen3:1.7b` (Qwen 2.5 - 1.7B parameters)  
+**Alternatives**: `qwen3:4b`, `qwen2.5:3b`, `llama3.2:3b`  
+**Why Qwen?**: Balanced speed/quality for local inference, strong multilingual support
+
+**Note**: The model can be changed in `docker/.env` by setting `OLLAMA_MODEL`.
 
 ---
 
-## 🏗️ Architecture
+## 🏛️ System Architecture
 
-### System Architecture
+### High-Level Architecture
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                        n8n Orchestrator                     │
-│                 Workflow Automation (Port 5678)             │
+│                         User                                 │
 └──────────────────────────┬──────────────────────────────────┘
                            │
-        ┌──────────────────┴──────────────────┐
-        │                                     │
-┌───────▼──────────┐              ┌──────────▼─────────┐
-│   API Gateway    │              │                    │
-│   (FastAPI)      │◄─────────────┤   CrewAI Service   │
-│   Port 8000      │  Proxy       │   Port 8100        │
-└───────┬──────────┘              └──────────┬─────────┘
-        │                                    │
-    ┌───▼────────┐                      ┌───▼────────┐
-    │            │                      │            │
-    │  RAG       │                      │  Multi-    │
-    │  Pipeline  │                      │  Agent     │
-    │            │                      │  Workflow  │
-    └───┬────────┘                      └───┬────────┘
-        │                                   │
-┌───────▼───────────────────────────────────▼──────────┐
-│                                                      │
-│  ┌─────────────┐        ┌──────────────┐             │
-│  │  Weaviate   │        │   Ollama     │             │
-│  │  Port 8080  │        │  Port 11434  │             │
-│  │             │        │              │             │
-│  │ • Hybrid    │        │ • LLM        │             │
-│  │   Search    │        │   Inference  │             │
-│  │ • Vector DB │        │ • qwen2.5:3b │             │
-│  └─────────────┘        └──────────────┘             │
-│                                                      │
-│  ┌─────────────┐                                     │
-│  │ PostgreSQL  │                                     │
-│  │  Port 5432  │                                     │
-│  │             │                                     │
-│  │ • n8n DB    │                                     │
-│  └─────────────┘                                     │
-│                                                      │
-└──────────────────────────────────────────────────────┘
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      n8n Orchestrator                        │
+│          (Workflow Automation & Scheduling)                  │
+└──────────────┬────────────────────────┬─────────────────────┘
+               │                        │
+               ▼                        ▼
+┌──────────────────────────┐  ┌────────────────────────────┐
+│     API Gateway (8000)   │  │   CrewAI Service (8100)    │
+│                          │  │                            │
+│  ┌────────────────────┐ │  │  ┌──────────────────────┐ │
+│  │  RAG Endpoints     │ │  │  │  Writer Agent        │ │
+│  │  /ingest/arxiv     │ │  │  │  Reviewer Agent      │ │
+│  │  /ingest/local     │ │  │  │  FactChecker Agent   │ │
+│  │  /query            │ │  │  └──────────────────────┘ │
+│  └────────────────────┘ │  └────────────────────────────┘
+└────────┬─────────────────┘              │
+         │                                │
+         ▼                                ▼
+┌──────────────────────────┐  ┌────────────────────────────┐
+│   Weaviate (8080)        │  │     Ollama (11434)         │
+│   Vector Database        │  │     LLM Inference          │
+│   - Document Store       │  │     - qwen3:1.7b          │
+│   - BM25 + Vector Search │  │     - Response Generation  │
+└──────────────────────────┘  └────────────────────────────┘
+         ▲
+         │
+┌────────────────────────┐
+│  PostgreSQL (5432)     │
+│  n8n Database          │
+└────────────────────────┘
 ```
 
 ### Request Flow
+
+**Complete Research Query Workflow**:
 ```
 1. User → n8n: Trigger workflow with research topic
-2. n8n → API: POST /research/query {"query": "...", "language": "en"}
-3. API → CrewAI: POST /crewai/run (proxy request)
-4. CrewAI → Weaviate: Retrieve top-k relevant chunks
-5. CrewAI → Ollama: Run multi-agent workflow:
-   ├─ Writer: Draft summary from context
-   ├─ Reviewer: Improve clarity
-   └─ FactChecker: Verify claims against sources
-6. CrewAI → API: Return fact-checked summary
-7. API → n8n: Return final result
-8. n8n → User: Deliver summary (email, webhook, etc.)
+
+2. n8n → API: POST /rag/ingest/arxiv 
+   └─> Fetch papers from ArXiv matching query
+   └─> Extract text, chunk, embed, store in Weaviate
+
+3. n8n → API: POST /research/query {"query": "...", "language": "en"}
+   └─> API validates input with Guardrails
+
+4. API → CrewAI: POST /crewai/run (proxy request)
+   
+5. CrewAI → Weaviate: Retrieve top-k relevant chunks
+   └─> Hybrid search (BM25 + vector similarity)
+   └─> Returns: 5-10 most relevant document chunks
+
+6. CrewAI → Ollama: Run multi-agent workflow:
+   ├─ Writer Agent: Draft 300-word summary from context
+   ├─ Reviewer Agent: Improve clarity, fix grammar
+   └─ FactChecker Agent: Verify claims against sources, validate citations
+
+7. CrewAI → API: Return fact-checked summary with citations
+
+8. API: Validate output with Guardrails
+   └─> Check citation format, length, harmful content
+
+9. API → n8n: Return final result
+
+10. n8n → User: Deliver summary (email, webhook, notification, etc.)
 ```
+
+**Data Flow Details**:
+- **Ingestion**: ArXiv/Local → PDF Parse → Chunking (350 chars) → Embedding → Weaviate
+- **Retrieval**: Query → Embed → Hybrid Search (α=0.5) → Top-5 chunks → Context
+- **Generation**: Context → Writer → Reviewer → FactChecker → Final Summary
 
 ---
 
 ## 📁 Folder Structure
 ```
 BIS5151E_Research-Assistant/
-├── .devcontainer/              # VS Code DevContainer configuration
-│   ├── Dockerfile              # Multi-stage build (dev, api, crewai)
+├── .devcontainer/              # VS Code DevContainer
+│   ├── Dockerfile              # Multi-stage: dev, api, crewai
 │   └── devcontainer.json       # Container settings
 │
 ├── .github/                    # GitHub configuration
 │   ├── workflows/              
-│   │   └── ci.yml              # CI/CD pipeline (pytest, ruff, black)
-│   └── CODEOWNERS              # Code ownership
+│   │   └── ci.yml              # CI/CD pipeline
+│   ├── ISSUE_TEMPLATE/         # Issue templates
+│   └── pull_request_template.md
 │
 ├── configs/                    # Application configuration
-│   └── app.yaml                # Main config (LLM, RAG, Weaviate settings)
+│   └── app.yaml                # Main config (LLM, RAG, Weaviate, Guardrails)
 │
 ├── data/                       # Data storage (gitignored except .gitkeep)
-│   ├── raw/                    # Source documents (PDFs, TXT)
-│   ├── processed/              # Processed chunks
+│   ├── raw/                    # Local PDFs/TXT files
+│   ├── arxiv/                  # Downloaded ArXiv papers
+│   ├── processed/              # Processed chunks (legacy)
 │   └── external/               # External datasets
 │
+├── database/                   # Database scripts
+│   ├── init/                   # PostgreSQL init scripts
+│   └── scripts/                # Backup/restore scripts
+│
 ├── docker/                     # Docker configuration
-│   ├── docker-compose.yml      # Main service definitions
+│   ├── docker-compose.yml      # Main services (CPU mode)
 │   ├── docker-compose.nvidia.yml # GPU support (NVIDIA)
 │   ├── docker-compose.amd.yml  # GPU support (AMD)
-│   ├── .env.example            # Docker secrets template
+│   ├── .env.example            # Docker environment template
 │   └── workflows/              # n8n workflow files
+│       └── research_assistant.json
 │
 ├── docs/                       # Documentation
-│   ├── setup/                  # Installation guides
+│   ├── setup/                  # Installation & setup guides
+│   │   ├── README.md           # Setup hub
+│   │   ├── INSTALLATION.md     # Detailed installation
+│   │   ├── GPU.md              # GPU setup
+│   │   ├── N8N.md              # n8n workflow setup
+│   │   └── TROUBLESHOOTING.md  # Common issues
 │   ├── api/                    # API documentation
-│   ├── architecture/           # Design documents
+│   │   └── README.md           # Endpoint reference
+│   ├── architecture/           # System design
+│   │   ├── README.md           # Architecture overview
+│   │   ├── DATA_FLOW.md        # Data flow diagrams
+│   │   └── research-assistant_*.txt # Project docs
 │   ├── examples/               # Usage examples
-│   └── troubleshooting/        # Common issues
+│   │   └── workflow_examples.md
+│   ├── evaluation/             # Evaluation documentation
+│   │   ├── README.md           # Evaluation overview
+│   │   ├── TRULENS.md          # TruLens setup
+│   │   └── METRICS.md          # Metrics explanation
+│   └── templates/              # Chat templates for development
 │
 ├── outputs/                    # Generated summaries (gitignored)
 │
 ├── scripts/                    # Utility scripts
-│   ├── admin/                  # Administrative tasks
-│   │   ├── health_check.py     # Service health verification
-│   │   ├── backup_data.sh      # Backup persistent data
-│   │   └── cleanup_volumes.sh  # Docker cleanup
-│   ├── dev/                    # Development helpers
-│   │   ├── start_services.sh   # Start all services
-│   │   ├── stop_services.sh    # Stop all services
-│   │   └── restart_service.sh  # Restart specific service
-│   ├── manual/                 # Manual testing scripts
-│   └── setup/                  # Installation helpers
-│       ├── verify_gpu.sh       # GPU detection
-│       └── install_gpu_support_linux.sh
+│   ├── admin/                  # Administration
+│   │   └── health_check.py     # Service health checks
+│   ├── eval/                   # Evaluation scripts
+│   └── setup/                  # Setup helpers
 │
 ├── src/                        # Source code
 │   ├── agents/                 # CrewAI multi-agent system
-│   │   ├── api/                # CrewAI service (port 8100)
-│   │   ├── config/             # Agent/task YAML configs
-│   │   ├── crews/              # Crew compositions
+│   │   ├── api/                # CrewAI service API (port 8100)
 │   │   ├── roles/              # Agent definitions
 │   │   ├── tasks/              # Task definitions
-│   │   ├── tools/              # Custom tools
-│   │   └── runner.py           # Main execution logic
-│   │
+│   │   ├── crews/              # Crew compositions
+│   │   └── runner.py           # Execution logic
 │   ├── api/                    # Main API gateway (port 8000)
-│   │   ├── routers/            # Endpoint implementations
+│   │   ├── routers/            # Endpoint groups
+│   │   │   ├── crewai.py       # CrewAI proxy
+│   │   │   ├── ollama.py       # Ollama proxy
+│   │   │   ├── rag.py          # RAG operations
+│   │   │   ├── research.py     # Research workflow
+│   │   │   └── system.py       # Health/version
 │   │   ├── schemas/            # Pydantic models
-│   │   ├── dependencies.py     # Dependency injection
-│   │   ├── errors.py           # Error handling
-│   │   ├── openapi.py          # API documentation config
 │   │   └── server.py           # FastAPI app
-│   │
-│   ├── eval/                   # Evaluation & quality assurance
-│   │   ├── guardrails.py       # Safety checks
-│   │   └── trulens.py          # Monitoring
-│   │
-│   ├── rag/                    # RAG pipeline
-│   │   ├── core/               # Core infrastructure
-│   │   │   ├── pipeline.py     # Main RAG pipeline
-│   │   │   ├── schema.py       # Weaviate schema management
-│   │   │   └── service.py      # RAG service layer
-│   │   ├── ingestion/          # Document processing
-│   │   │   ├── engine.py       # Ingestion orchestration
-│   │   │   └── processor.py    # Chunking & ID generation
-│   │   └── sources/            # Data sources
-│   │       ├── base.py         # Abstract source
-│   │       ├── local.py        # Local file source
-│   │       └── arxiv.py        # ArXiv source
-│   │
-│   └── utils/                  # Shared utilities
-│       └── config.py           # Configuration management
+│   ├── eval/                   # Evaluation & monitoring
+│   │   ├── guardrails/         # Safety validation
+│   │   ├── trulens/            # Quality metrics
+│   │   ├── performance/        # Performance tracking
+│   │   └── quality/            # Quality metrics
+│   ├── rag/                    # RAG pipeline (Haystack + Weaviate)
+│   │   ├── core/               # Pipeline components
+│   │   │   ├── docstore.py     # Weaviate document store
+│   │   │   ├── embedder.py     # Sentence transformers
+│   │   │   ├── pipeline.py     # RAG pipeline (singleton)
+│   │   │   ├── processor.py    # Document processing
+│   │   │   └── schema.py       # Weaviate schema (explicit)
+│   │   ├── sources/            # Data sources
+│   │   │   ├── arxiv.py        # ArXiv API client
+│   │   │   └── local.py        # Local file loader
+│   │   └── cli.py              # CLI entrypoint
+│   └── utils/                  # Utilities
+│       ├── config.py           # Configuration loader
+│       └── logging_config.py   # Logging setup
 │
 ├── tests/                      # Test suite
-│   ├── conftest.py             # Shared fixtures
 │   ├── unit/                   # Unit tests
-│   │   ├── test_rag/
-│   │   ├── test_agents/
-│   │   └── test_api/
+│   │   ├── test_agents/        # Agent tests
+│   │   ├── test_api/           # API tests
+│   │   ├── test_eval/          # Evaluation tests
+│   │   └── test_rag/           # RAG tests
 │   ├── integration/            # Integration tests
-│   └── fixtures/               # Test data
+│   ├── fixtures/               # Test data
+│   ├── conftest.py             # Pytest configuration
+│   └── TESTING.md              # Testing guide
 │
 ├── .env.example                # Application environment template
 ├── .gitignore                  # Git ignore rules
+├── .gitattributes              # Git attributes
 ├── .ruff.toml                  # Ruff linter config
-├── CONTRIBUTING.md             # Contribution guidelines
+├── CHANGELOG.md                # Version history
+├── CONTRIBUTING.md             # Contribution guide
+├── LICENSE                     # Academic license
+├── QUICKSTART.md               # 5-minute quickstart
 ├── README.md                   # This file
-└── requirements.txt            # Python dependencies
+├── ROADMAP.md                  # Future plans
+├── requirements.txt            # Python dependencies
+└── requirements-dev.txt        # Development dependencies
 ```
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Getting Started
 
-### Prerequisites
-- **Docker Desktop** (with 16GB+ RAM allocated)
-- **Git**
-- **20GB free disk space**
+### Quick Start (5 Minutes)
 
-### Installation (5 steps)
+See **[QUICKSTART.md](QUICKSTART.md)** for the fastest path to running the system.
+
+### Detailed Installation
+
+See **[docs/setup/INSTALLATION.md](docs/setup/INSTALLATION.md)** for complete installation instructions.
+
+**Prerequisites**:
+- Docker Desktop
+- 16GB RAM (32GB recommended)
+- 20GB free disk space
+- Windows 10/11, macOS, or Linux
+
+**Quick Commands**:
 ```bash
 # 1. Clone repository
 git clone https://github.com/Jasonwts-x/BIS5151E_Research-Assistant.git
@@ -291,214 +377,146 @@ cp .env.example .env
 cp docker/.env.example docker/.env
 # Edit docker/.env: Set POSTGRES_PASSWORD and N8N_ENCRYPTION_KEY
 
-# 3. Start services (CPU mode)
+# 3. Start services
 docker compose -f docker/docker-compose.yml up -d
 
-# 4. Verify installation
-python scripts/admin/health_check.py
+# 4. Wait for services (2-3 minutes)
+docker compose logs -f
 
-# 5. Ingest sample data
+# 5. Verify health
+curl http://localhost:8000/health
+
+# 6. First query
 curl -X POST http://localhost:8000/rag/ingest/arxiv \
   -H "Content-Type: application/json" \
   -d '{"query": "machine learning", "max_results": 3}'
-```
 
-### First Query
-```bash
-curl -X POST http://localhost:8000/rag/query \
+curl -X POST http://localhost:8000/research/query \
   -H "Content-Type: application/json" \
-  -d '{
-    "query": "What is machine learning?",
-    "language": "en"
-  }'
+  -d '{"query": "What is machine learning?", "language": "en"}'
 ```
 
-**See full installation guide**: [docs/setup/INSTALLATION.md](docs/setup/INSTALLATION.md)
+**Access Points**:
+- **API Docs**: http://localhost:8000/docs
+- **n8n UI**: http://localhost:5678
+- **Weaviate**: http://localhost:8080/v1/meta
 
 ---
 
 ## 📚 Documentation
 
-- **[Installation Guide](docs/setup/INSTALLATION.md)** - Step-by-step setup
-- **[API Documentation](docs/api/README.md)** - Endpoint reference
-- **[Architecture](docs/architecture/README.md)** - System design
-- **[Troubleshooting](docs/troubleshooting/README.md)** - Common issues
-- **[Examples](docs/examples/README.md)** - Usage examples
+### **Main Documentation**
 
-**Quick Links**:
-- API Docs (Swagger): http://localhost:8000/docs
-- n8n UI: http://localhost:5678
-- Weaviate Console: http://localhost:8080/v1/meta
-
----
-
-## 🛠️ Development
-
-### Open in DevContainer
-```bash
-# VS Code will detect .devcontainer/devcontainer.json
-# Click "Reopen in Container"
-```
-
-### Run Tests
-```bash
-# All tests
-pytest tests/ -v
-
-# Unit tests only (fast)
-pytest tests/unit/ -v
-
-# Integration tests (requires services)
-pytest tests/integration/ -v
-
-# With coverage
-pytest tests/ --cov=src --cov-report=html
-```
-
-### Code Quality
-```bash
-# Format code
-black src tests
-
-# Lint
-ruff check src tests --fix
-
-# Type check
-mypy src
-```
-
-### Commit Standards
-
-We use **conventional commits**:
-```
-<feature>(<category>): <description>
-
-Features: chore, docs, feat, fix, refactor, style, test
-Categories: agents, api, docker, docs, rag, refactor, tests
-Example: feat(agents): add translator agent for multilingual support
-```
+| Category | Document | Description |
+|----------|----------|-------------|
+| **Setup & Installation** | [QUICKSTART.md](QUICKSTART.md) | Get running in 5 minutes |
+| | [docs/setup/](docs/setup/) | Complete installation guides |
+| | [docs/setup/INSTALLATION.md](docs/setup/INSTALLATION.md) | Detailed step-by-step setup |
+| | [docs/setup/GPU.md](docs/setup/GPU.md) | NVIDIA/AMD GPU acceleration |
+| | [docs/setup/N8N.md](docs/setup/N8N.md) | n8n workflow automation setup |
+| | [docs/setup/TROUBLESHOOTING.md](docs/setup/TROUBLESHOOTING.md) | Common issues & solutions |
+| **API Reference** | [docs/api/](docs/api/) | Complete API documentation |
+| | [Swagger UI](http://localhost:8000/docs) | Interactive API docs (when running) |
+| **Architecture** | [docs/architecture/](docs/architecture/) | System design documents |
+| | [docs/architecture/README.md](docs/architecture/README.md) | Architecture overview |
+| | [docs/architecture/DATA_FLOW.md](docs/architecture/DATA_FLOW.md) | Request flow diagrams |
+| **Usage Examples** | [docs/examples/](docs/examples/) | Code examples & workflows |
+| | [docs/examples/workflow_examples.md](docs/examples/workflow_examples.md) | n8n workflow examples |
+| **Evaluation** | [docs/evaluation/](docs/evaluation/) | Quality & monitoring |
+| | [docs/evaluation/README.md](docs/evaluation/README.md) | Evaluation overview |
+| | [docs/evaluation/METRICS.md](docs/evaluation/METRICS.md) | Metrics explanation |
+| | [docs/evaluation/TRULENS.md](docs/evaluation/TRULENS.md) | TruLens setup guide |
+| **Development** | [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution guidelines |
+| | [tests/TESTING.md](tests/TESTING.md) | Testing guide |
+| **Project Info** | [CHANGELOG.md](CHANGELOG.md) | Version history |
+| | [ROADMAP.md](ROADMAP.md) | Future plans |
+| | [LICENSE](LICENSE) | License information |
 
 ---
 
-## 📊 Usage Examples
+## 📊 Evaluation & Quality
 
-### API
-```bash
-# Ingest ArXiv papers
-curl -X POST http://localhost:8000/rag/ingest/arxiv \
-  -H "Content-Type: application/json" \
-  -d '{"query": "retrieval augmented generation", "max_results": 5}'
+### Quality Metrics
 
-# Query with multi-agent processing
-curl -X POST http://localhost:8000/rag/query \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "What is RAG?",
-    "language": "en"
-  }'
+The system implements comprehensive evaluation to ensure high-quality outputs:
 
-# Get index statistics
-curl http://localhost:8000/rag/stats
-```
+| Metric | Purpose | Target | Status |
+|--------|---------|--------|--------|
+| **Answer Relevance** | Does the answer address the query? | > 0.8 | ✅ Implemented (TruLens) |
+| **Context Relevance** | Is retrieved context useful? | > 0.7 | ✅ Implemented (TruLens) |
+| **Groundedness** | Are claims supported by context? | > 0.85 | ✅ Implemented (TruLens) |
+| **Citation Coverage** | % of claims with citations | > 90% | ✅ Implemented (Guardrails) |
+| **ROUGE-L** | Summarization quality | > 0.5 | ✅ Implemented |
+| **Response Time** | Query latency | < 30s | ✅ Measured |
 
-### CLI
-```bash
-# Ingest local files
-python -m src.rag.cli ingest-local --pattern "*.pdf"
+### Guardrails (Safety Checks)
 
-# Fetch from ArXiv
-python -m src.rag.cli ingest-arxiv "neural networks" --max-results 10
+**Input Validation**:
+- ✅ Query length limits (< 10,000 chars)
+- ✅ Jailbreak attempt detection
+- ✅ PII detection (basic)
+- ✅ Off-topic query detection
 
-# Test retrieval
-python -m src.rag.cli query "What is deep learning?" --top-k 5
-
-# Reset index
-python -m src.rag.cli reset-index --yes
-```
-
----
-
-## 📊 Evaluation & Monitoring
-
-ResearchAssistantGPT includes comprehensive evaluation and monitoring:
+**Output Validation**:
+- ✅ Citation format checking
+- ✅ Hallucination marker detection ("I think", "I believe", etc.)
+- ✅ Length validation
+- ✅ Harmful content filtering
 
 ### Evaluation Dashboard
 
-Access the interactive dashboard at **http://localhost:8501** to view:
-- TruLens quality metrics (groundedness, relevance)
-- Guardrails validation results
-- Performance timing breakdown
-- ROUGE/BLEU quality scores
+**TruLens Dashboard** (Experimental):
+- Real-time quality metrics
+- Query-level analysis
+- Performance trends
+- Feedback collection
 
-### Evaluation API
-
-Query evaluation metrics programmatically:
-```bash
-# Get evaluation leaderboard
-curl http://localhost:8502/metrics/leaderboard
-
-# Get specific evaluation record
-curl http://localhost:8502/metrics/record/{record_id}
-```
-
-### Evaluation in Query Responses
-
-All query responses automatically include evaluation metrics:
-```json
-{
-  "topic": "What is RAG?",
-  "answer": "Retrieval-Augmented Generation...",
-  "evaluation": {
-    "trulens": {
-      "groundedness": 0.85,
-      "answer_relevance": 0.78,
-      "context_relevance": 0.82
-    },
-    "guardrails": {
-      "input_passed": true,
-      "output_passed": true
-    },
-    "performance": {
-      "total_time": 45.2,
-      "rag_retrieval": 2.1,
-      "crew_execution": 42.5
-    }
-  }
-}
-```
-
-See [Evaluation Documentation](docs/evaluation/README.md) for details.
+See [docs/evaluation/](docs/evaluation/) for setup instructions.
 
 ---
 
 ## 👥 Team
 
-**Project Group**: ResearchAssistantGPT
+**Team Members**:
+- Jason Waschtschenko - [@Jasonwts-x](https://github.com/Jasonwts-x)
+- [Team member 2] - [GitHub]
+- [Team member 3] - [GitHub]
 
-- **Jason Waschtschenko** (GitHub: [@Jasonwts-x](https://github.com/Jasonwts-x))
-- **Karim Epple**
-- **Dilsat Bekil**
-- **Rigon Rexha**
-- **Eren Kaya**
+**Course**: BIS5151 – Generative Artificial Intelligence  
+**Institution**: Hochschule Pforzheim  
+**Semester**: Winter 2025/26
 
 ---
 
-## 📝 License
+## 📄 License
 
-This project is for **educational use** within the Master of Information Systems program at Hochschule Pforzheim.
+This project is licensed under the **Academic Use License** for educational purposes at Hochschule Pforzheim.
 
-All AI models and datasets used comply with open-source or institutional usage rights.
+**Key Terms**:
+- ✅ Free to use for academic/educational purposes
+- ✅ Modifications allowed (must be documented)
+- ❌ Commercial use prohibited without permission
+- ⚠️ Must provide attribution in academic work
+
+See [LICENSE](LICENSE) for full terms.
+
+For commercial licensing inquiries, contact: waschtsc@hs-pforzheim.de
 
 ---
 
 ## 🙏 Acknowledgments
 
-- **Prof. Dr. Manuel Fritz, MBA** - Course instructor
-- **Anthropic** - Claude AI assistance in development
-- **Hochschule Pforzheim** - Academic support
+**Technologies**:
+- [Haystack](https://haystack.deepset.ai/) - RAG framework
+- [CrewAI](https://www.crewai.com/) - Multi-agent orchestration
+- [Weaviate](https://weaviate.io/) - Vector database
+- [Ollama](https://ollama.com/) - Local LLM runtime
+- [n8n](https://n8n.io/) - Workflow automation
+- [FastAPI](https://fastapi.tiangolo.com/) - API framework
+
+**Course Instructor**:
+- Prof. Dr. Manuel Fritz, MBA - For guidance and support
 
 ---
 
-**[⬆ Back to top](#researchassistantgpt)**
-
----
+**[⬆ Back to Top](#researchassistantgpt)**

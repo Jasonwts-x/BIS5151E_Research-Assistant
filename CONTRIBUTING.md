@@ -18,8 +18,9 @@ Be respectful, inclusive, and constructive. We value:
 
 ### 1. Fork & Clone
 ```bash
-# Fork the repository on GitHub
-# Then clone your fork
+# Fork the repository on GitHub (click "Fork" button)
+
+# Clone your fork
 git clone https://github.com/YOUR_USERNAME/BIS5151E_Research-Assistant.git
 cd BIS5151E_Research-Assistant
 
@@ -35,28 +36,38 @@ git remote add upstream https://github.com/Jasonwts-x/BIS5151E_Research-Assistan
 code .
 
 # VS Code will prompt: "Reopen in Container"
-# Click it and wait for container to build
+# Click it and wait for container to build (~2-3 minutes first time)
 ```
 
-**Option B: Local Setup**
+**Container includes**:
+- Python 3.11
+- All project dependencies
+- Ruff, Black, MyPy
+- pytest
+- Git
+- Access to all Docker services
+
+**Option B: Local Python Environment**
 ```bash
 # Create virtual environment
 python3.11 -m venv .venv
+
+# Activate
 source .venv/bin/activate  # Linux/Mac
-# or
-.venv\Scripts\activate  # Windows
+.venv\Scripts\activate     # Windows
 
 # Install dependencies
+pip install --upgrade pip
 pip install -r requirements.txt
 pip install -r requirements-dev.txt
 ```
 
-### 3. Start Services
+### 3. Start Infrastructure Services
 ```bash
-# Start infrastructure
+# Start Docker services
 docker compose -f docker/docker-compose.yml up -d
 
-# Verify services
+# Verify services are healthy
 python scripts/admin/health_check.py
 ```
 
@@ -78,29 +89,37 @@ git checkout -b feature/your-feature-name
 git checkout -b fix/issue-description
 ```
 
-**Branch naming conventions:**
+**Branch naming conventions**:
 - `feature/` - New features
 - `fix/` - Bug fixes
 - `docs/` - Documentation updates
 - `refactor/` - Code refactoring
 - `test/` - Test additions
+- `eval/` - Evaluation improvements
 
 ### 2. Make Changes
 
-**Follow our coding standards:**
+**Before committing, always run**:
 ```bash
-# Before committing, always run:
-ruff check src tests --fix
+# Auto-format code
 black src tests
-mypy src
-```
 
-**Testing requirements:**
-```bash
+# Lint and fix issues
+ruff check src tests --fix
+
+# Type check
+mypy src
+
 # Run tests
 pytest tests/ -v
+```
 
-# Ensure coverage doesn't drop
+**Testing requirements**:
+```bash
+# Run all tests
+pytest tests/ -v
+
+# Run with coverage
 pytest tests/ --cov=src --cov-report=term
 
 # Target: >80% coverage for new code
@@ -110,185 +129,47 @@ pytest tests/ --cov=src --cov-report=term
 
 We use [Conventional Commits](https://www.conventionalcommits.org/):
 ```bash
-git add .
-git commit -m "type: description"
+git add <files>
+git commit -m "type(scope): description"
 ```
 
-**Commit types:**
-- `feat(folder):`       - New feature
-- `fix(folder):`        - Bug fix
-- `docs(folder):`       - Documentation only
-- `style(folder):`      - Formatting, missing semicolons, etc.
-- `refactor(folder):`   - Code change that neither fixes nor adds a feature
-- `test(folder):`       - Adding tests
-- `chore(folder):`      - Maintenance tasks
+**Commit types**:
+- `feat:` - New feature
+- `fix:` - Bug fix
+- `docs:` - Documentation changes
+- `style:` - Code formatting (no logic change)
+- `refactor:` - Code restructuring (no feature change)
+- `test:` - Adding/updating tests
+- `perf:` - Performance improvements
+- `chore:` - Maintenance tasks
 
-**Examples:**
+**Optional scope**: `agents`, `api`, `rag`, `eval`, `docker`, `docs`
+
+**Examples**:
 ```bash
-git commit -m "feat: add multilingual support for German"
-git commit -m "fix: resolve Weaviate connection timeout"
-git commit -m "docs: update API endpoint examples"
-git commit -m "test: add unit tests for RAG pipeline"
+git commit -m "feat(agents): add translator agent for multilingual support"
+git commit -m "fix(rag): resolve Weaviate connection timeout"
+git commit -m "docs(api): add webhook integration examples"
+git commit -m "test(rag): add unit tests for document processor"
+git commit -m "refactor(eval): simplify guardrails validation logic"
 ```
 
-### 4. Push & Create Pull Request
+### 4. Push and Create Pull Request
 ```bash
 # Push to your fork
 git push origin feature/your-feature-name
 
-# Then create PR on GitHub
+# Create Pull Request on GitHub
+# Go to: https://github.com/YOUR_USERNAME/BIS5151E_Research-Assistant
+# Click "Compare & pull request"
 ```
 
----
-
-## 📝 Pull Request Guidelines
-
-### Before Submitting
-
-Checklist:
-- [ ] Code follows style guide (ruff + black)
-- [ ] All tests pass (`pytest tests/`)
-- [ ] Added tests for new features
-- [ ] Updated documentation
-- [ ] No merge conflicts with `main`
-- [ ] Commit messages follow conventional format
-
-### PR Description Template
-```markdown
-## Description
-Brief description of changes.
-
-## Related Issue
-Fixes #123
-
-## Changes Made
-- Added feature X
-- Modified component Y
-- Removed deprecated Z
-
-## Testing
-- [ ] Unit tests added/updated
-- [ ] Integration tests pass
-- [ ] Manually tested
-
-## Screenshots (if applicable)
-[Add screenshots]
-
-## Checklist
-- [ ] Code formatted (black + ruff)
-- [ ] Tests pass
-- [ ] Documentation updated
-```
-
-### Review Process
-
-1. **Automated checks** run (CI pipeline)
-2. **Maintainer review** (1-2 days)
-3. **Address feedback** (make changes)
-4. **Approval & merge** (by maintainer)
-
----
-
-## 🧪 Testing Guidelines
-
-### Test Structure
-```
-tests/
-├── unit/           # Fast, isolated tests (no external services)
-├── integration/    # Slow tests (require Docker services)
-└── fixtures/       # Shared test data
-```
-
-### Writing Tests
-
-**Unit test example:**
-```python
-# tests/unit/test_rag/test_processor.py
-import pytest
-from src.rag.ingestion.processor import DocumentProcessor
-
-def test_chunk_text():
-    processor = DocumentProcessor()
-    text = "This is a test. " * 100
-    chunks = processor.chunk_text(text, chunk_size=200)
-    
-    assert len(chunks) > 0
-    assert all(len(c) <= 200 for c in chunks)
-```
-
-**Integration test example:**
-```python
-# tests/integration/test_rag_ingestion.py
-import pytest
-from src.rag.core import RAGPipeline
-
-@pytest.mark.integration
-def test_ingest_and_query(weaviate_client):
-    pipeline = RAGPipeline.from_existing()
-    
-    # Test ingestion
-    result = pipeline.ingest_local("data/raw/*.pdf")
-    assert result.chunks_ingested > 0
-    
-    # Test retrieval
-    docs = pipeline.run("test query", top_k=5)
-    assert len(docs) > 0
-```
-
-### Running Tests
-```bash
-# All tests
-pytest tests/ -v
-
-# Unit only (fast)
-pytest tests/unit/ -v
-
-# Integration only (slow)
-pytest tests/integration/ -v
-
-# Specific test
-pytest tests/unit/test_rag/test_processor.py::test_chunk_text -v
-
-# With coverage
-pytest tests/ --cov=src --cov-report=html
-```
-
----
-
-## 📚 Documentation Guidelines
-
-### Code Documentation
-```python
-def process_document(file_path: str, chunk_size: int = 500) -> list[str]:
-    """
-    Process a document into chunks.
-    
-    Args:
-        file_path: Path to document file (PDF or TXT)
-        chunk_size: Maximum characters per chunk (default: 500)
-    
-    Returns:
-        List of text chunks
-    
-    Raises:
-        FileNotFoundError: If file doesn't exist
-        ValueError: If chunk_size < 100
-    
-    Example:
-        >>> chunks = process_document("paper.pdf", chunk_size=500)
-        >>> len(chunks)
-        42
-    """
-    ...
-```
-
-### README Updates
-
-When adding features:
-1. Update main [README.md](README.md) (if major feature)
-2. Add detailed docs to [docs/](docs/)
-3. Add examples to [docs/examples/](docs/examples/)
-4. Update [CHANGELOG.md](CHANGELOG.md)
+**Pull Request Guidelines**:
+- Use descriptive title
+- Reference related issue: "Fixes #123"
+- Describe changes made
+- Include test results
+- Add screenshots (if UI changes)
 
 ---
 
@@ -297,27 +178,23 @@ When adding features:
 ### Python Style
 
 **Follow PEP 8** enforced by ruff and black:
-```bash
-# Auto-format
-black src tests
-
-# Lint
-ruff check src tests --fix
-
-# Type check
-mypy src
-```
-
-### Type Hints
-
-Always use type hints:
 ```python
-# Good
+# Good: Type hints, docstrings, clear naming
 def fetch_papers(query: str, max_results: int = 10) -> list[Document]:
+    """
+    Fetch papers from ArXiv.
+    
+    Args:
+        query: Search query string
+        max_results: Maximum number of papers to fetch
+        
+    Returns:
+        List of Document objects
+    """
     ...
 
-# Bad
-def fetch_papers(query, max_results=10):
+# Bad: No types, unclear naming, no docs
+def fetch(q, n=10):
     ...
 ```
 
@@ -337,7 +214,29 @@ class RAGPipeline:
 
 # Constants: UPPER_SNAKE_CASE
 MAX_CHUNK_SIZE = 500
-DEFAULT_MODEL = "qwen2.5:3b"
+DEFAULT_MODEL = "qwen3:1.7b"
+
+# Private methods/variables: leading underscore
+def _normalize_metadata(self, doc: Document) -> None:
+    ...
+```
+
+### Import Organization
+```python
+# Standard library
+from __future__ import annotations
+import logging
+from pathlib import Path
+from typing import Any, Dict, List
+
+# Third-party
+import requests
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+
+# Local
+from src.rag.core.pipeline import RAGPipeline
+from src.utils.config import load_config
 ```
 
 ### Logging
@@ -349,32 +248,167 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Good
-logger.info("Processing document", extra={"file": file_path, "chunks": len(chunks)})
+logger.info(
+    "Processing document",
+    extra={"file": file_path, "chunks": len(chunks)}
+)
 
 # Bad
-print(f"Processing {file_path}")
+print(f"Processing {file_path}")  # Never use print
 ```
 
 ### Error Handling
 
-Be specific:
+Be specific with exceptions:
 ```python
 # Good
 try:
     result = api.call()
 except ConnectionError as e:
     logger.error("API connection failed: %s", e)
-    raise
+    raise HTTPException(status_code=503, detail="Service unavailable")
 except TimeoutError as e:
     logger.warning("API timeout, retrying: %s", e)
     # Retry logic
+except ValueError as e:
+    logger.error("Invalid input: %s", e)
+    raise HTTPException(status_code=400, detail=str(e))
     
 # Bad
 try:
     result = api.call()
 except Exception:
-    pass  # Silent failure
+    pass  # Silent failure - NEVER DO THIS
 ```
+
+### Docstrings
+
+Use Google-style docstrings:
+```python
+def chunk_document(
+    text: str,
+    chunk_size: int = 350,
+    overlap: int = 50
+) -> list[str]:
+    """
+    Split text into overlapping chunks.
+    
+    Args:
+        text: Input text to chunk
+        chunk_size: Target size of each chunk in characters
+        overlap: Number of overlapping characters between chunks
+        
+    Returns:
+        List of text chunks
+        
+    Raises:
+        ValueError: If chunk_size <= overlap
+        
+    Example:
+        >>> chunks = chunk_document("Long text...", chunk_size=500, overlap=50)
+        >>> len(chunks)
+        15
+    """
+    ...
+```
+
+---
+
+## 🧪 Testing Guidelines
+
+### Test Organization
+```
+tests/
+├── unit/               # Fast, isolated tests (no external services)
+│   ├── test_agents/
+│   ├── test_api/
+│   ├── test_eval/
+│   └── test_rag/
+├── integration/        # Slow, requires Docker services
+│   └── test_rag_ingestion_e2e.py
+├── fixtures/           # Shared test data
+└── conftest.py         # Pytest configuration
+```
+
+### Writing Tests
+```python
+import pytest
+from src.rag.core.processor import DocumentProcessor
+
+def test_chunk_id_deterministic():
+    """Chunk IDs should be deterministic based on content."""
+    processor = DocumentProcessor()
+    
+    # Same content should produce same ID
+    chunk1 = "This is a test chunk."
+    chunk2 = "This is a test chunk."
+    
+    id1 = processor._generate_chunk_id(chunk1, "doc1", 0)
+    id2 = processor._generate_chunk_id(chunk2, "doc1", 0)
+    
+    assert id1 == id2
+    
+def test_chunk_id_unique():
+    """Different content should produce different IDs."""
+    processor = DocumentProcessor()
+    
+    id1 = processor._generate_chunk_id("Content A", "doc1", 0)
+    id2 = processor._generate_chunk_id("Content B", "doc1", 0)
+    
+    assert id1 != id2
+```
+
+### Running Tests
+```bash
+# All tests
+pytest tests/ -v
+
+# Specific category
+pytest tests/unit/ -v
+pytest tests/integration/ -v
+
+# Specific file
+pytest tests/unit/test_rag/test_processor.py -v
+
+# Specific test
+pytest tests/unit/test_rag/test_processor.py::test_chunk_id_deterministic -v
+
+# With coverage
+pytest tests/ --cov=src --cov-report=html
+# Open htmlcov/index.html
+
+# Skip slow tests
+pytest tests/unit/ -v  # Only fast tests
+```
+
+---
+
+## 📝 Documentation Guidelines
+
+### Code Documentation
+
+- Every public function/class needs a docstring
+- Complex logic needs inline comments
+- Use type hints everywhere
+
+### Updating Documentation
+
+When adding features:
+
+1. **Update relevant docs** in `docs/`
+2. **Add examples** to `docs/examples/`
+3. **Update API docs** if new endpoints
+4. **Update CHANGELOG.md**
+
+### Documentation Files to Update
+
+| Change Type | Update These Files |
+|-------------|-------------------|
+| New feature | README.md, CHANGELOG.md, relevant docs/ file |
+| API endpoint | docs/api/README.md, CHANGELOG.md |
+| Configuration | docs/setup/INSTALLATION.md, .env.example |
+| Bug fix | CHANGELOG.md |
+| Breaking change | CHANGELOG.md (with migration notes), README.md |
 
 ---
 
@@ -382,53 +416,78 @@ except Exception:
 
 For maintainers:
 
-1. **Update version** in relevant files
-2. **Update CHANGELOG.md**
-3. **Create git tag**:
+### 1. Version Bump
+
+Update version in:
+- `CHANGELOG.md` - Add new version section
+- `src/api/routers/system.py` - Update VERSION constant
+
+### 2. Create Release
 ```bash
-   git tag -a v0.4.0 -m "Release v0.4.0"
-   git push origin v0.4.0
+# Tag release
+git tag -a v1.0.0 -m "Release v1.0.0: First stable release"
+git push origin v1.0.0
+
+# GitHub Actions will create release automatically
 ```
-4. **GitHub Actions** will create release automatically
+
+### 3. Post-Release
+
+- Announce in discussions
+- Update documentation
+- Close related issues
 
 ---
 
 ## 🐛 Reporting Bugs
 
-Use [GitHub Issues](https://github.com/Jasonwts-x/BIS5151E_Research-Assistant/issues/new?template=bug_report.md).
+Use [GitHub Issues](https://github.com/Jasonwts-x/BIS5151E_Research-Assistant/issues/new) with bug template.
 
-**Include:**
-- Expected behavior
-- Actual behavior
+**Include**:
+- Clear description
 - Steps to reproduce
-- System info (OS, Docker version, etc.)
+- Expected vs actual behavior
+- System info (OS, Docker version)
 - Logs (if relevant)
+- Screenshots (if UI issue)
 
 ---
 
 ## 💡 Suggesting Features
 
-Use [GitHub Issues](https://github.com/Jasonwts-x/BIS5151E_Research-Assistant/issues/new?template=feature_request.md).
+Use [GitHub Issues](https://github.com/Jasonwts-x/BIS5151E_Research-Assistant/issues/new) with feature template.
 
-**Include:**
-- Use case
+**Include**:
+- Use case (why is this needed?)
 - Proposed solution
 - Alternatives considered
+- Willing to implement? (yes/no)
 
 ---
 
 ## ❓ Questions
 
-- **General:** [GitHub Discussions](https://github.com/Jasonwts-x/BIS5151E_Research-Assistant/discussions)
-- **Bugs:** [GitHub Issues](https://github.com/Jasonwts-x/BIS5151E_Research-Assistant/issues)
-- **Private:** Email team members
+- **General**: [GitHub Discussions](https://github.com/Jasonwts-x/BIS5151E_Research-Assistant/discussions)
+- **Bugs**: [GitHub Issues](https://github.com/Jasonwts-x/BIS5151E_Research-Assistant/issues)
+- **Security**: Email team privately (see README)
 
 ---
 
 ## 📄 License
 
-By contributing, you agree your contributions will be licensed under the same license as the project (Academic Use License).
+By contributing, you agree your contributions will be licensed under the same Academic Use License as the project. See [LICENSE](LICENSE).
+
+---
+
+## 🙏 Recognition
+
+Contributors will be:
+- Listed in project credits
+- Mentioned in release notes
+- Added to CONTRIBUTORS.md (if significant contribution)
 
 ---
 
 **Thank you for contributing! 🎉**
+
+**Questions?** Open a discussion or ask in your pull request.
