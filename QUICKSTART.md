@@ -270,11 +270,12 @@ Once running, access these services:
 
 ### 1. Set Up n8n Workflows
 
-See [docs/setup/N8N.md](docs/setup/N8N.md) for:
+See **[n8n Setup Guide](docs/setup/N8N.md)** for:
 - Creating n8n admin account
 - Importing example workflows
 - Setting up scheduled research tasks
 - Configuring email notifications
+
 
 ### 2. Explore the API
 
@@ -287,7 +288,7 @@ See [docs/setup/N8N.md](docs/setup/N8N.md) for:
 - `GET /health` - Health check
 - `GET /ready` - Readiness check
 
-Full documentation: [docs/api/README.md](docs/api/README.md)
+Full documentation: **[API Reference](docs/api/ENDPOINTS.md)**
 
 ### 3. Ingest Your Own Documents
 ```bash
@@ -438,9 +439,11 @@ For more troubleshooting, see [docs/setup/TROUBLESHOOTING.md](docs/setup/TROUBLE
 
 ## Getting Help
 
-- **Documentation**: [docs/](docs/)
-- **Detailed Setup**: [docs/setup/INSTALLATION.md](docs/setup/INSTALLATION.md)
-- **API Reference**: [docs/api/README.md](docs/api/README.md)
+- **Documentation**: [docs/README.md](docs/README.md)
+- **Complete Installation**: [docs/setup/INSTALLATION.md](docs/setup/INSTALLATION.md)
+- **API Reference**: [docs/api/ENDPOINTS.md](docs/api/ENDPOINTS.md)
+- **Command Reference**: [docs/guides/COMMAND_REFERENCE.md](docs/guides/COMMAND_REFERENCE.md)
+- **Troubleshooting**: [docs/setup/TROUBLESHOOTING.md](docs/setup/TROUBLESHOOTING.md)
 - **Issues**: [GitHub Issues](https://github.com/Jasonwts-x/BIS5151E_Research-Assistant/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/Jasonwts-x/BIS5151E_Research-Assistant/discussions)
 

@@ -412,6 +412,16 @@ When adding features:
 
 ---
 
+## 📚 Related Documentation
+
+- **[Setup Guide](docs/setup/INSTALLATION.md)** - Installation instructions
+- **[API Reference](docs/api/ENDPOINTS.md)** - Endpoint documentation
+- **[Architecture Overview](docs/architecture/OVERVIEW.md)** - System design
+- **[Testing Guide](tests/TESTING.md)** - Running tests
+- **[Command Reference](docs/guides/COMMAND_REFERENCE.md)** - Common commands
+
+---
+
 ## 🚀 Release Process
 
 For maintainers:

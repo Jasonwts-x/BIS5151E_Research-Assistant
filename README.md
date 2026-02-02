@@ -101,36 +101,51 @@ This project demonstrates practical application of:
 
 ### Python Libraries
 
-**Core Framework**:
-- **Haystack 2.x** - RAG pipeline framework
-- **CrewAI 1.3.0** - Multi-agent collaboration
-- **FastAPI** - Modern async API framework
-- **Uvicorn** - ASGI server
-- **Pydantic 2.x** - Data validation
+<table>
+<tr>
+<td width="50%" valign="top">
 
-**AI/ML**:
-- **LangChain-Ollama** - LLM integration
-- **sentence-transformers** - Text embeddings (`all-MiniLM-L6-v2`)
-- **weaviate-client** - Vector database client
-- **haystack-weaviate** - Weaviate document store
+**Core Framework**
+- 🚀 **FastAPI** `0.104.1` - API framework
+- 🔄 **Uvicorn** `0.24.0` - ASGI server
+- ✅ **Pydantic** `2.5.0` - Data validation
 
-**Data Processing**:
-- **PyPDF** - PDF parsing
-- **arxiv** - ArXiv API client
-- **requests** - HTTP client
-- **python-dotenv** - Environment management
+**RAG Pipeline**
+- 🔍 **Haystack** `2.x` - RAG framework
+- 🗂️ **Weaviate Client** `4.4.0` - Vector DB
+- 📝 **Sentence Transformers** `2.2.2` - Embeddings
+- 📄 **PyPDF** `3.17.0` - PDF processing
 
-**Evaluation** (Experimental):
-- **trulens-eval 0.19.0** - RAG quality metrics
-- **guardrails-ai** - Input/output validation
-- **rouge-score** - Summarization metrics
-- **sacrebleu** - Translation quality (BLEU)
+**Multi-Agent System**
+- 🤖 **CrewAI** `1.3.0` - Agent orchestration
+- 🦜 **LangChain** `0.1.0` - LLM integration
+- 🦙 **Ollama** - Local LLM runtime
 
-**Development**:
-- **pytest** - Testing framework
-- **ruff** - Fast Python linter
-- **black** - Code formatter
-- **mypy** - Type checking
+</td>
+<td width="50%" valign="top">
+
+**Evaluation & Quality**
+- 🛡️ **Guardrails AI** `0.4.0` - Validation
+- 📊 **TruLens** `0.18.0` - RAG metrics
+- 📈 **ROUGE Score** - Text quality
+- 🎯 **SciKit Learn** - Similarity metrics
+
+**Workflow & Integration**
+- 🔄 **n8n** (Docker) - Automation
+- 🐘 **PostgreSQL** `15` - Data storage
+- 🔧 **Requests** `2.31.0` - HTTP client
+
+**Development**
+- 🧪 **Pytest** `7.4.3` - Testing
+- 🎨 **Black** `23.12.0` - Formatting
+- 📏 **Ruff** `0.1.8` - Linting
+- 🔍 **MyPy** `1.7.1` - Type checking
+
+</td>
+</tr>
+</table>
+
+See [requirements.txt](requirements.txt) for complete list.
 
 ### LLM Configuration
 
@@ -146,86 +161,59 @@ This project demonstrates practical application of:
 
 ### High-Level Architecture
 ```
-┌────────────────────────────────────────────────────────────────┐
-│                         External Layer                         │
-│  ┌────────────┐                              ┌──────────────┐  │
-│  │    User    │                              │   n8n UI     │  │
-│  │  (Browser) │                              │  (Workflow)  │  │
-│  └─────┬──────┘                              └──────┬───────┘  │
-└────────┼────────────────────────────────────────────┼──────────┘
-         │                                            │
-         └────────────────────┬───────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                         User / n8n                              │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ HTTP/REST
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    API Gateway (Port 8000)                      │
+│              FastAPI + Modular Routers                          │
+│              - Input Validation (Guardrails)                    │
+│              - Request Routing                                  │
+│              - Output Validation (Guardrails)                   │
+└────┬──────────────────────────┬──────────────┬──────────────────┘
+     │                          │              │
+     ▼                          ▼              ▼
+┌────────────┐      ┌────────────────────┐  ┌────────────────┐
+│  Weaviate  │◄─────│  CrewAI (8100)     │◄─┤ Ollama (11434) │
+│  (8080)    │      │  Multi-Agent       │  │                │
+│  Vector DB │      │  Writer→Reviewer   │  │ LLM Runtime    │
+│  Hybrid    │      │  →FactChecker      │  │ qwen3:1.7b     │
+│  Search    │      └────────────────────┘  │                │
+└────────────┘                │             └────────────────┘
+                              │ Metrics
+                              ▼
+                    ┌────────────────────┐
+                    │  Evaluation (8502) │
+                    │  - TruLens         │
+                    │  - Guardrails      │
+                    │  - Performance     │
+                    │  - Dashboard       │
+                    └────────────────────┘
                               │
-┌─────────────────────────────┼──────────────────────────────────┐
-│                    Application Layer                           │
-│                              │                                 │
-│                    ┌─────────▼──────────┐                      │
-│                    │   API Gateway      │                      │
-│                    │   (FastAPI:8000)   │                      │
-│                    └─────────┬──────────┘                      │
-│                              │                                 │
-│          ┌───────────────────┼──────────────────┐              │
-│          │                   │                  │              │
-│    ┌─────▼──────┐   ┌───────▼────────┐  ┌─────▼────────┐       │
-│    │    RAG     │   │  CrewAI Service│  │    Ollama    │       │
-│    │  Pipeline  │   │    (:8100)     │  │   (:11434)   │       │
-│    └─────┬──────┘   └───────┬────────┘  └──────────────┘       │
-└──────────┼──────────────────┼──────────────────────────────────┘
-           │                  │
-┌──────────┼──────────────────┼──────────────────────────────────┐
-│                         Data Layer                             │
-│    ┌─────▼──────────────┐   │                                  │
-│    │     Weaviate       │   │                                  │
-│    │  Vector Database   │   │                                  │
-│    │     (:8080)        │   │                                  │
-│    └────────────────────┘   │                                  │
-│                             │                                  │
-│    ┌────────────────────────▼───┐                              │
-│    │      PostgreSQL            │                              │
-│    │  (n8n + TruLens DB)        │                              │
-│    │        (:5432)             │                              │
-│    └────────────────────────────┘                              │
-└────────────────────────────────────────────────────────────────┘┌────────────────────────────────────────────────────────────────┐
-│                         External Layer                         │
-│  ┌────────────┐                              ┌──────────────┐  │
-│  │    User    │                              │   n8n UI     │  │
-│  │  (Browser) │                              │  (Workflow)  │  │
-│  └─────┬──────┘                              └──────┬───────┘  │
-└────────┼────────────────────────────────────────────┼──────────┘
-         │                                            │
-         └────────────────────┬───────────────────────┘
-                              │
-┌─────────────────────────────┼──────────────────────────────────┐
-│                    Application Layer                           │
-│                              │                                 │
-│                    ┌─────────▼──────────┐                      │
-│                    │   API Gateway      │                      │
-│                    │   (FastAPI:8000)   │                      │
-│                    └─────────┬──────────┘                      │
-│                              │                                 │
-│          ┌───────────────────┼──────────────────┐              │
-│          │                   │                  │              │
-│    ┌─────▼──────┐   ┌───────▼────────┐  ┌─────▼────────┐       │
-│    │    RAG     │   │  CrewAI Service│  │    Ollama    │       │
-│    │  Pipeline  │   │    (:8100)     │  │   (:11434)   │       │
-│    └─────┬──────┘   └───────┬────────┘  └──────────────┘       │
-└──────────┼──────────────────┼──────────────────────────────────┘
-           │                  │
-┌──────────┼──────────────────┼──────────────────────────────────┐
-│                         Data Layer                             │
-│    ┌─────▼──────────────┐   │                                  │
-│    │     Weaviate       │   │                                  │
-│    │  Vector Database   │   │                                  │
-│    │     (:8080)        │   │                                  │
-│    └────────────────────┘   │                                  │
-│                             │                                  │
-│    ┌────────────────────────▼───┐                              │
-│    │      PostgreSQL            │                              │
-│    │  (n8n + TruLens DB)        │                              │
-│    │        (:5432)             │                              │
-│    └────────────────────────────┘                              │
-└────────────────────────────────────────────────────────────────┘
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Data & Storage Layer                         │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐           │
+│  │ PostgreSQL   │  │ Redis Cache  │  │ Volume Mounts│           │
+│  │ (5432)       │  │ (future)     │  │ - Models     │           │
+│  │ - n8n data   │  │ - Embeddings │  │ - Documents  │           │
+│  │ - Metrics    │  │ - Responses  │  │ - Outputs    │           │
+│  └──────────────┘  └──────────────┘  └──────────────┘           │
+└─────────────────────────────────────────────────────────────────┘
+
 ```
+
+**Key Components**:
+- **API Gateway**: Single entry point, validation, routing
+- **CrewAI Service**: Multi-agent orchestration (Writer→Reviewer→FactChecker)
+- **Weaviate**: Vector database with hybrid search (BM25 + semantic)
+- **Ollama**: Local LLM inference (qwen3:1.7b default)
+- **Evaluation**: Quality monitoring with TruLens, Guardrails, dashboard
+- **PostgreSQL**: Persistent storage for n8n workflows and metrics
+- **Redis Cache**: Planned for query/embedding caching
+- **n8n**: Workflow automation and scheduling
 
 ### Request Flow
 
@@ -268,128 +256,118 @@ This project demonstrates practical application of:
 
 ---
 
-## 📁 Folder Structure
+## 📂 Folder Structure
 ```
 BIS5151E_Research-Assistant/
-├── .devcontainer/              # VS Code DevContainer
-│   ├── Dockerfile              # Multi-stage: dev, api, crewai
-│   └── devcontainer.json       # Container settings
+├── .devcontainer/                  # VS Code DevContainer configuration
+├── .github/                        # GitHub Actions CI/CD workflows
 │
-├── .github/                    # GitHub configuration
-│   ├── workflows/              
-│   │   └── ci.yml              # CI/CD pipeline
-│   ├── ISSUE_TEMPLATE/         # Issue templates
-│   └── pull_request_template.md
+├── configs/                        # Configuration files
+│   ├── haystack/                   # Haystack pipeline configs
+│   └── crewai/                     # CrewAI agent configs
 │
-├── configs/                    # Application configuration
-│   └── app.yaml                # Main config (LLM, RAG, Weaviate, Guardrails)
+├── data/                           # Data storage
+│   ├── arxiv/                      # ArXiv downloaded papers
+│   ├── outputs/                    # Generated summaries
+│   └── raw/                        # User-uploaded documents
 │
-├── data/                       # Data storage (gitignored except .gitkeep)
-│   ├── raw/                    # Local PDFs/TXT files
-│   ├── arxiv/                  # Downloaded ArXiv papers
-│   ├── processed/              # Processed chunks (legacy)
-│   └── external/               # External datasets
+├── database/                       # Database initialization
+│   └── init/                       # PostgreSQL init scripts
 │
-├── database/                   # Database scripts
-│   ├── init/                   # PostgreSQL init scripts
-│   └── scripts/                # Backup/restore scripts
+├── docker/                         # Docker configuration
+│   ├── workflows/                  # n8n example workflows
+│   ├── .env                        # Docker environment configuration
+│   ├── docker-compose.yml          # Main compose file
+│   └── docker-compose.nvidia.yml   # GPU support
 │
-├── docker/                     # Docker configuration
-│   ├── docker-compose.yml      # Main services (CPU mode)
-│   ├── docker-compose.nvidia.yml # GPU support (NVIDIA)
-│   ├── docker-compose.amd.yml  # GPU support (AMD)
-│   ├── .env.example            # Docker environment template
-│   └── workflows/              # n8n workflow files
-│       └── research_assistant.json
+├── docs/                           # Documentation
+│   ├── api/                        # API reference
+│   │   ├── README.md
+│   │   ├── ENDPOINTS.md            # Complete endpoint table
+│   │   ├── SCHEMAS.md              # Request/response models
+│   │   └── AUTHENTICATION.md       # Auth guide (future)
+│   │
+│   ├── architecture/               # System design
+│   │   ├── README.md
+│   │   ├── OVERVIEW.md             # High-level architecture
+│   │   ├── DATA_FLOW.md            # Request flow diagrams
+│   │   ├── SERVICES.md             # Docker services
+│   │   ├── AGENTS.md               # Multi-agent system
+│   │   ├── RAG_PIPELINE.md         # RAG implementation
+│   │   └── DATABASE.md             # Database schemas
+│   │
+│   ├── evaluation/                 # Quality monitoring
+│   │   ├── README.md
+│   │   ├── METRICS.md              # Metrics explained
+│   │   ├── GUARDRAILS.md           # Validation config
+│   │   ├── TRULENS.md              # TruLens setup
+│   │   └── DASHBOARD.md            # Dashboard guide
+│   │
+│   ├── examples/                   # Code examples
+│   │   ├── README.md
+│   │   ├── BASIC_USAGE.md          # curl/PowerShell
+│   │   ├── PYTHON_EXAMPLES.md      # Python integration
+│   │   └── CLI_EXAMPLES.md         # CLI tools
+│   │
+│   ├── guides/                     # How-to guides
+│   │   ├── README.md
+│   │   ├── COMMAND_REFERENCE.md    # Quick reference
+│   │   ├── CONFIGURATION.md        # All settings
+│   │   └── BEST_PRACTICES.md       # Optimization
+│   │
+│   ├── setup/                      # Installation
+│   │   ├── README.md               # Setup hub
+│   │   ├── INSTALLATION.md         # Complete guide
+│   │   ├── GPU.md                  # NVIDIA GPU setup
+│   │   ├── N8N.md                  # n8n workflow setup
+│   │   └── TROUBLESHOOTING.md      # Common issues
+│   │
+│   └── README.md                   # Documentation hub
 │
-├── docs/                       # Documentation
-│   ├── setup/                  # Installation & setup guides
-│   │   ├── README.md           # Setup hub
-│   │   ├── INSTALLATION.md     # Detailed installation
-│   │   ├── GPU.md              # GPU setup
-│   │   ├── N8N.md              # n8n workflow setup
-│   │   └── TROUBLESHOOTING.md  # Common issues
-│   ├── api/                    # API documentation
-│   │   └── README.md           # Endpoint reference
-│   ├── architecture/           # System design
-│   │   ├── README.md           # Architecture overview
-│   │   ├── DATA_FLOW.md        # Data flow diagrams
-│   │   └── research-assistant_*.txt # Project docs
-│   ├── examples/               # Usage examples
-│   │   └── workflow_examples.md
-│   ├── evaluation/             # Evaluation documentation
-│   │   ├── README.md           # Evaluation overview
-│   │   ├── TRULENS.md          # TruLens setup
-│   │   └── METRICS.md          # Metrics explanation
-│   └── templates/              # Chat templates for development
+├── outputs/                        # Output files for users
 │
-├── outputs/                    # Generated summaries (gitignored)
+├── scripts/                        # Utility scripts
+│   ├── admin/                      # Admin tools
+│   │   ├── health_check.py
+│   │   └── backup.sh
+│   └── cli/                        # CLI tools
+│       ├── ingest_arxiv.py
+│       └── query_rag.py
 │
-├── scripts/                    # Utility scripts
-│   ├── admin/                  # Administration
-│   │   └── health_check.py     # Service health checks
-│   ├── eval/                   # Evaluation scripts
-│   └── setup/                  # Setup helpers
+├── src/                            # Source code
+│   ├── agents/                     # CrewAI multi-agent system
+│   │   └── api/                    # CrewAI FastAPI service
+│   │
+│   ├── api/                        # Main API gateway
+│   │   ├── routers/                # Modular endpoints
+│   │   └── server.py               # FastAPI application
+│   │
+│   ├── eval/                       # Evaluation & quality
+│   │   ├── guardrails/             # Input/output validation
+│   │   ├── trulens/                # RAG quality metrics
+│   │   ├── performance/            # Timing tracking
+│   │   └── quality/                # Quality metrics
+│   │
+│   └── rag/                        # RAG pipeline
+│       ├── core/                   # Pipeline, processor, embedder
+│       ├── sources/                # ArXiv, local loaders
+│       └── stores/                 # Weaviate integration
 │
-├── src/                        # Source code
-│   ├── agents/                 # CrewAI multi-agent system
-│   │   ├── api/                # CrewAI service API (port 8100)
-│   │   ├── roles/              # Agent definitions
-│   │   ├── tasks/              # Task definitions
-│   │   ├── crews/              # Crew compositions
-│   │   └── runner.py           # Execution logic
-│   ├── api/                    # Main API gateway (port 8000)
-│   │   ├── routers/            # Endpoint groups
-│   │   │   ├── crewai.py       # CrewAI proxy
-│   │   │   ├── ollama.py       # Ollama proxy
-│   │   │   ├── rag.py          # RAG operations
-│   │   │   ├── research.py     # Research workflow
-│   │   │   └── system.py       # Health/version
-│   │   ├── schemas/            # Pydantic models
-│   │   └── server.py           # FastAPI app
-│   ├── eval/                   # Evaluation & monitoring
-│   │   ├── guardrails/         # Safety validation
-│   │   ├── trulens/            # Quality metrics
-│   │   ├── performance/        # Performance tracking
-│   │   └── quality/            # Quality metrics
-│   ├── rag/                    # RAG pipeline (Haystack + Weaviate)
-│   │   ├── core/               # Pipeline components
-│   │   │   ├── docstore.py     # Weaviate document store
-│   │   │   ├── embedder.py     # Sentence transformers
-│   │   │   ├── pipeline.py     # RAG pipeline (singleton)
-│   │   │   ├── processor.py    # Document processing
-│   │   │   └── schema.py       # Weaviate schema (explicit)
-│   │   ├── sources/            # Data sources
-│   │   │   ├── arxiv.py        # ArXiv API client
-│   │   │   └── local.py        # Local file loader
-│   │   └── cli.py              # CLI entrypoint
-│   └── utils/                  # Utilities
-│       ├── config.py           # Configuration loader
-│       └── logging_config.py   # Logging setup
+├── tests/                          # Test suite
+│   ├── integration/                # End-to-end tests
+│   ├── unit/                       # Unit tests
+│   ├── conftest.py                 # pytest configuration
+│   └── TESTING.md                  # Testing guide
 │
-├── tests/                      # Test suite
-│   ├── unit/                   # Unit tests
-│   │   ├── test_agents/        # Agent tests
-│   │   ├── test_api/           # API tests
-│   │   ├── test_eval/          # Evaluation tests
-│   │   └── test_rag/           # RAG tests
-│   ├── integration/            # Integration tests
-│   ├── fixtures/               # Test data
-│   ├── conftest.py             # Pytest configuration
-│   └── TESTING.md              # Testing guide
-│
-├── .env.example                # Application environment template
-├── .gitignore                  # Git ignore rules
-├── .gitattributes              # Git attributes
-├── .ruff.toml                  # Ruff linter config
-├── CHANGELOG.md                # Version history
-├── CONTRIBUTING.md             # Contribution guide
-├── LICENSE                     # Academic license
-├── QUICKSTART.md               # 5-minute quickstart
-├── README.md                   # This file
-├── ROADMAP.md                  # Future plans
-├── requirements.txt            # Python dependencies
-└── requirements-dev.txt        # Development dependencies
+├── .env.                           # Application config 
+├── .gitignore
+├── CHANGELOG.md                    # Version history
+├── CONTRIBUTING.md                 # Development guide
+├── LICENSE                         # Academic Use License
+├── QUICKSTART.md                   # 5-minute setup
+├── README.md                       # This file
+├── ROADMAP.md                      # Future plans
+└── requirements.txt                # Python dependencies
 ```
 
 ---
@@ -431,13 +409,27 @@ docker compose logs -f
 curl http://localhost:8000/health
 
 # 6. First query
-curl -X POST http://localhost:8000/rag/ingest/arxiv \
-  -H "Content-Type: application/json" \
-  -d '{"query": "machine learning", "max_results": 3}'
+$body = @{
+    query = "transformers attention mechanism"
+    max_results = 3
+} | ConvertTo-Json
 
-curl -X POST http://localhost:8000/research/query \
-  -H "Content-Type: application/json" \
-  -d '{"query": "What is machine learning?", "language": "en"}'
+$response = Invoke-RestMethod -Uri "http://localhost:8000/rag/ingest/arxiv" `
+    -Method Post `
+    -ContentType "application/json" `
+    -Body $body
+
+$body = @{
+    query = "Explain the transformer attention mechanism"
+    language = "en"
+} | ConvertTo-Json
+
+$response = Invoke-RestMethod -Uri "http://localhost:8000/research/query" `
+    -Method Post `
+    -ContentType "application/json" `
+    -Body $body
+
+Write-Host "`nAnswer:`n$($response.answer)"
 ```
 
 **Access Points**:
@@ -449,32 +441,165 @@ curl -X POST http://localhost:8000/research/query \
 
 ## 📚 Documentation
 
-### **Main Documentation**
+Complete documentation organized by category:
 
-| Category | Document | Description |
-|----------|----------|-------------|
-| **Setup & Installation** | [QUICKSTART.md](QUICKSTART.md) | Get running in 5 minutes |
-| | [docs/setup/](docs/setup/) | Complete installation guides |
-| | [docs/setup/INSTALLATION.md](docs/setup/INSTALLATION.md) | Detailed step-by-step setup |
-| | [docs/setup/GPU.md](docs/setup/GPU.md) | NVIDIA/AMD GPU acceleration |
-| | [docs/setup/N8N.md](docs/setup/N8N.md) | n8n workflow automation setup |
-| | [docs/setup/TROUBLESHOOTING.md](docs/setup/TROUBLESHOOTING.md) | Common issues & solutions |
-| **API Reference** | [docs/api/](docs/api/) | Complete API documentation |
-| | [Swagger UI](http://localhost:8000/docs) | Interactive API docs (when running) |
-| **Architecture** | [docs/architecture/](docs/architecture/) | System design documents |
-| | [docs/architecture/README.md](docs/architecture/README.md) | Architecture overview |
-| | [docs/architecture/DATA_FLOW.md](docs/architecture/DATA_FLOW.md) | Request flow diagrams |
-| **Usage Examples** | [docs/examples/](docs/examples/) | Code examples & workflows |
-| | [docs/examples/workflow_examples.md](docs/examples/workflow_examples.md) | n8n workflow examples |
-| **Evaluation** | [docs/evaluation/](docs/evaluation/) | Quality & monitoring |
-| | [docs/evaluation/README.md](docs/evaluation/README.md) | Evaluation overview |
-| | [docs/evaluation/METRICS.md](docs/evaluation/METRICS.md) | Metrics explanation |
-| | [docs/evaluation/TRULENS.md](docs/evaluation/TRULENS.md) | TruLens setup guide |
-| **Development** | [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution guidelines |
-| | [tests/TESTING.md](tests/TESTING.md) | Testing guide |
-| **Project Info** | [CHANGELOG.md](CHANGELOG.md) | Version history |
-| | [ROADMAP.md](ROADMAP.md) | Future plans |
-| | [LICENSE](LICENSE) | License information |
+<table>
+<tr>
+<th width="25%">Category</th>
+<th width="40%">Documents</th>
+<th width="35%">Description</th>
+</tr>
+
+<tr>
+<td rowspan="5"><b>🚀 Setup</b></td>
+<td><a href="QUICKSTART.md">Quickstart Guide</a></td>
+<td>5-minute setup</td>
+</tr>
+<tr>
+<td><a href="docs/setup/INSTALLATION.md">Complete Installation</a></td>
+<td>Step-by-step guide</td>
+</tr>
+<tr>
+<td><a href="docs/setup/GPU.md">GPU Setup (NVIDIA)</a></td>
+<td>3-5x faster inference</td>
+</tr>
+<tr>
+<td><a href="docs/setup/N8N.md">n8n Workflow Setup</a></td>
+<td>Automation guide</td>
+</tr>
+<tr>
+<td><a href="docs/setup/TROUBLESHOOTING.md">Troubleshooting</a></td>
+<td>Common issues & fixes</td>
+</tr>
+
+<tr>
+<td rowspan="4"><b>📡 API</b></td>
+<td><a href="docs/api/README.md">API Overview</a></td>
+<td>Getting started</td>
+</tr>
+<tr>
+<td><a href="docs/api/ENDPOINTS.md">Endpoint Reference</a></td>
+<td>Complete endpoint table</td>
+</tr>
+<tr>
+<td><a href="docs/api/SCHEMAS.md">Request/Response Schemas</a></td>
+<td>Data models</td>
+</tr>
+<tr>
+<td><a href="http://localhost:8000/docs">Swagger UI</a> (live)</td>
+<td>Interactive API docs</td>
+</tr>
+
+<tr>
+<td rowspan="6"><b>🏗️ Architecture</b></td>
+<td><a href="docs/architecture/OVERVIEW.md">System Overview</a></td>
+<td>High-level design</td>
+</tr>
+<tr>
+<td><a href="docs/architecture/DATA_FLOW.md">Data Flow</a></td>
+<td>Request flow diagrams</td>
+</tr>
+<tr>
+<td><a href="docs/architecture/SERVICES.md">Docker Services</a></td>
+<td>Service configurations</td>
+</tr>
+<tr>
+<td><a href="docs/architecture/AGENTS.md">Multi-Agent System</a></td>
+<td>CrewAI agents</td>
+</tr>
+<tr>
+<td><a href="docs/architecture/RAG_PIPELINE.md">RAG Pipeline</a></td>
+<td>RAG implementation</td>
+</tr>
+<tr>
+<td><a href="docs/architecture/DATABASE.md">Database Schema</a></td>
+<td>Weaviate & PostgreSQL</td>
+</tr>
+
+<tr>
+<td rowspan="5"><b>📊 Evaluation</b></td>
+<td><a href="docs/evaluation/README.md">Evaluation Overview</a></td>
+<td>Quality assurance</td>
+</tr>
+<tr>
+<td><a href="docs/evaluation/METRICS.md">Metrics Explained</a></td>
+<td>What each metric means</td>
+</tr>
+<tr>
+<td><a href="docs/evaluation/GUARDRAILS.md">Guardrails Config</a></td>
+<td>Input/output validation</td>
+</tr>
+<tr>
+<td><a href="docs/evaluation/TRULENS.md">TruLens Setup</a></td>
+<td>RAG quality monitoring</td>
+</tr>
+<tr>
+<td><a href="docs/evaluation/DASHBOARD.md">Dashboard Guide</a></td>
+<td>Visual analytics (port 8502)</td>
+</tr>
+
+<tr>
+<td rowspan="3"><b>💡 Examples</b></td>
+<td><a href="docs/examples/BASIC_USAGE.md">Basic Usage</a></td>
+<td>curl & PowerShell examples</td>
+</tr>
+<tr>
+<td><a href="docs/examples/PYTHON_EXAMPLES.md">Python Integration</a></td>
+<td>API client code</td>
+</tr>
+<tr>
+<td><a href="docs/examples/CLI_EXAMPLES.md">CLI Tools</a></td>
+<td>Command-line usage</td>
+</tr>
+
+<tr>
+<td rowspan="3"><b>📖 Guides</b></td>
+<td><a href="docs/guides/COMMAND_REFERENCE.md">Command Reference</a></td>
+<td>Quick command lookup</td>
+</tr>
+<tr>
+<td><a href="docs/guides/CONFIGURATION.md">Configuration Guide</a></td>
+<td>All settings explained</td>
+</tr>
+<tr>
+<td><a href="docs/guides/BEST_PRACTICES.md">Best Practices</a></td>
+<td>Performance & optimization</td>
+</tr>
+
+<tr>
+<td rowspan="3"><b>🔧 Development</b></td>
+<td><a href="CONTRIBUTING.md">Contributing Guide</a></td>
+<td>Development workflow</td>
+</tr>
+<tr>
+<td><a href="tests/TESTING.md">Testing Guide</a></td>
+<td>Running tests</td>
+</tr>
+<tr>
+<td><a href=".github/workflows/">CI/CD Workflows</a></td>
+<td>GitHub Actions</td>
+</tr>
+
+<tr>
+<td rowspan="3"><b>📋 Project Info</b></td>
+<td><a href="CHANGELOG.md">Changelog</a></td>
+<td>Version history</td>
+</tr>
+<tr>
+<td><a href="ROADMAP.md">Roadmap</a></td>
+<td>Future plans</td>
+</tr>
+<tr>
+<td><a href="LICENSE">License</a></td>
+<td>Academic Use License</td>
+</tr>
+</table>
+
+**Quick Access**:
+- 📖 **Documentation Hub**: [docs/README.md](docs/README.md)
+- 🚀 **Get Started**: [QUICKSTART.md](QUICKSTART.md)
+- 🔧 **Troubleshooting**: [docs/setup/TROUBLESHOOTING.md](docs/setup/TROUBLESHOOTING.md)
+- 💬 **Discussions**: [GitHub Discussions](https://github.com/Jasonwts-x/BIS5151E_Research-Assistant/discussions)
 
 ---
 
@@ -493,29 +618,164 @@ The system implements comprehensive evaluation to ensure high-quality outputs:
 | **ROUGE-L** | Summarization quality | > 0.5 | ✅ Implemented |
 | **Response Time** | Query latency | < 30s | ✅ Measured |
 
-### Guardrails (Safety Checks)
+### 🛡️ Guardrails AI Validation
 
-**Input Validation**:
-- ✅ Query length limits (< 10,000 chars)
-- ✅ Jailbreak attempt detection
-- ✅ PII detection (basic)
-- ✅ Off-topic query detection
+**Input Validation** (prevents harmful queries):
 
-**Output Validation**:
-- ✅ Citation format checking
-- ✅ Hallucination marker detection ("I think", "I believe", etc.)
-- ✅ Length validation
-- ✅ Harmful content filtering
+<table>
+<tr>
+<td width="25%">
 
-### Evaluation Dashboard
+**📏 Length Check**
+- Max: 10,000 chars
+- Action: Reject
 
-**TruLens Dashboard** (Experimental):
-- Real-time quality metrics
-- Query-level analysis
-- Performance trends
-- Feedback collection
+</td>
+<td width="25%">
 
-See [docs/evaluation/](docs/evaluation/) for setup instructions.
+**🚫 Jailbreak Detection**
+- Prompt injection
+- Action: Reject
+
+</td>
+<td width="25%">
+
+**🔒 PII Detection**
+- Email, phone
+- Action: Reject
+
+</td>
+<td width="25%">
+
+**📍 Off-Topic Check**
+- Relevance check
+- Action: Warning
+
+</td>
+</tr>
+</table>
+
+**Output Validation** (ensures quality responses):
+
+<table>
+<tr>
+<td width="25%">
+
+**📚 Citation Format**
+- Format: `[1]`, `[2]`
+- Coverage: >90%
+- Action: Enforce
+
+</td>
+<td width="25%">
+
+**🔍 Hallucination Detection**
+- Markers: "I think"
+- Unsupported claims
+- Action: Warning
+
+</td>
+<td width="25%">
+
+**📊 Length Validation**
+- Range: 200-500 words
+- Action: Warning
+
+</td>
+<td width="25%">
+
+**⚠️ Safety Check**
+- Harmful content
+- Profanity
+- Action: Reject
+
+</td>
+</tr>
+</table>
+
+**Configuration** (`.env`):
+```bash
+GUARDRAILS_CITATION_REQUIRED=true  # Enforce citations
+GUARDRAILS_STRICT_MODE=false       # Lenient validation
+```
+
+**Learn more**: [Guardrails Documentation](docs/evaluation/GUARDRAILS.md)
+
+### 📊 TruLens Evaluation Dashboard
+
+Real-time quality monitoring with visual analytics.
+
+**Dashboard URL**: http://localhost:8502
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+**📈 Real-Time Metrics**
+
+| Metric | Target | Current |
+|--------|--------|---------|
+| Answer Relevance | >0.80 | 0.87 |
+| Context Relevance | >0.70 | 0.81 |
+| Groundedness | >0.85 | 0.92 |
+| Citation Coverage | >90% | 94% |
+| Avg Response Time | <30s | 28.4s |
+
+**Features**:
+- ✅ Live metric tracking
+- 📊 Historical trends (7/30/90 days)
+- 🔍 Query-level drill-down
+- 📉 Performance graphs
+- 💾 Export to CSV/PDF
+
+</td>
+<td width="50%" valign="top">
+
+**🎯 Quality Monitoring**
+```
+┌─────────────────────────────┐
+│ Overall Score: 0.87 (Good)  │
+├─────────────────────────────┤
+│                             │
+│  📊 Trend (Last 7 days)     │
+│  │                    ╱───╲ │
+│  │             ╱────╱      ╲│
+│  │      ╱────╱              │
+│  └──────────────────────────│
+│   Mon Tue Wed Thu Fri Sat   │
+│                             │
+│  📋 Recent Queries          │
+│  • Neural networks: 0.92    │
+│  • Transformers: 0.88       │
+│  • Deep learning: 0.85      │
+└─────────────────────────────┘
+```
+
+**Access Dashboard**:
+```bash
+# View in browser
+open http://localhost:8502
+
+# Or from CLI
+python -m streamlit run \
+  src/eval/dashboard/app.py \
+  --server.port 8502
+```
+
+</td>
+</tr>
+</table>
+
+**Status**: Experimental (stub implementation)
+
+**Setup**: See [Dashboard Guide](docs/evaluation/DASHBOARD.md)
+
+**Metrics Tracked**:
+- 🎯 **Answer Relevance**: Does answer address the query?
+- 📝 **Context Relevance**: Is retrieved context useful?
+- ✅ **Groundedness**: Are claims supported by sources?
+- 📊 **Citation Quality**: Proper citation format and coverage
+- ⏱️ **Performance**: Response times and throughput
 
 ---
 
@@ -566,4 +826,4 @@ For commercial licensing inquiries, contact: waschtsc@hs-pforzheim.de
 
 ---
 
-**[⬆ Back to Top](#researchassistantgpt)**
+**[⬆ Back to Top](#Research-Assistant-GPT)**

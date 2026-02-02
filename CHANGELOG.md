@@ -78,9 +78,12 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for how to contribute and update this cha
 
 ## Links
 
+- **GitHub Repository**: https://github.com/Jasonwts-x/BIS5151E_Research-Assistant
 - **GitHub Releases**: https://github.com/Jasonwts-x/BIS5151E_Research-Assistant/releases
 - **Project Roadmap**: [ROADMAP.md](ROADMAP.md)
-- **Documentation**: [docs/](docs/)
+- **Documentation Hub**: [docs/README.md](docs/README.md)
+- **API Reference**: [docs/api/ENDPOINTS.md](docs/api/ENDPOINTS.md)
+- **Contributing**: [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ---
 

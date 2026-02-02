@@ -95,14 +95,14 @@
         {
             "parameters": {
                 "operation": "completion",
-                "completionTitle": "Ready",
-                "completionMessage": "={{ $json.body.summary }}",
+                "completionTitle": "ResearchAssistantGPT",
+                "completionMessage": "=<div style=\"font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f3f4f6; padding: 40px 20px; min-height: 100vh; display: flex; justify-content: center; align-items: flex-start;\">\n    \n    <div style=\"background-color: #ffffff; max-width: 800px; width: 100%; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); overflow: hidden; margin-top: 20px;\">\n        \n        <div style=\"background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); padding: 32px; text-align: center; color: white;\">\n           \n\n        </div>\n\n        <div style=\"padding: 40px;\">\n            \n            <div style=\"display: flex; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #e5e7eb; padding-bottom: 15px;\">\n                <h2 style=\"color: #111827; font-size: 20px; font-weight: 600; margin: 0;\">\n                    Executive Summary\n                </h2>\n            </div>\n\n            <div style=\"\n                font-size: 16px; \n                line-height: 1.75; \n                color: #374151; \n                white-space: pre-wrap; \n                background-color: #f8fafc; \n                padding: 24px; \n                border-radius: 8px; \n                border: 1px solid #e2e8f0;\n                border-left: 5px solid #2563eb;\">\n{{ $json.body.summary }}\n            </div>\n\n        </div>\n        \n        </div>\n</div>",
                 "options": {}
             },
             "type": "n8n-nodes-base.form",
             "typeVersion": 2.3,
             "position": [
-                928,
+                640,
                 0
             ],
             "id": "d2d6f059-aadb-4811-9b78-d7748ff1aed8",
@@ -150,7 +150,7 @@
     "settings": {
         "executionOrder": "v1"
     },
-    "versionId": "48043e93-0dc9-4554-a64b-0d79346bf911",
+    "versionId": "b04325cf-05ce-424b-8c02-ab4c2a4b8ce6",
     "meta": {
         "instanceId": "9a3dbce0855c560add1a69685d8095ae8d38aa4b032d6d97aba964f31a63f454"
     },

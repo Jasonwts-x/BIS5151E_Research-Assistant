@@ -342,6 +342,12 @@ Want to help with a roadmap item?
 - `help wanted` - We need help!
 - `enhancement` - New features
 
+**Documentation**:
+- **[Setup Guide](docs/setup/INSTALLATION.md)** - Installation
+- **[Architecture](docs/architecture/OVERVIEW.md)** - System design
+- **[API Reference](docs/api/ENDPOINTS.md)** - Endpoints
+- **[Best Practices](docs/guides/BEST_PRACTICES.md)** - Optimization
+
 ---
 
 ## 📝 Release Schedule
