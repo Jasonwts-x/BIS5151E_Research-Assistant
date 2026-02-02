@@ -18,18 +18,32 @@ logger = logging.getLogger(__name__)
 
 
 class EvaluationDatabase:
-    """Manages PostgreSQL connection for evaluation data."""
+    """
+    Manages PostgreSQL connection and session lifecycle for evaluation data.
+
+    This class handles the creation of the SQLAlchemy engine, connection pooling,
+    and provides a context-managed session for safe database operations.
+
+    Attributes:
+        database_url (str): The full connection string used for the database.
+        engine (sqlalchemy.engine.Engine): The SQLAlchemy engine instance.
+        SessionLocal (sqlalchemy.orm.sessionmaker): Factory for producing Session objects.
+    """
 
     def __init__(self, database_url: Optional[str] = None):
         """
-        Initialize database connection.
+        Initialize the database connection and internal session factory.
 
         Args:
-            database_url: PostgreSQL connection string
-                          Format: postgresql://user:pass@host:port/dbname
+            database_url: PostgreSQL connection string. 
+                Format: `postgresql://user:pass@host:port/dbname`.
+                If None, defaults to the DATABASE_URL environment variable.
+
+        Raises:
+            Exception: If the initial connection attempt fails.
         """
         if database_url is None:
-            # Get from environment or use default
+            # Fallback chain: Env Var -> Hardcoded Docker Default
             database_url = os.getenv(
                 "DATABASE_URL",
                 "postgresql://research_assistant:research_password@postgres:5432/research_assistant"
@@ -47,13 +61,19 @@ class EvaluationDatabase:
             raise
 
     def _connect(self):
-        """Establish database connection and create tables."""
+        """
+        Establish the engine with connection pooling and initialize schema.
+
+        Configures:
+            - pool_pre_ping: Ensures stale connections are refreshed (pessimistic testing).
+            - pool_size/max_overflow: Manages concurrent connection limits.
+        """
         self.engine = create_engine(
             self.database_url,
-            pool_pre_ping=True,  # Verify connections before using
-            pool_size=5,
-            max_overflow=10,
-            echo=False,  # Set to True for SQL query debugging
+            pool_pre_ping=True,  # Verify connections before using to avoid 'Server closed' errors
+            pool_size=5,         # Keep 5 connections ready
+            max_overflow=10,     # Allow up to 10 extra connections during peaks
+            echo=False,          # Toggle to True to see raw SQL in logs
         )
         
         self.SessionLocal = sessionmaker(
@@ -62,27 +82,34 @@ class EvaluationDatabase:
             bind=self.engine
         )
 
-        # Create tables if they don't exist
+        # Idempotent table creation
         Base.metadata.create_all(bind=self.engine)
         logger.info("✓ Database tables initialized")
 
     @contextmanager
     def get_session(self) -> Generator[Session, None, None]:
         """
-        Get database session as context manager.
-        
-        Automatically handles commit/rollback and cleanup.
-        
-        Usage:
-            with db.get_session() as session:
-                session.add(record)
-                session.commit()
-        
+        Provide a transactional scope around a series of operations.
+
+        This context manager ensures that the session is automatically closed,
+        and provides a rollback mechanism if an exception occurs during the block.
+
         Yields:
-            SQLAlchemy session
+            sqlalchemy.orm.Session: An active SQLAlchemy session.
+
+        Example:
+            >>> db = get_database()
+            >>> with db.get_session() as session:
+            ...     session.add(my_record)
+            ...     session.commit()
+
+        Raises:
+            RuntimeError: If called before a connection is established.
+            Exception: Re-raises any exception encountered within the 'with' block 
+                after performing a rollback.
         """
         if self.SessionLocal is None:
-            raise RuntimeError("Database not connected")
+            raise RuntimeError("Database not connected. Initialize EvaluationDatabase first.")
         
         session = self.SessionLocal()
         try:
@@ -96,10 +123,10 @@ class EvaluationDatabase:
 
     def health_check(self) -> bool:
         """
-        Check if database is accessible.
-        
+        Perform a simple query to verify database accessibility.
+
         Returns:
-            True if database is healthy, False otherwise
+            bool: True if the database responds, False otherwise.
         """
         try:
             with self.get_session() as session:
@@ -110,22 +137,26 @@ class EvaluationDatabase:
             return False
 
     def close(self):
-        """Close database connection and cleanup resources."""
+        """
+        Dispose of the engine and release all pooled connections.
+        
+        Should be called during application shutdown.
+        """
         if self.engine:
             self.engine.dispose()
             logger.info("Database connection closed")
 
 
-# Singleton instance
+# Singleton instance to prevent multiple redundant connection pools
 _db = None
 
 
 def get_database() -> EvaluationDatabase:
     """
-    Get singleton database instance.
-    
+    Retrieve or initialize the singleton EvaluationDatabase instance.
+
     Returns:
-        EvaluationDatabase singleton
+        EvaluationDatabase: The shared database manager.
     """
     global _db
     if _db is None:
