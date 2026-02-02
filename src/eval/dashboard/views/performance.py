@@ -48,8 +48,13 @@ def render_performance():
         st.markdown("### Performance Summary")
         col1, col2, col3, col4 = st.columns(4)
         
+        # Get performance metrics with defaults
+        avg_total = summary.get("average_total_time", 0)
+        avg_rag = summary.get("average_rag_time", 0)
+        avg_agent = summary.get("average_agent_time", 0)
+        avg_llm = summary.get("average_llm_time", 0)
+        
         with col1:
-            avg_total = summary.get("average_total_time", 0)
             st.metric(
                 label="Avg Total Time",
                 value=f"{avg_total:.2f}s" if avg_total > 0 else "N/A",
@@ -57,7 +62,6 @@ def render_performance():
             )
         
         with col2:
-            avg_rag = summary.get("average_rag_time", 0)
             st.metric(
                 label="Avg RAG Time",
                 value=f"{avg_rag:.2f}s" if avg_rag > 0 else "N/A",
@@ -65,7 +69,6 @@ def render_performance():
             )
         
         with col3:
-            avg_agent = summary.get("average_agent_time", 0)
             st.metric(
                 label="Avg Agent Time",
                 value=f"{avg_agent:.2f}s" if avg_agent > 0 else "N/A",
@@ -73,7 +76,6 @@ def render_performance():
             )
         
         with col4:
-            avg_llm = summary.get("average_llm_time", 0)
             st.metric(
                 label="Avg LLM Time",
                 value=f"{avg_llm:.2f}s" if avg_llm > 0 else "N/A",
@@ -97,15 +99,24 @@ def render_performance():
             import plotly.express as px
             
             df = pd.DataFrame(entries)
-            if "total_time" in df.columns:
-                fig_timing = px.bar(
-                    df.head(10),
-                    x="query",
-                    y="total_time",
-                    title="Query Execution Time (Top 10)",
-                    labels={"total_time": "Time (seconds)", "query": "Query"},
-                )
-                st.plotly_chart(fig_timing, use_container_width=True)
+            if "total_time" in df.columns and df["total_time"].notna().any():
+                # Filter out entries without timing data
+                df_with_timing = df[df["total_time"].notna() & (df["total_time"] > 0)]
+                
+                if not df_with_timing.empty:
+                    fig_timing = px.bar(
+                        df_with_timing.head(10),
+                        x="query",
+                        y="total_time",
+                        title="Query Execution Time (Top 10)",
+                        labels={"total_time": "Time (seconds)", "query": "Query"},
+                    )
+                    fig_timing.update_xaxes(tickangle=-45)
+                    st.plotly_chart(fig_timing, use_container_width=True)
+                else:
+                    st.info("No timing data available yet. Run some queries with performance tracking enabled.")
+            else:
+                st.info("No timing data available yet. Run some queries with performance tracking enabled.")
             
             st.markdown("---")
             
@@ -143,33 +154,42 @@ def render_performance():
             # Recent queries performance
             st.markdown("### Recent Queries Performance")
             
-            perf_df = pd.DataFrame([
-                {
-                    "Query": entry.get("query", "")[:50] + "...",
-                    "Total Time (s)": entry.get("total_time", 0),
-                    "Timestamp": entry.get("timestamp", ""),
-                }
-                for entry in entries[:20]
-            ])
+            # Filter entries that have timing data
+            entries_with_timing = [e for e in entries if e.get("total_time") and e.get("total_time") > 0]
             
-            st.dataframe(perf_df, use_container_width=True)
+            if entries_with_timing:
+                perf_df = pd.DataFrame([
+                    {
+                        "Query": entry.get("query", "")[:50] + "..." if len(entry.get("query", "")) > 50 else entry.get("query", ""),
+                        "Total Time (s)": f"{entry.get('total_time', 0):.2f}",
+                        "Timestamp": pd.to_datetime(entry.get("timestamp", "")).strftime("%Y-%m-%d %H:%M") if entry.get("timestamp") else "N/A",
+                    }
+                    for entry in entries_with_timing[:20]
+                ])
+                
+                st.dataframe(perf_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("No performance data available yet. Run some queries to see metrics here!")
             
             st.markdown("---")
             
             # Slowest queries
             st.markdown("### Slowest Queries (Top 10)")
             
-            sorted_entries = sorted(entries, key=lambda x: x.get("total_time", 0), reverse=True)
-            slow_df = pd.DataFrame([
-                {
-                    "Query": entry.get("query", "")[:50] + "...",
-                    "Total Time (s)": entry.get("total_time", 0),
-                    "Timestamp": entry.get("timestamp", ""),
-                }
-                for entry in sorted_entries[:10]
-            ])
-            
-            st.dataframe(slow_df, use_container_width=True)
+            if entries_with_timing:
+                sorted_entries = sorted(entries_with_timing, key=lambda x: x.get("total_time", 0), reverse=True)
+                slow_df = pd.DataFrame([
+                    {
+                        "Query": entry.get("query", "")[:50] + "..." if len(entry.get("query", "")) > 50 else entry.get("query", ""),
+                        "Total Time (s)": f"{entry.get('total_time', 0):.2f}",
+                        "Timestamp": pd.to_datetime(entry.get("timestamp", "")).strftime("%Y-%m-%d %H:%M") if entry.get("timestamp") else "N/A",
+                    }
+                    for entry in sorted_entries[:10]
+                ])
+                
+                st.dataframe(slow_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("No performance data available yet. Run some queries to see metrics here!")
         else:
             st.info("No performance data available yet. Run some queries to see metrics here!")
     

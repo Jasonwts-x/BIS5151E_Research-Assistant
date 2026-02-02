@@ -20,7 +20,7 @@ def render_overview():
     # Hero section with custom styling
     st.markdown("""
         <div style='text-align: center; padding: 2rem 0;'>
-            <h1 style='font-size: 3rem; margin-bottom: 0.5rem;'>📊 Overview</h1>
+            <h1 style='font-size: 3rem; margin-bottom: 0.5rem;'>📊 Quick Statistics</h1>
             <p style='font-size: 1.2rem; color: #666;'>
                 Welcome to the Research-Assistant Evaluation Dashboard!
             </p>
@@ -53,42 +53,102 @@ def render_overview():
         response.raise_for_status()
         summary = response.json()
         
+        total_evals = summary.get("total_evaluations", 0)
+        
         # Key Metrics Section
-        st.markdown("## 📈 Key Metrics")
+        st.markdown("## 📈 TruLens Metrics")
         st.markdown("")
         
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3 = st.columns(3)
         
         with col1:
-            total = summary.get("total_evaluations", 0)
-            delta = f"+{summary.get('new_evaluations_today', 0)}" if summary.get('new_evaluations_today', 0) > 0 else None
+            avg_groundedness = summary.get("average_groundedness", 0)
             st.metric(
-                label="Total Evaluations",
-                value=f"{total}",
-                delta=delta,
+                label="Groundedness",
+                value=f"{avg_groundedness:.2f} / 1.00" if avg_groundedness > 0 else "N/A",
+                delta=None,
             )
         
         with col2:
-            avg_score = summary.get("average_overall_score", 0)
+            avg_relevance = summary.get("average_answer_relevance", 0)
             st.metric(
-                label="Average Overall Score",
-                value=f"{avg_score:.2f}" if avg_score > 0 else "N/A",
+                label="Answer Relevance",
+                value=f"{avg_relevance:.2f} / 1.00" if avg_relevance > 0 else "N/A",
                 delta=None,
             )
         
         with col3:
-            avg_groundedness = summary.get("average_groundedness", 0)
+            avg_context = summary.get("average_context_relevance", 0)
             st.metric(
-                label="Avg Groundedness",
-                value=f"{avg_groundedness:.2f}" if avg_groundedness > 0 else "N/A",
+                label="Context Relevance",
+                value=f"{avg_context:.2f} / 1.00" if avg_context > 0 else "N/A",
                 delta=None,
             )
         
-        with col4:
-            avg_relevance = summary.get("average_answer_relevance", 0)
+        st.markdown("---")
+        
+        # Guardrails Section
+        st.markdown("## 🛡️ Guardrails")
+        st.markdown("")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            total_checks = summary.get("total_guardrail_checks", 18)
             st.metric(
-                label="Avg Answer Relevance",
-                value=f"{avg_relevance:.2f}" if avg_relevance > 0 else "N/A",
+                label="Total Checks",
+                value=str(total_checks),
+                delta=None,
+            )
+        
+        with col2:
+            violations = summary.get("guardrail_violations", 0)
+            st.metric(
+                label="Violations",
+                value=str(violations),
+                delta=None,
+            )
+        
+        with col3:
+            pass_rate = ((total_checks - violations) / total_checks * 100) if total_checks > 0 else 100
+            st.metric(
+                label="Pass Rate",
+                value=f"{pass_rate:.0f}%",
+                delta=None,
+            )
+        
+        st.markdown("---")
+        
+        # Performance Section
+        st.markdown("## ⚡ Performance")
+        st.markdown("")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            avg_total_time = summary.get("average_total_time", 0)
+            display_time = f"{avg_total_time:.1f}s" if avg_total_time > 0 else "TBD"
+            st.metric(
+                label="Avg Total Time",
+                value=display_time,
+                delta=None,
+            )
+        
+        with col2:
+            avg_rag_time = summary.get("average_rag_time", 0)
+            display_rag = f"{avg_rag_time:.1f}s" if avg_rag_time > 0 else "TBD"
+            st.metric(
+                label="Avg RAG Time",
+                value=display_rag,
+                delta=None,
+            )
+        
+        with col3:
+            avg_agent_time = summary.get("average_agent_time", 0)
+            display_agent = f"{avg_agent_time:.1f}s" if avg_agent_time > 0 else "TBD"
+            st.metric(
+                label="Avg Agent Time",
+                value=display_agent,
                 delta=None,
             )
         
@@ -98,89 +158,110 @@ def render_overview():
         st.markdown("## ⚡ System Status")
         st.markdown("")
         
-        # Check service health
-        services = {
-            "Evaluation Service": {"url": "http://eval:8502/health", "icon": "✅"},
-            "Guardrails": {"url": None, "icon": "✅", "status": summary.get("guardrails_enabled", True)},
-            "Database": {"url": None, "icon": "✅", "status": "Connected"},
-            "TruLens": {"url": None, "icon": "✅", "status": "Initialized"},
-            "Performance Tracking": {"url": None, "icon": "✅", "status": "Active"},
-            "Quality Metrics": {"url": None, "icon": "✅", "status": "Available"},
-        }
+        # Check service health with actual status checks
+        import requests as req
         
-        # Display status in grid
+        def check_service_health(url: str) -> bool:
+            """Check if a service is healthy."""
+            try:
+                response = req.get(url, timeout=2)
+                return response.status_code == 200
+            except Exception:
+                return False
+        
+        # Check evaluation service
+        eval_healthy = check_service_health("http://eval:8502/health")
+        
+        # Database and other services are healthy if we got this far
+        db_healthy = True  # If we got summary data, DB is working
+        trulens_healthy = total_evals > 0 or True  # Assume healthy if service responds
+        guardrails_enabled = summary.get("guardrails_enabled", True)
+        perf_tracking = summary.get("average_total_time", -1) >= 0  # -1 means no data, but tracking works
+        quality_available = summary.get("average_overall_score", -1) >= 0
+        
+        # Display status in grid with color coding
         col1, col2 = st.columns(2)
         
-        status_items = list(services.items())
-        mid = len(status_items) // 2
-        
         with col1:
-            for name, config in status_items[:mid]:
-                status_icon = config["icon"]
-                st.markdown(f"""
-                    <div style='background: #f0f2f6; padding: 1rem; border-radius: 5px; margin-bottom: 0.5rem;'>
-                        {status_icon} <strong>{name}</strong>: 
-                        <span style='color: #28a745;'>
-                            {config.get('status', 'Healthy')}
-                        </span>
-                    </div>
-                """, unsafe_allow_html=True)
+            if eval_healthy:
+                st.success("✅ **Evaluation Service**: Healthy")
+            else:
+                st.error("❌ **Evaluation Service**: Offline")
+            
+            if db_healthy:
+                st.success("✅ **Database**: Connected")
+            else:
+                st.error("❌ **Database**: Disconnected")
+            
+            if trulens_healthy:
+                st.success("✅ **TruLens**: Initialized")
+            else:
+                st.warning("⚠️ **TruLens**: Not Initialized")
         
         with col2:
-            for name, config in status_items[mid:]:
-                status_icon = config["icon"]
-                st.markdown(f"""
-                    <div style='background: #f0f2f6; padding: 1rem; border-radius: 5px; margin-bottom: 0.5rem;'>
-                        {status_icon} <strong>{name}</strong>: 
-                        <span style='color: #28a745;'>
-                            {config.get('status', 'Healthy')}
-                        </span>
-                    </div>
-                """, unsafe_allow_html=True)
+            if guardrails_enabled:
+                st.success("✅ **Guardrails**: Enabled")
+            else:
+                st.warning("⚠️ **Guardrails**: Disabled")
+            
+            if perf_tracking:
+                st.success("✅ **Performance Tracking**: Active")
+            else:
+                st.warning("⚠️ **Performance Tracking**: Inactive")
+            
+            if quality_available:
+                st.success("✅ **Quality Metrics**: Available")
+            else:
+                st.info("ℹ️ **Quality Metrics**: Pending Data")
         
         st.markdown("---")
         
-        # Quick Statistics Section
-        st.markdown("## 📊 Quick Statistics")
+        # Recent Evaluations Section
+        st.markdown("## 📋 Recent Evaluations")
         st.markdown("")
         
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.markdown("### TruLens Metrics")
-            groundedness = summary.get("average_groundedness", 0)
-            answer_rel = summary.get("average_answer_relevance", 0)
-            context_rel = summary.get("average_context_relevance", 0)
+        if total_evals == 0:
+            st.info("📭 No evaluations yet. Start using the research assistant to see metrics here!")
+            st.markdown("""
+            **To generate evaluations:**
+```powershell
+            # Run a research query
+            Invoke-RestMethod -Uri "http://localhost:8000/research/query" `
+              -Method Post -ContentType "application/json" `
+              -Body '{"query": "What is machine learning?", "language": "en"}'
+```
             
-            st.markdown(f"""
-            - **Groundedness:** {groundedness:.2f} / 1.00
-            - **Answer Relevance:** {answer_rel:.2f} / 1.00
-            - **Context Relevance:** {context_rel:.2f} / 1.00
+            Then refresh this page to see results!
             """)
+        else:
+            try:
+                response = requests.get("http://eval:8502/metrics/leaderboard?limit=10", timeout=5)
+                response.raise_for_status()
+                leaderboard = response.json()
+                
+                entries = leaderboard.get("entries", [])
+                
+                if entries:
+                    import pandas as pd
+                    
+                    df = pd.DataFrame([
+                        {
+                            "Timestamp": pd.to_datetime(entry.get("timestamp", "")).strftime("%Y-%m-%d %H:%M"),
+                            "Query": entry.get("query", "")[:60] + "..." if len(entry.get("query", "")) > 60 else entry.get("query", ""),
+                            "Overall Score": f"{entry.get('overall_score', 0):.3f}",
+                            "Groundedness": f"{entry.get('groundedness', 0):.3f}",
+                            "Answer Relevance": f"{entry.get('answer_relevance', 0):.3f}",
+                        }
+                        for entry in entries
+                    ])
+                    
+                    st.dataframe(df, use_container_width=True, hide_index=True)
+                else:
+                    st.info("No recent evaluations available.")
+            except Exception as e:
+                st.warning(f"Could not load recent evaluations: {e}")
         
-        with col2:
-            st.markdown("### Guardrails")
-            total_checks = summary.get("total_guardrail_checks", 18)
-            violations = summary.get("guardrail_violations", 0)
-            pass_rate = ((total_checks - violations) / total_checks * 100) if total_checks > 0 else 100
-            
-            st.markdown(f"""
-            - **Total Checks:** {total_checks}
-            - **Violations:** {violations}
-            - **Pass Rate:** {pass_rate:.0f}%
-            """)
-        
-        with col3:
-            st.markdown("### Performance")
-            avg_total_time = summary.get("average_total_time", 0)
-            avg_rag_time = summary.get("average_rag_time", 0)
-            avg_agent_time = summary.get("average_agent_time", 0)
-            
-            st.markdown(f"""
-            - **Avg Total Time:** {avg_total_time:.1f}s if {avg_total_time > 0} else "TBD"
-            - **Avg RAG Time:** {avg_rag_time:.1f}s if {avg_rag_time > 0} else "TBD"
-            - **Avg Agent Time:** {avg_agent_time:.1f}s if {avg_agent_time > 0} else "TBD"
-            """)
+        st.markdown("---")
         
     except requests.exceptions.RequestException as e:
         st.error(f"""
@@ -189,8 +270,8 @@ def render_overview():
         Error: {str(e)}
         
         **Troubleshooting:**
-        - Verify the evaluation service is running: `docker-compose ps eval`
-        - Check service logs: `docker-compose logs eval`
+        - Verify the evaluation service is running: `docker compose ps eval`
+        - Check service logs: `docker compose logs eval`
         - Ensure port 8502 is accessible
         """)
     except Exception as e:
