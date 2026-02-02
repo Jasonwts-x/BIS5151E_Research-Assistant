@@ -10,7 +10,8 @@ Practical code examples and integration guides.
 |----------|-------------|
 | **[BASIC_USAGE.md](BASIC_USAGE.md)** | Simple query examples |
 | **[PYTHON_EXAMPLES.md](PYTHON_EXAMPLES.md)** | Python SDK integration |
-| **[CLI_EXAMPLES.md](CLI_EXAMPLES.md)** | Command-line tools | # <- Add this
+| **[CLI_EXAMPLES.md](CLI_EXAMPLES.md)** | Command-line tools |
+| **[../setup/N8N.md](../setup/N8N.md)** | n8n workflow examples |
 
 ---
 

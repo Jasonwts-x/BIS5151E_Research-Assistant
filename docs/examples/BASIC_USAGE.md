@@ -397,7 +397,7 @@ foreach ($question in $questions) {
 ## 📚 Related Documentation
 
 - **[Python Examples](PYTHON_EXAMPLES.md)** - Integration code
-- **[n8n Workflows](N8N_WORKFLOWS.md)** - Automation examples
+- **[n8n Setup & Workflows](../setup/N8N.md)** - Automation examples
 - **[API Reference](../api/ENDPOINTS.md)** - All endpoints
 
 ---

@@ -10,7 +10,7 @@ Complete REST API reference for ResearchAssistantGPT.
 |----------|-------------|
 | **[ENDPOINTS.md](ENDPOINTS.md)** | Complete endpoint reference (table) |
 | **[SCHEMAS.md](SCHEMAS.md)** | Request/response schemas |
-| **[EXAMPLES.md](EXAMPLES.md)** | Integration examples |
+| **[../examples/README.md](../examples/README.md)** | Integration examples |
 | **[AUTHENTICATION.md](AUTHENTICATION.md)** | Authentication (future) |
 
 ---

@@ -567,7 +567,7 @@ finally:
 ## 📚 Related Documentation
 
 - **[Basic Usage](BASIC_USAGE.md)** - Simple examples
-- **[n8n Workflows](N8N_WORKFLOWS.md)** - Automation
+- **[n8n Setup & Workflows](../setup/N8N.md)** - Automation
 - **[API Reference](../api/ENDPOINTS.md)** - All endpoints
 
 ---

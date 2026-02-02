@@ -11,7 +11,6 @@ How-to guides and best practices for ResearchAssistantGPT.
 | **[COMMAND_REFERENCE.md](COMMAND_REFERENCE.md)** | Common commands quick reference |
 | **[CONFIGURATION.md](CONFIGURATION.md)** | Configuration options |
 | **[BEST_PRACTICES.md](BEST_PRACTICES.md)** | Optimization and best practices |
-| **[DEPLOYMENT.md](DEPLOYMENT.md)** | Production deployment guide (future) |
 
 ---
 

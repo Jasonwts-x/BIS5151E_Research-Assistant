@@ -241,8 +241,6 @@ Database schemas and design:
 - API key management
 - Rate limiting
 
-See [Security Architecture](SECURITY.md) for details (future).
-
 ---
 
 ## 📚 Related Documentation
