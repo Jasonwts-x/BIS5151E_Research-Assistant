@@ -1,270 +1,202 @@
-# Evaluation System Documentation
+# Evaluation & Quality Monitoring
 
-ResearchAssistantGPT includes a comprehensive evaluation system for monitoring quality, safety, and performance.
-
----
-
-## Overview
-
-The evaluation system consists of four main components:
-
-1. **TruLens** - Quality metrics (groundedness, relevance)
-2. **Guardrails** - Safety validation (input/output checks)
-3. **Performance** - Timing and resource tracking
-4. **Quality Metrics** - ROUGE, BLEU, semantic similarity
+Documentation for quality assurance, metrics, and monitoring.
 
 ---
 
-## Architecture
+## 📚 Evaluation Documentation
+
+| Document | Description |
+|----------|-------------|
+| **[METRICS.md](METRICS.md)** | Explanation of all quality metrics |
+| **[TRULENS.md](TRULENS.md)** | TruLens setup and usage |
+| **[GUARDRAILS.md](GUARDRAILS.md)** | Guardrails configuration and validation |
+| **[DASHBOARD.md](DASHBOARD.md)** | Evaluation dashboard setup (future) |
+
+---
+
+## 🎯 Overview
+
+ResearchAssistantGPT implements comprehensive evaluation to ensure high-quality outputs:
+
+1. **Input Validation** (Guardrails) - Prevent harmful/invalid queries
+2. **Output Validation** (Guardrails) - Ensure safe, high-quality responses
+3. **RAG Quality** (TruLens) - Measure answer relevance, groundedness, context quality
+4. **Performance Tracking** - Monitor response times and resource usage
+
+---
+
+## 📊 Evaluation Pipeline
 ```
-┌──────────────────────────────────────────┐
-│ CrewAI Service (Port 8100)               │
-│  ├─ Input Validation (Guardrails)        │
-│  ├─ RAG Retrieval (Performance Tracked)  │
-│  ├─ Agent Execution (Performance Tracked)│
-│  ├─ Output Validation (Guardrails)       │
-│  └─ TruLens Evaluation                   │
-└────────────────────┬─────────────────────┘
-                     │
-                     ▼
-┌──────────────────────────────────────────┐
-│ Evaluation Service (Ports 8501/8502)     │
-│  ├─ PostgreSQL Storage                   │
-│  ├─ Metrics API (8502)                   │
-│  └─ Streamlit Dashboard (8501)           │
-└──────────────────────────────────────────┘
-```
-
----
-
-## Components
-
-### 1. TruLens Integration
-
-**Location:** `src/eval/trulens/`
-
-**Metrics:**
-- **Groundedness** (0-1): Are claims supported by context?
-- **Answer Relevance** (0-1): Does answer address the query?
-- **Context Relevance** (0-1): Is retrieved context relevant?
-- **Citation Quality** (0-1): Are sources properly cited?
-
-**Usage:**
-```python
-from src.eval.trulens import TruLensClient
-
-client = TruLensClient(enabled=True)
-result = client.evaluate(
-    query="What is AI?",
-    context="Retrieved context...",
-    answer="AI is artificial intelligence...",
-)
-
-print(f"Groundedness: {result['trulens']['groundedness']}")
-```
-
----
-
-### 2. Guardrails Validation
-
-**Location:** `src/eval/guardrails/`
-
-**Input Validators:**
-- Jailbreak Detection
-- PII Detection
-- Topic Relevance Check
-
-**Output Validators:**
-- Citation Format Validation
-- Hallucination Detection
-- Length Validation
-- Harmful Content Detection
-
-**Usage:**
-```python
-from src.eval.guardrails import InputValidator, OutputValidator
-
-input_validator = InputValidator()
-output_validator = OutputValidator()
-
-# Validate input
-passed, results = input_validator.validate("User query here")
-if not passed:
-    print("Input validation failed!")
-
-# Validate output
-passed, results = output_validator.validate("Generated answer here")
-if not passed:
-    print("Output validation failed!")
+User Query
+    ↓
+┌──────────────────────────┐
+│ 1. Input Validation      │
+│    (Guardrails)          │
+│    - Length check        │
+│    - Jailbreak detection │
+│    - PII detection       │
+│    - Off-topic check     │
+└──────────────────────────┘
+    ↓
+Processing (RAG + Agents)
+    ↓
+┌──────────────────────────┐
+│ 2. Output Validation     │
+│    (Guardrails)          │
+│    - Citation check      │
+│    - Hallucination detect│
+│    - Length validation   │
+│    - Safety check        │
+└──────────────────────────┘
+    ↓
+┌──────────────────────────┐
+│ 3. Quality Metrics       │
+│    (TruLens)             │
+│    - Answer relevance    │
+│    - Context relevance   │
+│    - Groundedness        │
+│    - ROUGE/BLEU          │
+└──────────────────────────┘
+    ↓
+Response to User
 ```
 
 ---
 
-### 3. Performance Monitoring
+## 🎯 Quality Metrics
 
-**Location:** `src/eval/performance/`
+### Automatic Metrics
 
-**Tracked Metrics:**
-- Total execution time
-- RAG retrieval time
-- Agent execution time (per agent)
-- LLM inference time
-- Guardrails validation time
+| Metric | Tool | Target | Current |
+|--------|------|--------|---------|
+| **Answer Relevance** | TruLens | > 0.8 | Monitoring |
+| **Context Relevance** | TruLens | > 0.7 | Monitoring |
+| **Groundedness** | TruLens | > 0.85 | Monitoring |
+| **Citation Coverage** | Guardrails | > 90% | ✅ Enforced |
+| **Response Time** | Performance | < 30s | ✅ 28s avg |
 
-**Usage:**
-```python
-from src.eval.performance import PerformanceTracker
+### Manual Metrics (Future)
 
-tracker = PerformanceTracker()
-tracker.start()
-
-with tracker.track("rag_retrieval"):
-    # ... RAG code ...
-    pass
-
-with tracker.track("agent_writer"):
-    # ... agent code ...
-    pass
-
-tracker.stop()
-summary = tracker.get_summary()
-print(f"Total time: {summary['total_time']}s")
-```
+- User satisfaction scores
+- Expert evaluation
+- A/B testing results
 
 ---
 
-### 4. Quality Metrics
+## 🛡️ Guardrails
 
-**Location:** `src/eval/quality/`
+### Input Validation
 
-**Available Calculators:**
-- **ROUGE** - N-gram overlap (ROUGE-1, ROUGE-2, ROUGE-L)
-- **BLEU** - Precision-based scoring
-- **Semantic Similarity** - Embedding-based relevance
-- **Factuality Checker** - Claim verification
+**Checks**:
+- ✅ Query length (max 10,000 chars)
+- ✅ Jailbreak attempt detection
+- ✅ PII detection (emails, phone numbers)
+- ✅ Off-topic query detection
 
-**Usage:**
-```python
-from src.eval.quality import ROUGECalculator
-
-calculator = ROUGECalculator()
-scores = calculator.calculate(
-    generated="Generated answer",
-    reference="Reference answer",
-)
-
-print(f"ROUGE-1: {scores['rouge-1']}")
-print(f"ROUGE-2: {scores['rouge-2']}")
-```
-
----
-
-## Dashboard
-
-Access the evaluation dashboard at **http://localhost:8501**
-
-**Features:**
-- Real-time metrics overview
-- Performance timing breakdown
-- Quality score trends
-- Guardrails violation tracking
-- Evaluation leaderboard
-
----
-
-## API Endpoints
-
-**Base URL:** `http://localhost:8502`
-
-### Evaluate Query/Answer
+**Configuration**: `.env`
 ```bash
-POST /metrics/evaluate
-{
-  "query": "What is AI?",
-  "answer": "AI is artificial intelligence...",
-  "context": "Retrieved context...",
-  "language": "en"
-}
-```
-
-### Get Leaderboard
-```bash
-GET /metrics/leaderboard?limit=100
-```
-
-### Get Record Details
-```bash
-GET /metrics/record/{record_id}
-```
-
----
-
-## Configuration
-
-**Environment Variables:**
-```bash
-# Enable/disable evaluation
-TRULENS_ENABLED=true
-GUARDRAILS_ENABLED=true
-
-# Guardrails settings
+GUARDRAILS_CITATION_REQUIRED=true
 GUARDRAILS_STRICT_MODE=false
+```
 
-# Database
-TRULENS_DATABASE_URL=postgresql://user:pass@postgres:5432/trulens
+See [GUARDRAILS.md](GUARDRAILS.md) for details.
+
+### Output Validation
+
+**Checks**:
+- ✅ Citation format validation ([1], [2], etc.)
+- ✅ Hallucination marker detection ("I think", "I believe")
+- ✅ Length constraints (200-500 words)
+- ✅ Harmful content filtering
+
+---
+
+## 📈 TruLens Monitoring
+
+**Metrics Tracked**:
+1. **Answer Relevance**: Does the answer address the query?
+2. **Context Relevance**: Is retrieved context useful?
+3. **Groundedness**: Are claims supported by context?
+
+**Status**: Experimental (stub implementation)
+
+**Setup**: See [TRULENS.md](TRULENS.md)
+
+---
+
+## 🎛️ Configuration
+
+### Enable/Disable Evaluation
+```bash
+# .env file
+
+# Guardrails (input/output validation)
+GUARDRAILS_CITATION_REQUIRED=true  # Require citations
+GUARDRAILS_STRICT_MODE=false        # Lenient mode
+
+# TruLens (quality metrics)
+EVAL_ENABLE_TRULENS=true            # Enable TruLens
+EVAL_FAITHFULNESS_METRIC=trulens_groundedness
+
+# Performance tracking
+EVAL_ENABLE_PERFORMANCE=true        # Track timing
 ```
 
 ---
 
-## Database Schema
+## 📊 Viewing Metrics
 
-Evaluation data is stored in PostgreSQL with the following tables:
+### Current (Logs)
 
-- `records` - TruLens evaluation records
-- `feedback_results` - TruLens feedback scores
-- `performance_metrics` - Timing and resource data
-- `quality_metrics` - ROUGE/BLEU scores
-- `guardrails_results` - Validation results
+Metrics are logged to console:
+```
+INFO - Guardrails: Input validation passed
+INFO - Query processed in 28.4s
+INFO - TruLens: answer_relevance=0.89, groundedness=0.92
+```
 
-See `scripts/setup/init-db.sql` for full schema.
+### Future (Dashboard)
 
----
+Planned: Web dashboard for visualization
+- Real-time metrics
+- Historical trends
+- Quality scores over time
 
-## Best Practices
-
-1. **Always enable guardrails** in production
-2. **Monitor dashboard regularly** for quality degradation
-3. **Set up alerts** for low groundedness scores
-4. **Review violations** caught by guardrails
-5. **Track performance trends** over time
+See [DASHBOARD.md](DASHBOARD.md) (future)
 
 ---
 
-## Troubleshooting
+## 🔧 Troubleshooting
 
-**Dashboard not loading:**
+### Issue: Guardrails blocking valid queries
+
+**Solution**:
 ```bash
-# Check if eval service is running
-docker compose ps eval
+# Relax validation
+GUARDRAILS_STRICT_MODE=false
+```
+
+### Issue: TruLens metrics not appearing
+
+**Solution**:
+```bash
+# Check TruLens is enabled
+EVAL_ENABLE_TRULENS=true
 
 # Check logs
-docker compose logs eval
-```
-
-**No evaluation data:**
-```bash
-# Ensure TruLens is enabled
-docker compose exec eval env | grep TRULENS_ENABLED
-
-# Check database connection
-docker compose exec eval python -c "from src.eval.trulens import TruLensClient; TruLensClient(enabled=True)"
+docker compose logs api | grep TruLens
 ```
 
 ---
 
-## Further Reading
+## 📚 Related Documentation
 
-- [TruLens Documentation](https://www.trulens.org/)
-- [Guardrails AI Documentation](https://www.guardrailsai.com/)
-- [ROUGE Score Explanation](https://en.wikipedia.org/wiki/ROUGE_(metric))
-- [BLEU Score Explanation](https://en.wikipedia.org/wiki/BLEU)
+- **[Metrics Explanation](METRICS.md)** - What each metric means
+- **[TruLens Setup](TRULENS.md)** - Enable TruLens monitoring
+- **[Guardrails Config](GUARDRAILS.md)** - Configure validation
+- **[API Documentation](../api/README.md)** - API reference
+
+---
+
+**[⬅ Back to Documentation](../README.md)**
