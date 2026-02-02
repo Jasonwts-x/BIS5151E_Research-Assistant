@@ -1,445 +1,445 @@
-# GPU Support Guide
+# GPU Acceleration Setup (NVIDIA)
 
-Enable GPU acceleration for faster LLM inference and embedding generation.
+Enable GPU acceleration for 3-5x faster LLM inference.
 
----
-
-## ⚠️ Current Status
-
-**GPU support is in development.** This guide provides configuration for future implementation.
-
-Currently, the system runs on CPU with acceptable performance:
-- Query time: ~25-30 seconds
-- Ingestion: ~5-10 seconds per paper
-
-GPU acceleration will reduce these times by 3-5x.
+**Prerequisites**: NVIDIA GPU with 8GB+ VRAM
 
 ---
 
-## Prerequisites
+## ⚠️ Important Notes
 
-### NVIDIA GPUs
-
-**Requirements:**
-- NVIDIA GPU with Compute Capability 6.0+ (Pascal or newer)
-- NVIDIA drivers installed
-- NVIDIA Container Toolkit
-
-**Supported GPUs:**
-- GeForce RTX 20/30/40 series
-- Tesla T4, V100, A100
-- Quadro RTX series
-
-**Minimum VRAM:** 8GB (recommended: 12GB+)
+- **Only NVIDIA GPUs are supported** (AMD support is experimental and not covered here)
+- **Requires NVIDIA GPU with CUDA support** (Check: https://developer.nvidia.com/cuda-gpus)
+- **Minimum 8GB VRAM** recommended (16GB+ for larger models)
+- **Windows users**: WSL2 required
+- **Linux users**: Native Docker support
 
 ---
 
-### AMD GPUs
+## 📋 Prerequisites
 
-**Requirements:**
-- AMD GPU (RDNA 2 or newer)
-- ROCm 5.0+ installed
-- AMD Container Toolkit
+### Hardware Requirements
 
-**Supported GPUs:**
-- Radeon RX 6000/7000 series
-- Radeon Pro W6000 series
+| Component | Minimum | Recommended |
+|-----------|---------|-------------|
+| **GPU** | NVIDIA GPU (CUDA 11.0+) | RTX 3060 or better |
+| **VRAM** | 8GB | 16GB+ |
+| **System RAM** | 16GB | 32GB |
+| **CUDA Compute** | 6.0+ | 7.0+ |
 
-**Status:** Experimental support via ROCm
+**Check your GPU compatibility**: https://developer.nvidia.com/cuda-gpus
+
+### Software Requirements
+
+| Software | Version | Required |
+|----------|---------|----------|
+| **NVIDIA Driver** | 525.60.13+ | ✅ Yes |
+| **Docker Desktop** | 20.10+ | ✅ Yes |
+| **NVIDIA Container Toolkit** | Latest | ✅ Yes |
+| **WSL2** (Windows only) | Latest | ✅ Yes (Windows) |
 
 ---
 
-## Installation
+## 🔧 Installation Steps
 
-### NVIDIA Setup
+### Step 1: Install/Update NVIDIA Drivers
 
-#### 1. Install NVIDIA Drivers
+You must install NVIDIA drivers on your **host system** (not inside Docker).
 
-**Linux:**
+#### Windows
+
+1. **Download latest drivers**:
+   - Visit: https://www.nvidia.com/Download/index.aspx
+   - Select your GPU model
+   - Download and install "Game Ready Driver" or "Studio Driver"
+
+2. **Verify installation**:
+```powershell
+   nvidia-smi
+```
+   
+   **Expected output**:
+```
+   +-----------------------------------------------------------------------------+
+   | NVIDIA-SMI 535.xx.xx    Driver Version: 535.xx.xx    CUDA Version: 12.2     |
+   |-------------------------------+----------------------+----------------------+
+   | GPU  Name        ...
+```
+
+3. **Install WSL2** (if not already installed):
+```powershell
+   # Run as Administrator
+   wsl --install
+   
+   # Restart computer
+   
+   # Update WSL
+   wsl --update
+```
+
+#### Linux (Ubuntu/Debian)
 ```bash
-# Ubuntu/Debian
+# Add NVIDIA package repository
+wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.0-1_all.deb
+sudo dpkg -i cuda-keyring_1.0-1_all.deb
 sudo apt-get update
-sudo apt-get install nvidia-driver-535
 
-# Verify
-nvidia-smi
-```
-
-**Windows:**
-Download from https://www.nvidia.com/drivers
-
----
-
-#### 2. Install NVIDIA Container Toolkit
-
-**Linux:**
-```bash
-# Add repository
-distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
-curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add -
-curl -s -L https://nvidia.github.io/nvidia-docker/$distribution/nvidia-docker.list | \
-  sudo tee /etc/apt/sources.list.d/nvidia-docker.list
-
-# Install
-sudo apt-get update
-sudo apt-get install -y nvidia-container-toolkit
-
-# Restart Docker
-sudo systemctl restart docker
-
-# Verify
-docker run --rm --gpus all nvidia/cuda:11.8.0-base-ubuntu22.04 nvidia-smi
-```
-
-**Windows/macOS:**
-GPU support in Docker Desktop is limited. Consider using WSL2 (Windows) or Linux VM.
-
----
-
-#### 3. Configure Docker Compose
-
-**Edit `docker/docker-compose.nvidia.yml`** (to be created):
-```yaml
-version: '3.8'
-
-services:
-  ollama:
-    image: ollama/ollama:latest
-    container_name: ollama
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    environment:
-      - NVIDIA_VISIBLE_DEVICES=all
-    ports:
-      - "${OLLAMA_PORT:-11434}:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    networks:
-      - research_net
-    restart: unless-stopped
-
-  api:
-    build:
-      context: ..
-      dockerfile: .devcontainer/Dockerfile
-      target: api
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    environment:
-      - NVIDIA_VISIBLE_DEVICES=all
-      - CUDA_VISIBLE_DEVICES=0
-    # ... rest of config
-```
-
----
-
-#### 4. Start with GPU Support
-```bash
-# Stop current services
-docker compose down
-
-# Start with NVIDIA GPU support
-docker compose -f docker/docker-compose.yml -f docker/docker-compose.nvidia.yml up -d
-
-# Verify GPU usage
-docker exec ollama nvidia-smi
-```
-
----
-
-### AMD Setup (ROCm)
-
-#### 1. Install ROCm
-
-**Ubuntu 22.04:**
-```bash
-# Add repository
-wget -q -O - https://repo.radeon.com/rocm/rocm.gpg.key | sudo apt-key add -
-echo 'deb [arch=amd64] https://repo.radeon.com/rocm/apt/5.7/ ubuntu main' | \
-  sudo tee /etc/apt/sources.list.d/rocm.list
-
-# Install
-sudo apt-get update
-sudo apt-get install rocm-hip-sdk
-
-# Add user to groups
-sudo usermod -a -G render,video $USER
+# Install NVIDIA driver
+sudo apt-get install -y nvidia-driver-535
 
 # Reboot
 sudo reboot
 
 # Verify
-rocm-smi
+nvidia-smi
 ```
+
+#### macOS
+
+**Note**: NVIDIA GPUs are not supported on macOS (Apple Silicon uses Metal, not CUDA).
 
 ---
 
-#### 2. Configure Docker
+### Step 2: Install NVIDIA Container Toolkit
 
-**Edit `docker/docker-compose.amd.yml`** (to be created):
-```yaml
-version: '3.8'
+This allows Docker to access your GPU.
 
-services:
-  ollama:
-    image: ollama/ollama:rocm
-    container_name: ollama
-    devices:
-      - /dev/kfd
-      - /dev/dri
-    environment:
-      - HSA_OVERRIDE_GFX_VERSION=10.3.0  # Adjust for your GPU
-    # ... rest of config
-```
+#### Windows (WSL2)
 
----
+**The NVIDIA drivers installed in Step 1 are sufficient for WSL2. No additional installation needed inside WSL2.**
 
-#### 3. Start with ROCm Support
+Verify Docker can see GPU:
 ```bash
-docker compose -f docker/docker-compose.yml -f docker/docker-compose.amd.yml up -d
+docker run --rm --gpus all nvidia/cuda:12.0.0-base-ubuntu22.04 nvidia-smi
 ```
 
----
+If this works, skip to Step 3.
 
-## Performance Comparison
-
-### CPU vs GPU (NVIDIA RTX 3080)
-
-| Operation | CPU | GPU | Speedup |
-|-----------|-----|-----|---------|
-| **LLM Inference** (per call) | 8-10s | 2-3s | 3-4x |
-| **Embedding** (100 chunks) | 2s | 0.5s | 4x |
-| **Full Query** | 25-30s | 8-12s | 3x |
-| **Ingestion** (5 papers) | 25s | 15s | 1.7x |
-
----
-
-## Configuration
-
-### Ollama GPU Settings
+If it fails, continue:
 ```bash
-# Inside ollama container
-docker exec -it ollama bash
+# Inside WSL2 terminal
+distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl -s -L https://nvidia.github.io/libnvidia-container/$distribution/libnvidia-container.list | \
+    sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+    sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
 
-# Check GPU availability
-ollama run qwen2.5:3b --verbose
+sudo apt-get update
+sudo apt-get install -y nvidia-container-toolkit
 
-# Set GPU memory limit
-ollama run qwen2.5:3b --gpu-memory 8G
+# Configure Docker
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
 ```
 
----
-
-### Embedding Model GPU
-
-**Update `src/rag/ingestion/engine.py`:**
-```python
-from sentence_transformers import SentenceTransformer
-
-# Enable GPU
-model = SentenceTransformer(
-    'all-MiniLM-L6-v2',
-    device='cuda'  # or 'cpu' for CPU mode
-)
-
-# Batch size (larger on GPU)
-embeddings = model.encode(
-    chunks,
-    batch_size=128,  # Increase for GPU (default: 32)
-    show_progress_bar=True
-)
-```
-
----
-
-## Monitoring GPU Usage
-
-### NVIDIA
+#### Linux (Ubuntu/Debian)
 ```bash
-# Real-time monitoring
-watch -n 1 nvidia-smi
+# Add NVIDIA Container Toolkit repository
+distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl -s -L https://nvidia.github.io/libnvidia-container/$distribution/libnvidia-container.list | \
+    sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+    sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
 
-# Or use nvtop
-sudo apt-get install nvtop
-nvtop
+# Install
+sudo apt-get update
+sudo apt-get install -y nvidia-container-toolkit
+
+# Configure Docker
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
+
+# Verify
+docker run --rm --gpus all nvidia/cuda:12.0.0-base-ubuntu22.04 nvidia-smi
 ```
 
-**Expected output:**
+**Expected output**: Should show your GPU information inside the container.
+
+---
+
+### Step 3: Configure Docker Desktop (Windows/macOS)
+
+#### Windows
+
+1. Open **Docker Desktop**
+2. Go to **Settings** → **Resources** → **WSL Integration**
+3. Enable integration with your WSL2 distro (e.g., Ubuntu)
+4. Click **Apply & Restart**
+
+#### macOS
+
+**NVIDIA GPUs not supported on macOS.** Use CPU mode or cloud GPU.
+
+---
+
+### Step 4: Verify GPU Access
+
+Test that Docker can access your GPU:
+```bash
+docker run --rm --gpus all nvidia/cuda:12.0.0-base-ubuntu22.04 nvidia-smi
+```
+
+**Expected output**:
 ```
 +-----------------------------------------------------------------------------+
-| NVIDIA-SMI 535.54.03    Driver Version: 535.54.03    CUDA Version: 12.2     |
+| NVIDIA-SMI 535.xx.xx    Driver Version: 535.xx.xx    CUDA Version: 12.2     |
 |-------------------------------+----------------------+----------------------+
-| GPU  Name        Persistence-M| Bus-Id        Disp.A | Volatile Uncorr. ECC |
+| GPU  Name            TCC/WDDM | Bus-Id        Disp.A | Volatile Uncorr. ECC |
 | Fan  Temp  Perf  Pwr:Usage/Cap|         Memory-Usage | GPU-Util  Compute M. |
 |===============================+======================+======================|
-|   0  NVIDIA GeForce ...  Off  | 00000000:01:00.0  On |                  N/A |
-| 30%   45C    P2    150W / 350W|   6234MiB / 12288MiB |     95%      Default |
+|   0  NVIDIA GeForce ... WDDM  | 00000000:01:00.0  On |                  N/A |
+| 30%   45C    P8    15W / 350W |    500MiB / 12288MiB |      0%      Default |
 +-------------------------------+----------------------+----------------------+
 ```
 
----
-
-### AMD
-```bash
-# Monitor GPU
-watch -n 1 rocm-smi
-
-# Or
-radeontop
-```
+If you see your GPU, you're ready!
 
 ---
 
-## Troubleshooting
+## 🚀 Start with GPU Support
 
-### NVIDIA: GPU Not Detected
-
-**Check driver:**
+### Option 1: Start All Services with GPU
 ```bash
-nvidia-smi
-# Should show GPU info
+# Stop existing services (if running)
+docker compose -f docker/docker-compose.yml down
+
+# Start with GPU support
+docker compose -f docker/docker-compose.yml -f docker/docker-compose.nvidia.yml up -d
 ```
 
-**Check Docker:**
+### Option 2: GPU for Ollama Only
+
+If you only want GPU for Ollama (recommended):
+
+The `docker-compose.nvidia.yml` file already configures this. Just use the command above.
+
+---
+
+## ✅ Verify GPU Usage
+
+### Check Ollama is Using GPU
 ```bash
-docker run --rm --gpus all nvidia/cuda:11.8.0-base-ubuntu22.04 nvidia-smi
-# Should show GPU in container
+# View Ollama logs
+docker compose logs ollama
+
+# Should see messages like:
+# "CUDA device: NVIDIA GeForce RTX 3080"
+# "GPU memory: 10240 MB"
 ```
 
-**Common fixes:**
+### Monitor GPU Usage
+
+**While running a query**:
 ```bash
-# Restart Docker
+# In one terminal, watch GPU usage
+watch -n 1 nvidia-smi
+
+# In another terminal, run a query
+```
+```powershell
+# PowerShell
+$body = @{
+    query = "Explain quantum computing"
+    language = "en"
+} | ConvertTo-Json
+
+Invoke-RestMethod -Uri "http://localhost:8000/research/query" `
+    -Method Post `
+    -ContentType "application/json" `
+    -Body $body
+```
+
+**Expected**: GPU utilization should spike to 60-90% during generation.
+
+---
+
+## 📊 Performance Comparison
+
+### CPU vs GPU Benchmarks
+
+| Operation | CPU (8 cores) | GPU (RTX 3080) | Speedup |
+|-----------|---------------|----------------|---------|
+| **Embedding generation** (100 docs) | ~12s | ~3s | 4x |
+| **LLM inference** (300 tokens) | ~25s | ~6s | 4.2x |
+| **Full query workflow** | ~35s | ~10s | 3.5x |
+
+**Model**: qwen3:1.7b
+
+**Note**: Speedup varies by GPU model and workload.
+
+---
+
+## 🔧 Troubleshooting
+
+### Issue: `docker: Error response from daemon: could not select device driver "" with capabilities: [[gpu]]`
+
+**Solution**:
+```bash
+# Restart Docker daemon
 sudo systemctl restart docker
 
-# Reinstall NVIDIA Container Toolkit
+# Or restart Docker Desktop (Windows/macOS)
+```
+
+### Issue: `nvidia-smi` not found in container
+
+**Solution**: NVIDIA drivers not installed or Container Toolkit not configured.
+```bash
+# Verify host drivers
+nvidia-smi
+
+# Reinstall Container Toolkit (Linux)
 sudo apt-get install --reinstall nvidia-container-toolkit
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
 ```
 
----
+### Issue: GPU not being used (low utilization)
 
-### AMD: ROCm Not Working
+**Possible causes**:
+1. Model not loaded on GPU
+2. Batch size too small
+3. CPU bottleneck elsewhere
 
-**Check GPU:**
+**Solution**:
 ```bash
-rocm-smi
-# Should list AMD GPU
+# Check Ollama logs for GPU initialization
+docker compose logs ollama | grep -i cuda
+
+# Should see: "CUDA device: ..."
 ```
 
-**Check permissions:**
+### Issue: Out of memory (OOM) errors
+
+**Solution**:
 ```bash
-groups
-# Should include 'render' and 'video'
+# Use smaller model
+# Edit docker/.env
+OLLAMA_MODEL=qwen3:1.7b  # Instead of larger models
 
-# If not:
-sudo usermod -a -G render,video $USER
-# Log out and back in
+# Or reduce concurrent requests
+# Edit .env
+OLLAMA_NUM_PARALLEL=1
+OLLAMA_MAX_LOADED_MODELS=1
 ```
 
 ---
 
-### Out of Memory Errors
+## ⚙️ GPU Configuration Options
 
-**Reduce batch size:**
-```python
-# In src/rag/ingestion/engine.py
-embeddings = model.encode(
-    chunks,
-    batch_size=16,  # Reduce from 128
-)
+### Ollama GPU Settings
+
+Edit `docker/.env` to configure:
+```env
+# Number of parallel requests (default: 1)
+# Higher = more VRAM usage
+OLLAMA_NUM_PARALLEL=2
+
+# Maximum loaded models (default: 1)
+OLLAMA_MAX_LOADED_MODELS=1
+
+# Keep model in memory (default: 30m)
+# Longer = faster subsequent queries, more VRAM usage
+OLLAMA_KEEP_ALIVE=1h
+
+# GPU layers (default: auto)
+# Set to specific number to limit VRAM usage
+# OLLAMA_GPU_LAYERS=32
 ```
 
-**Reduce model size:**
+### Advanced: Multi-GPU Setup
+
+If you have multiple GPUs:
+```yaml
+# docker/docker-compose.nvidia.yml
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['0', '1']  # Use GPU 0 and 1
+              capabilities: [gpu]
+```
+
+---
+
+## 🔄 Switching Between CPU and GPU
+
+### Switch to GPU
 ```bash
-# Use smaller Ollama model
-ollama pull qwen2.5:1.5b  # Instead of 3b
+docker compose -f docker/docker-compose.yml -f docker/docker-compose.nvidia.yml up -d
+```
+
+### Switch Back to CPU
+```bash
+docker compose -f docker/docker-compose.yml up -d
+```
+
+**Note**: Switching will restart services and take ~2 minutes.
+
+---
+
+## 📈 Optimizing GPU Performance
+
+### 1. Use Quantized Models
+
+Smaller models = faster inference:
+```env
+# docker/.env
+OLLAMA_MODEL=qwen3:1.7b  # Fastest
+# OLLAMA_MODEL=qwen3:4b    # Balanced
+# OLLAMA_MODEL=qwen2.5:3b  # Alternative
+```
+
+### 2. Increase Batch Size
+
+For multiple queries:
+```env
+OLLAMA_NUM_PARALLEL=2  # Process 2 queries at once
+```
+
+### 3. Keep Models in VRAM
+```env
+OLLAMA_KEEP_ALIVE=2h  # Keep model loaded for 2 hours
+```
+
+### 4. Monitor VRAM Usage
+```bash
+# Watch VRAM
+watch -n 1 "nvidia-smi --query-gpu=memory.used,memory.free --format=csv"
 ```
 
 ---
 
-## Future Optimizations
+## 📚 Additional Resources
 
-### Planned Features
+### NVIDIA Documentation
+- **CUDA GPUs**: https://developer.nvidia.com/cuda-gpus
+- **Container Toolkit**: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+- **Docker GPU Support**: https://docs.docker.com/config/containers/resource_constraints/#gpu
 
-1. **Mixed Precision** (FP16)
-   - 2x faster inference
-   - 50% less memory
-
-2. **Model Quantization**
-   - INT8 or INT4 models
-   - 4x faster, 75% less memory
-
-3. **Batch Processing**
-   - Process multiple queries in parallel
-   - Better GPU utilization
-
-4. **Flash Attention**
-   - Faster attention computation
-   - Lower memory usage
+### Ollama GPU Documentation
+- **Ollama GPU Guide**: https://github.com/ollama/ollama/blob/main/docs/gpu.md
+- **Model Library**: https://ollama.com/library
 
 ---
 
-## Cost-Benefit Analysis
+## ❓ FAQ
 
-### When to Use GPU
+**Q: Can I use AMD GPUs?**  
+A: AMD GPU support is experimental. We recommend NVIDIA for production use.
 
-**Good use cases:**
-- High query volume (>100/day)
-- Large document collections (>1000 papers)
-- Real-time applications
-- Batch processing
+**Q: My GPU has 6GB VRAM. Will it work?**  
+A: It might work with smaller models (qwen3:1.7b), but 8GB+ is recommended.
 
-**CPU is fine for:**
-- Low query volume (<20/day)
-- Small document collections (<100 papers)
-- Development/testing
-- Budget constraints
+**Q: Can I use GPU for embeddings too?**  
+A: Currently, only Ollama LLM inference uses GPU. Embeddings use CPU (sentence-transformers). GPU embedding support is planned.
+
+**Q: Does this work in cloud environments (AWS, GCP)?**  
+A: Yes! Use GPU-enabled instances (AWS p3/g4, GCP N1 with GPUs). Install NVIDIA drivers and Container Toolkit.
 
 ---
 
-## Cloud GPU Options
-
-### AWS
-
-**EC2 Instance types:**
-- `g4dn.xlarge` - $0.526/hour (NVIDIA T4, 16GB)
-- `g5.xlarge` - $1.006/hour (NVIDIA A10G, 24GB)
-- `p3.2xlarge` - $3.06/hour (NVIDIA V100, 16GB)
-
----
-
-### Google Cloud
-
-**Instance types:**
-- `n1-standard-4` + T4 - $0.50/hour
-- `n1-standard-8` + V100 - $2.48/hour
-
----
-
-### Azure
-
-**Instance types:**
-- `NC6s_v3` - $3.06/hour (V100)
-- `NCasT4_v3` - $0.526/hour (T4)
-
----
-
-## Resources
-
-- **NVIDIA Container Toolkit:** https://github.com/NVIDIA/nvidia-docker
-- **ROCm Documentation:** https://rocmdocs.amd.com/
-- **Ollama GPU Support:** https://github.com/ollama/ollama/blob/main/docs/gpu.md
-- **sentence-transformers GPU:** https://www.sbert.net/docs/usage/computing_sentence_embeddings.html
-
----
-
-**[⬅ Back to Setup](README.md)** | **[⬆ Back to Main README](../../README.md)**
+**[⬅ Back to Setup Guide](README.md)** | **[⬆ Back to Installation](INSTALLATION.md)**
