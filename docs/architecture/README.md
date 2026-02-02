@@ -1,543 +1,257 @@
-# Architecture Documentation
+# System Architecture
 
-System design and architecture decisions for ResearchAssistantGPT.
-
-## Table of Contents
-
-1. [System Overview](#system-overview)
-2. [Service Architecture](#service-architecture)
-3. [Data Flow](#data-flow)
-4. [Component Details](#component-details)
-5. [Design Decisions](#design-decisions)
-6. [Scalability](#scalability)
-7. [Security](#security)
+Complete technical architecture documentation for ResearchAssistantGPT.
 
 ---
 
-## System Overview
+## 📚 Architecture Documentation
 
-ResearchAssistantGPT follows a **microservices architecture** with clear separation of concerns:
-```
-┌─────────────────────────────────────────────────────┐
-│                 Presentation Layer                   │
-│              (n8n Workflow Engine)                   │
-└─────────────────────┬───────────────────────────────┘
-                      │
-┌─────────────────────▼───────────────────────────────┐
-│              Application Layer                       │
-│   ┌──────────────────┐      ┌────────────────────┐ │
-│   │   API Gateway    │◄────►│  CrewAI Service    │ │
-│   │   (FastAPI)      │      │  (Multi-Agent)     │ │
-│   └────────┬─────────┘      └──────────┬─────────┘ │
-└────────────┼────────────────────────────┼───────────┘
-             │                            │
-┌────────────▼────────────────────────────▼───────────┐
-│              Infrastructure Layer                    │
-│   ┌──────────┐  ┌──────────┐  ┌──────────────────┐│
-│   │Weaviate  │  │  Ollama  │  │   PostgreSQL     ││
-│   │(Vector DB│  │  (LLM)   │  │   (n8n DB)       ││
-│   └──────────┘  └──────────┘  └──────────────────┘│
-└──────────────────────────────────────────────────────┘
-```
+| Document | Description |
+|----------|-------------|
+| **[OVERVIEW.md](OVERVIEW.md)** | High-level system architecture |
+| **[DATA_FLOW.md](DATA_FLOW.md)** | Request flow and data pipelines |
+| **[SERVICES.md](SERVICES.md)** | Docker services and interactions |
+| **[AGENTS.md](AGENTS.md)** | Multi-agent system (CrewAI) |
+| **[RAG_PIPELINE.md](RAG_PIPELINE.md)** | RAG implementation details |
+| **[DATABASE.md](DATABASE.md)** | Database schemas (Weaviate, PostgreSQL) |
 
 ---
 
-## Service Architecture
+## 🏗️ Quick Overview
 
-### Gateway Pattern
-
-**API Service** acts as the single entry point:
-- Routes requests to appropriate services
-- Handles authentication (future)
-- Provides unified error handling
-- Centralizes logging and monitoring
-
-### Service Separation
-
-| Service | Responsibility | Why Separate? |
-|---------|---------------|---------------|
-| **api** | Gateway & routing | Single entry point |
-| **crewai** | Multi-agent orchestration | Isolate AI logic, enable scaling |
-| **ollama** | LLM inference | Resource-intensive, needs GPU |
-| **weaviate** | Vector search | Specialized database |
-| **n8n** | Workflow automation | External orchestration |
-| **postgres** | Data persistence | Standard database |
-
-### Inter-Service Communication
+### High-Level Architecture
 ```
-┌─────────┐
-│   n8n   │
-└────┬────┘
-     │ HTTP
-┌────▼────────────────────┐
-│   API Gateway           │
-│   Port 8000             │
-└────┬────────────┬───────┘
-     │            │
-     │ HTTP       │ HTTP
-     │            │
-┌────▼────┐  ┌───▼──────┐
-│   RAG   │  │  CrewAI  │
-│ Service │  │  Service │
-│         │  │ Port 8100│
-└────┬────┘  └────┬─────┘
-     │            │
-     │ gRPC       │ HTTP
-     │            │
-┌────▼─────┐ ┌───▼──────┐
-│ Weaviate │ │  Ollama  │
-│ Port 8080│ │Port 11434│
-└──────────┘ └──────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                         User / n8n                          │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    API Gateway (8000)                       │
+│              FastAPI + Modular Routers                      │
+└────┬──────────────────────────┬──────────────┬──────────────┘
+     │                          │              │
+     ▼                          ▼              ▼
+┌────────────┐      ┌────────────────────┐  ┌──────────────┐
+│  Weaviate  │      │  CrewAI (8100)     │  │ Ollama(11434)│
+│  (8080)    │◄─────│  Multi-Agent       │◄─┤ LLM Runtime  │
+│  Vector DB │      │  Writer/Reviewer   │  │ qwen3:1.7b   │
+└────────────┘      │  FactChecker       │  └──────────────┘
+                    └────────────────────┘
 ```
 
-**Communication Protocols**:
-- **HTTP/REST**: Inter-service (api ↔ crewai)
-- **gRPC**: Weaviate client library
-- **Docker Network**: All services on `research_net`
+### Core Services
+
+| Service | Port | Purpose | Technology |
+|---------|------|---------|------------|
+| **API Gateway** | 8000 | REST API, request routing | FastAPI |
+| **CrewAI** | 8100 | Multi-agent orchestration | CrewAI 1.3.0 |
+| **Weaviate** | 8080 | Vector database, hybrid search | Weaviate 1.23.0 |
+| **Ollama** | 11434 | LLM inference | Ollama + qwen3:1.7b |
+| **n8n** | 5678 | Workflow automation | n8n |
+| **PostgreSQL** | 5432 | n8n persistence | PostgreSQL 15 |
 
 ---
 
-## Data Flow
+## 📖 Detailed Documentation
 
-### Query Flow (End-to-End)
-```
-1. User Input
-   ↓
-2. n8n Workflow
-   ↓ POST /rag/query
-3. API Gateway
-   ↓ Proxy
-4. CrewAI Service
-   ├─ 4a. RAG Pipeline
-   │  ├─ Embed query (sentence-transformers)
-   │  ├─ Hybrid search (Weaviate)
-   │  └─ Retrieve top-k chunks
-   │
-   ├─ 4b. Writer Agent (Ollama)
-   │  └─ Draft summary from context
-   │
-   ├─ 4c. Reviewer Agent (Ollama)
-   │  └─ Improve clarity
-   │
-   └─ 4d. FactChecker Agent (Ollama)
-      └─ Verify claims
-   ↓
-5. Return Summary
-   ↓
-6. n8n Post-Processing
-   └─ Save to file, send email, etc.
-```
+### [OVERVIEW.md](OVERVIEW.md)
+Complete system architecture overview:
+- Microservices design
+- Service responsibilities
+- Communication patterns
+- Network topology
+- Deployment architecture
 
-### Ingestion Flow
-```
-1. Source Selection
-   ├─ Local Files (data/raw/)
-   └─ ArXiv API
-   ↓
-2. Document Loading
-   ├─ PDF → PyPDF
-   └─ TXT → TextFileToDocument
-   ↓
-3. Chunking
-   └─ DocumentSplitter (Haystack)
-       • split_by: word
-       • split_length: 350
-       • split_overlap: 60
-   ↓
-4. Embedding
-   └─ SentenceTransformersDocumentEmbedder
-       • model: all-MiniLM-L6-v2
-       • Output: 384-dim vectors
-   ↓
-5. ID Generation
-   └─ Content-hash (SHA-256)
-       • Deterministic
-       • Automatic deduplication
-   ↓
-6. Storage
-   └─ Weaviate
-       • Batch insert
-       • Skip duplicates (UUID collision)
-```
+### [DATA_FLOW.md](DATA_FLOW.md)
+How data flows through the system:
+- Ingestion pipeline (ArXiv → Weaviate)
+- Query workflow (User → API → CrewAI → Ollama)
+- Multi-agent collaboration
+- Response generation
+- Network flow diagrams
+
+### [SERVICES.md](SERVICES.md)
+Docker service configurations:
+- Service dependencies
+- Health checks
+- Resource limits
+- Environment variables
+- Volume mounts
+- Network configuration
+
+### [AGENTS.md](AGENTS.md)
+Multi-agent system architecture:
+- Writer agent (draft generation)
+- Reviewer agent (quality improvement)
+- FactChecker agent (citation validation)
+- Agent collaboration patterns
+- Task definitions
+- Crew composition
+
+### [RAG_PIPELINE.md](RAG_PIPELINE.md)
+RAG implementation details:
+- Document processing
+- Chunking strategy (350 chars)
+- Embedding generation
+- Hybrid retrieval (BM25 + vector)
+- Context assembly
+- Pipeline optimization
+
+### [DATABASE.md](DATABASE.md)
+Database schemas and design:
+- Weaviate schema (ResearchDocument)
+- PostgreSQL schema (n8n, TruLens)
+- Data models
+- Indexing strategy
+- Query patterns
 
 ---
 
-## Component Details
+## 🎯 Architecture Principles
 
-### 1. API Gateway (FastAPI)
+### 1. Microservices Design
+- **Separation of Concerns**: Each service has a single responsibility
+- **Independent Scaling**: Scale services independently
+- **Fault Isolation**: Service failures don't cascade
+- **Technology Freedom**: Use best tool for each job
 
-**Purpose**: Unified entry point for all services
+### 2. API Gateway Pattern
+- **Single Entry Point**: API gateway routes all requests
+- **Service Discovery**: Internal service-to-service communication
+- **Load Balancing**: Distribute load across instances (future)
+- **Authentication**: Centralized auth (future)
 
-**Responsibilities**:
-- Route requests to appropriate services
-- Request validation (Pydantic)
-- Error handling and response formatting
-- (Future) Authentication & rate limiting
+### 3. Event-Driven Architecture
+- **Asynchronous Processing**: n8n triggers workflows
+- **Decoupled Services**: Services communicate via API calls
+- **Workflow Orchestration**: n8n manages complex workflows
 
-**Technology**:
-- Framework: FastAPI
-- ASGI Server: Uvicorn
-- Async: httpx for service calls
-
-**Endpoints**:
-- `/health`, `/ready`, `/version`: System
-- `/rag/*`: RAG operations
-- `/ollama/*`: LLM management
-- `/crewai/*`: Workflow execution
-
----
-
-### 2. CrewAI Service
-
-**Purpose**: Multi-agent research workflow
-
-**Architecture**:
-```
-CrewRunner
-  ├─ RAGPipeline (retrieval)
-  ├─ ResearchCrew (orchestration)
-  │  ├─ Writer Agent
-  │  ├─ Reviewer Agent
-  │  ├─ FactChecker Agent
-  │  └─ Translator Agent (optional)
-  ├─ GuardrailsWrapper (safety)
-  └─ TruLensMonitor (monitoring)
-```
-
-**Agent Communication**:
-- **Sequential Process**: Tasks execute in order
-- **Context Passing**: Each task receives previous output
-- **LLM Backend**: Ollama via LangChain
-
-**Workflow**:
-1. **Writer**: Draft summary from RAG context
-2. **Reviewer**: Improve clarity and structure
-3. **FactChecker**: Verify all claims against sources
-4. **(Optional) Translator**: Translate to target language
+### 4. Data Locality
+- **Embedded Models**: LLMs run locally (Ollama)
+- **Local Vector DB**: Weaviate on same network
+- **No External Calls**: Privacy-preserving design
 
 ---
 
-### 3. RAG Pipeline (Haystack)
+## 🔍 Key Design Decisions
 
-**Purpose**: Retrieve relevant context for queries
+### Why Microservices?
+**Decision**: Separate API, CrewAI, and Ollama into different services  
+**Rationale**:
+- Independent scaling (scale agents without scaling LLM)
+- Better resource management
+- Easier development and testing
+- Service isolation
 
-**Architecture**:
-```
-RAGPipeline
-  ├─ WeaviateDocumentStore
-  ├─ WeaviateHybridRetriever
-  │  ├─ Lexical Search (BM25)
-  │  └─ Vector Search (HNSW)
-  └─ SentenceTransformersTextEmbedder
-```
+### Why CrewAI?
+**Decision**: Use CrewAI for multi-agent orchestration  
+**Rationale**:
+- Built-in agent collaboration
+- Task-based workflow
+- LangChain integration
+- Active development
 
-**Hybrid Retrieval**:
-- **Lexical**: Keyword matching (BM25)
-- **Semantic**: Vector similarity (cosine)
-- **Combined**: Reciprocal Rank Fusion
+### Why Weaviate?
+**Decision**: Use Weaviate for vector database  
+**Rationale**:
+- Hybrid search (BM25 + vector)
+- Fast retrieval
+- Scalable
+- Good Python client
 
-**Why Hybrid?**:
-- Better than pure vector search
-- Handles both semantic and exact matches
-- Improved recall and precision
-
----
-
-### 4. Vector Database (Weaviate)
-
-**Purpose**: Store and search document embeddings
-
-**Schema**:
-```yaml
-Class: ResearchDocument
-Properties:
-  - content (text, searchable)
-  - source (text, filterable)
-  - document_id (text)
-  - chunk_index (int)
-  - chunk_hash (text, unique)
-  - authors (text[])
-  - publication_date (text)
-  - arxiv_id (text)
-  - abstract (text)
-  - ingestion_timestamp (text)
-  - schema_version (text)
-Vector: 384-dim (all-MiniLM-L6-v2)
-```
-
-**Indexing**:
-- **HNSW**: Hierarchical Navigable Small World
-- **M**: 16 (connections per node)
-- **efConstruction**: 64 (build quality)
-
-**Performance**:
-- **Insert**: ~100 docs/sec
-- **Query**: <50ms for top-k=5
-- **Storage**: ~1KB per chunk
+### Why qwen3:1.7b?
+**Decision**: Default to qwen3:1.7b model  
+**Rationale**:
+- Fast inference (< 10s on CPU)
+- Good quality for size
+- Multilingual support
+- Low resource usage
 
 ---
 
-### 5. LLM Runtime (Ollama)
+## 📊 Performance Characteristics
 
-**Purpose**: Local LLM inference
+### Latency Breakdown
 
-**Model**: qwen2.5:3b
-- **Parameters**: 3 billion
-- **Context**: 32K tokens
-- **Speed**: ~20 tokens/sec (CPU)
-- **Memory**: ~4GB RAM
+**Full research query** (~28 seconds):
+- API validation: 10ms
+- RAG retrieval: 500ms
+- Writer agent: 10s
+- Reviewer agent: 5s
+- FactChecker agent: 10s
+- Response formatting: 20ms
 
-**Why Ollama?**:
-- Local deployment (privacy)
-- Easy model management
-- GPU support
-- Compatible with OpenAI API
+**Ingestion** (per paper):
+- PDF download: 5s
+- Text extraction: 1s
+- Chunking: 100ms
+- Embedding: 2s
+- Weaviate write: 500ms
 
-**Alternative Models**:
-- `qwen3:4b`: Better quality, slower
-- `tinyllama:1.1b`: Faster, lower quality
-- `mistral:7b`: Best quality (requires GPU)
+### Resource Usage
 
----
+**Minimum**:
+- CPU: 4 cores
+- RAM: 16GB
+- Disk: 20GB
 
-### 6. Workflow Engine (n8n)
-
-**Purpose**: End-to-end automation
-
-**Capabilities**:
-- HTTP requests (call API)
-- Scheduling (cron jobs)
-- Conditionals (if-then logic)
-- Data transformation
-- Integrations (email, Slack, etc.)
-
-**Example Workflow**:
-```
-1. Schedule Trigger (daily 9am)
-   ↓
-2. HTTP Request: POST /rag/ingest/arxiv
-   ↓
-3. Condition: success?
-   ├─ Yes: Continue
-   └─ No: Send alert email
-   ↓
-4. HTTP Request: POST /rag/query
-   ↓
-5. Save to File
-   ↓
-6. Send Email with summary
-```
+**Recommended**:
+- CPU: 8 cores
+- RAM: 32GB
+- Disk: 50GB SSD
+- GPU: NVIDIA 8GB+ VRAM
 
 ---
 
-## Design Decisions
+## 🔄 Scaling Strategy
 
-### 1. Why Microservices?
+### Horizontal Scaling (Future)
 
-**Pros**:
-- Independent scaling (scale Ollama separately)
-- Technology flexibility (different languages per service)
-- Fault isolation (CrewAI failure doesn't crash API)
-- Development velocity (parallel work)
+**Stateless Services** (can scale easily):
+- API Gateway (multiple instances behind load balancer)
+- CrewAI Service (worker pool)
 
-**Cons**:
-- More complex deployment
-- Network overhead
-- Distributed debugging
+**Stateful Services** (require coordination):
+- Weaviate (replication)
+- PostgreSQL (read replicas)
+- Ollama (model sharding)
 
-**Decision**: Microservices **because**:
-- GPU resources needed only for Ollama
-- CrewAI logic separate from API routing
-- Future: Scale Ollama horizontally
+### Vertical Scaling (Current)
 
----
-
-### 2. Why Haystack over LangChain?
-
-**Comparison**:
-
-| Feature | Haystack | LangChain |
-|---------|----------|-----------|
-| RAG Pipeline | ✅ First-class | ⚠️ Add-on |
-| Type Safety | ✅ Strong | ⚠️ Weak |
-| Production-Ready | ✅ Yes | ⚠️ Mixed |
-| Flexibility | ⚠️ Structured | ✅ Very flexible |
-
-**Decision**: Haystack **because**:
-- Better for production RAG
-- Type-safe pipeline components
-- Active maintenance
+**Increase resources per service**:
+- More CPU cores for API/CrewAI
+- More RAM for Ollama
+- GPU for Ollama
+- SSD for Weaviate
 
 ---
 
-### 3. Why Weaviate over Alternatives?
+## 🔐 Security Considerations
 
-**Comparison**:
+**Current** (local deployment):
+- No authentication (trusted network)
+- No encryption (localhost only)
+- No authorization (single user)
 
-| Feature | Weaviate | Pinecone | Qdrant |
-|---------|----------|----------|--------|
-| Self-Hosted | ✅ Yes | ❌ Cloud only | ✅ Yes |
-| Hybrid Search | ✅ Built-in | ❌ No | ✅ Yes |
-| Cost | ✅ Free | 💰 Expensive | ✅ Free |
-| Maturity | ✅ Production | ✅ Production | ⚠️ Growing |
+**Future** (production):
+- JWT authentication
+- HTTPS/TLS encryption
+- Role-based access control
+- API key management
+- Rate limiting
 
-**Decision**: Weaviate **because**:
-- Self-hosted (privacy requirement)
-- Hybrid search out-of-the-box
-- Good Haystack integration
-
----
-
-### 4. Why Content-Hash IDs?
-
-**Problem**: Prevent duplicate documents during re-ingestion
-
-**Alternatives**:
-1. **Auto-increment**: Not deterministic
-2. **UUID**: Random, can't detect duplicates
-3. **Content-hash**: ✅ Deterministic
-
-**Implementation**:
-```python
-hash_input = f"{source}::{content}::{chunk_index}"
-chunk_id = hashlib.sha256(hash_input.encode()).hexdigest()[:16]
-```
-
-**Benefits**:
-- Same content → same ID
-- Automatic deduplication
-- Idempotent ingestion
+See [Security Architecture](SECURITY.md) for details (future).
 
 ---
 
-## Scalability
+## 📚 Related Documentation
 
-### Current Limitations
-
-| Component | Bottleneck | Max Throughput |
-|-----------|-----------|----------------|
-| Ollama (CPU) | Inference speed | ~20 tokens/sec |
-| Weaviate | Single node | ~100 inserts/sec |
-| API | Single process | ~50 req/sec |
-
-### Scaling Strategies
-
-**Horizontal Scaling**:
-```yaml
-# docker-compose.yml
-services:
-  ollama:
-    deploy:
-      replicas: 3  # 3x inference capacity
-  
-  api:
-    deploy:
-      replicas: 2  # Load balance requests
-```
-
-**Vertical Scaling**:
-- Ollama: Add GPU (3-5x faster)
-- Weaviate: More RAM (larger indexes)
-
-**Caching**:
-- Redis for query results
-- TTL: 1 hour for summaries
+- **[Setup Guide](../setup/README.md)** - Installation instructions
+- **[API Reference](../api/README.md)** - Endpoint documentation
+- **[Examples](../examples/README.md)** - Integration examples
+- **[Evaluation](../evaluation/README.md)** - Quality metrics
 
 ---
 
-## Security
-
-### Current Status
-
-⚠️ **Development Mode**: Minimal security
-
-**No Authentication**: API is open
-**No Rate Limiting**: Unlimited requests
-**No Encryption**: HTTP (not HTTPS)
-
-### Production Hardening
-
-**Required Changes**:
-1. **Add Authentication**:
-```python
-   # JWT tokens
-   from fastapi.security import HTTPBearer
-   security = HTTPBearer()
-```
-
-2. **Enable HTTPS**:
-```yaml
-   # docker-compose.yml
-   services:
-     api:
-       environment:
-         - CERT_FILE=/certs/cert.pem
-         - KEY_FILE=/certs/key.pem
-```
-
-3. **Add Rate Limiting**:
-```python
-   from slowapi import Limiter
-   limiter = Limiter(key_func=get_remote_address)
-   
-   @app.get("/rag/query")
-   @limiter.limit("10/minute")
-   def query(...):
-       ...
-```
-
-4. **Network Segmentation**:
-```yaml
-   networks:
-     public:  # api, n8n
-     private:  # weaviate, ollama, postgres
-```
-
----
-
-## Monitoring & Observability
-
-### Logging
-
-**Current**: Python logging to stdout
-
-**Production**: Structured logging
-```python
-import structlog
-logger = structlog.get_logger()
-logger.info("query_executed", query=query, duration_ms=duration)
-```
-
-### Metrics
-
-**Future**: Prometheus + Grafana
-```python
-from prometheus_client import Counter, Histogram
-
-query_counter = Counter('queries_total', 'Total queries')
-query_duration = Histogram('query_duration_seconds', 'Query duration')
-```
-
-### Tracing
-
-**Future**: OpenTelemetry
-```python
-from opentelemetry import trace
-tracer = trace.get_tracer(__name__)
-
-with tracer.start_as_current_span("rag_query"):
-    # ... query logic
-```
-
----
-
-## References
-
-- [Haystack Documentation](https://docs.haystack.deepset.ai/)
-- [Weaviate Architecture](https://weaviate.io/developers/weaviate/concepts)
-- [CrewAI Documentation](https://docs.crewai.com/)
-- [FastAPI Best Practices](https://fastapi.tiangolo.com/deployment/)
-
----
-
-**[⬆ Back to Documentation](../README.md)**
+**[⬅ Back to Documentation](../README.md)**
