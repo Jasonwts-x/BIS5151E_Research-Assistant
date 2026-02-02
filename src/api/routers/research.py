@@ -135,7 +135,7 @@ async def research_query(
             response.raise_for_status()
             crew_result = response.json()
         
-        summary = crew_result.get("summary", "")
+        summary = crew_result.get("answer", "")
         metadata = crew_result.get("metadata", {})
         
         logger.info("Multi-agent workflow completed, summary length: %d chars", len(summary))
