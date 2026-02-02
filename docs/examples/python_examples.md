@@ -1,474 +1,575 @@
-# Python SDK Examples
+# Python Integration Examples
 
-Python code examples for using ResearchAssistantGPT programmatically.
+Complete Python examples for integrating ResearchAssistantGPT.
 
-## Setup
+---
+
+## 📋 Table of Contents
+
+- [Simple Client](#simple-client)
+- [Application Integration](#application-integration)
+- [Async Client](#async-client)
+- [Error Handling](#error-handling)
+- [Web Integration](#web-integration)
+
+---
+
+## 🚀 Simple Client
+
+### Basic Usage
 ```python
-# Install dependencies
 import requests
-import json
-from pathlib import Path
+from typing import Dict, List, Any
 
-# API base URL
-API_URL = "http://localhost:8000"
-```
-
----
-
-## Basic Examples
-
-### 1. Health Check
-```python
-def check_health():
-    """Check API health."""
-    response = requests.get(f"{API_URL}/health")
-    return response.json()
-
-# Usage
-health = check_health()
-print(health)  # {'status': 'ok'}
-```
-
----
-
-### 2. Simple Query
-```python
-def query_rag(question, language="en"):
-    """Query the RAG system."""
-    response = requests.post(
-        f"{API_URL}/rag/query",
-        json={
-            "query": question,
-            "language": language
-        },
-        timeout=120
-    )
-    response.raise_for_status()
-    return response.json()
-
-# Usage
-result = query_rag("What is machine learning?")
-print(result["answer"])
-```
-
----
-
-### 3. Ingest ArXiv Papers
-```python
-def ingest_arxiv(query, max_results=5):
-    """Fetch and ingest papers from ArXiv."""
-    response = requests.post(
-        f"{API_URL}/rag/ingest/arxiv",
-        json={
-            "query": query,
-            "max_results": max_results
-        },
-        timeout=300  # 5 minutes for downloads
-    )
-    response.raise_for_status()
-    return response.json()
-
-# Usage
-result = ingest_arxiv("neural networks", max_results=10)
-print(f"Ingested {result['chunks_ingested']} chunks")
-```
-
----
-
-## Advanced Examples
-
-### 4. RAG Client Class
-```python
-class RAGClient:
-    """Client for ResearchAssistant API."""
-    
-    def __init__(self, base_url="http://localhost:8000"):
+class ResearchAssistant:
+    def __init__(self, base_url: str = "http://localhost:8000"):
         self.base_url = base_url
-        self.session = requests.Session()
-    
-    def health(self):
-        """Check API health."""
-        return self._get("/health")
-    
-    def ready(self):
-        """Check service readiness."""
-        return self._get("/ready")
-    
-    def query(self, question, language="en"):
-        """Query with RAG and multi-agent processing."""
-        return self._post("/rag/query", {
-            "query": question,
-            "language": language
-        }, timeout=120)
-    
-    def ingest_local(self, pattern="*"):
-        """Ingest local files."""
-        return self._post("/rag/ingest/local", {
-            "pattern": pattern
-        }, timeout=60)
-    
-    def ingest_arxiv(self, query, max_results=5):
-        """Ingest ArXiv papers."""
-        return self._post("/rag/ingest/arxiv", {
-            "query": query,
-            "max_results": max_results
-        }, timeout=300)
-    
-    def stats(self):
-        """Get index statistics."""
-        return self._get("/rag/stats")
-    
-    def reset_index(self):
-        """Clear all documents (dangerous!)."""
-        return self._delete("/rag/admin/reset-index")
-    
-    def _get(self, path):
-        response = self.session.get(f"{self.base_url}{path}")
-        response.raise_for_status()
-        return response.json()
-    
-    def _post(self, path, data, timeout=30):
-        response = self.session.post(
-            f"{self.base_url}{path}",
-            json=data,
-            timeout=timeout
+        
+    def ingest_arxiv(self, query: str, max_results: int = 3) -> Dict[str, Any]:
+        """Ingest papers from ArXiv."""
+        response = requests.post(
+            f"{self.base_url}/rag/ingest/arxiv",
+            json={"query": query, "max_results": max_results}
         )
         response.raise_for_status()
         return response.json()
     
-    def _delete(self, path):
-        response = self.session.delete(f"{self.base_url}{path}")
+    def ingest_local(self, pattern: str = "*") -> Dict[str, Any]:
+        """Ingest local files."""
+        response = requests.post(
+            f"{self.base_url}/rag/ingest/local",
+            json={"pattern": pattern}
+        )
+        response.raise_for_status()
+        return response.json()
+    
+    def research_query(self, query: str, language: str = "en", top_k: int = 5) -> Dict[str, Any]:
+        """Execute complete research workflow."""
+        response = requests.post(
+            f"{self.base_url}/research/query",
+            json={"query": query, "language": language, "top_k": top_k}
+        )
+        response.raise_for_status()
+        return response.json()
+    
+    def rag_query(self, query: str, top_k: int = 5) -> Dict[str, Any]:
+        """Query documents without agent processing."""
+        response = requests.post(
+            f"{self.base_url}/rag/query",
+            json={"query": query, "top_k": top_k}
+        )
+        response.raise_for_status()
+        return response.json()
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Get index statistics."""
+        response = requests.get(f"{self.base_url}/rag/stats")
         response.raise_for_status()
         return response.json()
 
 # Usage
-client = RAGClient()
-
-# Check health
-print(client.health())
-
-# Ingest papers
-result = client.ingest_arxiv("transformers", max_results=5)
-print(f"Ingested: {result['chunks_ingested']} chunks")
-
-# Query
-answer = client.query("Explain transformers architecture")
-print(answer["answer"])
-```
-
----
-
-### 5. Batch Processing
-```python
-def batch_query(questions, language="en"):
-    """Process multiple questions."""
-    client = RAGClient()
-    results = []
+if __name__ == "__main__":
+    client = ResearchAssistant()
     
-    for i, question in enumerate(questions, 1):
-        print(f"Processing {i}/{len(questions)}: {question}")
-        try:
-            result = client.query(question, language)
-            results.append({
-                "question": question,
-                "answer": result["answer"],
-                "success": True
-            })
-        except Exception as e:
-            results.append({
-                "question": question,
-                "error": str(e),
-                "success": False
-            })
-    
-    return results
-
-# Usage
-questions = [
-    "What is machine learning?",
-    "Explain neural networks",
-    "What is deep learning?"
-]
-
-results = batch_query(questions)
-
-# Save to JSON
-with open("results.json", "w") as f:
-    json.dump(results, f, indent=2)
-```
-
----
-
-### 6. Save Summary to File
-```python
-def save_summary(question, filename):
-    """Query and save summary to file."""
-    client = RAGClient()
+    # Ingest papers
+    print("Ingesting papers...")
+    result = client.ingest_arxiv("machine learning", max_results=3)
+    print(f"✅ Ingested {result['documents_loaded']} papers")
     
     # Query
-    result = client.query(question)
-    
-    # Save
-    output_path = Path(filename)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(f"# {question}\n\n")
-        f.write(result["answer"])
-        f.write("\n")
-    
-    print(f"Saved to: {output_path}")
-    return str(output_path)
-
-# Usage
-save_summary(
-    "What is retrieval augmented generation?",
-    "outputs/rag_summary.md"
-)
+    print("\nQuerying...")
+    result = client.research_query("What is machine learning?")
+    print(f"\nAnswer:\n{result['answer']}")
+    print(f"\nSources: {len(result['sources'])}")
 ```
 
 ---
 
-### 7. Multi-Language Support
+## 🏗️ Application Integration
+
+### Flask Web Application
 ```python
-def translate_summary(question, languages=["en", "de", "fr"]):
-    """Get summary in multiple languages."""
-    client = RAGClient()
-    results = {}
-    
-    for lang in languages:
-        print(f"Generating {lang} summary...")
-        result = client.query(question, language=lang)
-        results[lang] = result["answer"]
-    
-    return results
+from flask import Flask, request, jsonify, render_template
+import requests
 
-# Usage
-summaries = translate_summary(
-    "What is machine learning?",
-    languages=["en", "de", "fr", "es"]
-)
+app = Flask(__name__)
 
-# Print German version
-print(summaries["de"])
+class ResearchClient:
+    BASE_URL = "http://localhost:8000"
+    
+    @staticmethod
+    def research_query(query: str, language: str = "en"):
+        response = requests.post(
+            f"{ResearchClient.BASE_URL}/research/query",
+            json={"query": query, "language": language},
+            timeout=60
+        )
+        response.raise_for_status()
+        return response.json()
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/api/query', methods=['POST'])
+def query():
+    data = request.get_json()
+    query = data.get('query')
+    language = data.get('language', 'en')
+    
+    if not query:
+        return jsonify({"error": "Query is required"}), 400
+    
+    try:
+        result = ResearchClient.research_query(query, language)
+        return jsonify(result)
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/stats', methods=['GET'])
+def stats():
+    try:
+        response = requests.get(f"{ResearchClient.BASE_URL}/rag/stats")
+        response.raise_for_status()
+        return jsonify(response.json())
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": str(e)}), 500
+
+if __name__ == '__main__':
+    app.run(debug=True, port=5000)
+```
+
+**HTML Template** (`templates/index.html`):
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Research Assistant</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; }
+        textarea { width: 100%; height: 100px; }
+        button { padding: 10px 20px; background: #007bff; color: white; border: none; cursor: pointer; }
+        #result { margin-top: 20px; padding: 20px; background: #f5f5f5; }
+    </style>
+</head>
+<body>
+    <h1>Research Assistant</h1>
+    <textarea id="query" placeholder="Enter your research question..."></textarea>
+    <br><br>
+    <button onclick="submitQuery()">Submit</button>
+    
+    <div id="result" style="display:none;">
+        <h3>Answer:</h3>
+        <div id="answer"></div>
+        <h4>Sources:</h4>
+        <div id="sources"></div>
+    </div>
+    
+    <script>
+        async function submitQuery() {
+            const query = document.getElementById('query').value;
+            const resultDiv = document.getElementById('result');
+            const answerDiv = document.getElementById('answer');
+            const sourcesDiv = document.getElementById('sources');
+            
+            if (!query) {
+                alert('Please enter a query');
+                return;
+            }
+            
+            answerDiv.innerHTML = 'Processing...';
+            resultDiv.style.display = 'block';
+            sourcesDiv.innerHTML = '';
+            
+            try {
+                const response = await fetch('/api/query', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({query: query, language: 'en'})
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    answerDiv.innerHTML = data.answer;
+                    sourcesDiv.innerHTML = data.sources.map(s => 
+                        `<p>[${s.index}] ${s.source}<br>
+                        <small>${s.authors.join(', ')} (${s.publication_date})</small></p>`
+                    ).join('');
+                } else {
+                    answerDiv.innerHTML = `Error: ${data.error}`;
+                }
+            } catch (error) {
+                answerDiv.innerHTML = `Error: ${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html>
 ```
 
 ---
 
-### 8. Error Handling
-```python
-from requests.exceptions import RequestException, Timeout, HTTPError
+## ⚡ Async Client
 
-def robust_query(question, max_retries=3):
-    """Query with retry logic."""
-    client = RAGClient()
-    
-    for attempt in range(1, max_retries + 1):
-        try:
-            return client.query(question)
-        
-        except Timeout:
-            print(f"Attempt {attempt}: Timeout")
-            if attempt == max_retries:
-                raise
-            time.sleep(5 * attempt)  # Exponential backoff
-        
-        except HTTPError as e:
-            if e.response.status_code == 503:
-                print(f"Attempt {attempt}: Service unavailable")
-                if attempt == max_retries:
-                    raise
-                time.sleep(10)
-            else:
-                raise
-        
-        except RequestException as e:
-            print(f"Attempt {attempt}: {str(e)}")
-            if attempt == max_retries:
-                raise
-            time.sleep(5)
-
-# Usage
-try:
-    result = robust_query("What is AI?")
-    print(result["answer"])
-except Exception as e:
-    print(f"Failed after retries: {e}")
-```
-
----
-
-### 9. Progress Monitoring
-```python
-import time
-
-def ingest_with_progress(query, max_results=10):
-    """Ingest with progress monitoring."""
-    client = RAGClient()
-    
-    # Get initial stats
-    initial_stats = client.stats()
-    initial_count = initial_stats["document_count"]
-    
-    print(f"Initial document count: {initial_count}")
-    print(f"Starting ingestion: {query} ({max_results} papers)")
-    
-    # Start ingestion
-    result = client.ingest_arxiv(query, max_results)
-    
-    print(f"Ingestion complete:")
-    print(f"  Documents loaded: {result['documents_loaded']}")
-    print(f"  Chunks ingested: {result['chunks_ingested']}")
-    print(f"  Chunks skipped: {result['chunks_skipped']}")
-    
-    # Verify final stats
-    final_stats = client.stats()
-    final_count = final_stats["document_count"]
-    
-    print(f"Final document count: {final_count}")
-    print(f"Increase: +{final_count - initial_count} chunks")
-    
-    return result
-
-# Usage
-ingest_with_progress("large language models", max_results=5)
-```
-
----
-
-### 10. Async Client (asyncio)
+### Using `aiohttp`
 ```python
 import asyncio
 import aiohttp
+from typing import Dict, List, Any
 
-class AsyncRAGClient:
-    """Async client for parallel requests."""
-    
-    def __init__(self, base_url="http://localhost:8000"):
+class AsyncResearchAssistant:
+    def __init__(self, base_url: str = "http://localhost:8000"):
         self.base_url = base_url
     
-    async def query(self, session, question, language="en"):
-        """Async query."""
-        async with session.post(
-            f"{self.base_url}/rag/query",
-            json={"query": question, "language": language},
-            timeout=aiohttp.ClientTimeout(total=120)
-        ) as response:
-            response.raise_for_status()
-            return await response.json()
-    
-    async def batch_query(self, questions, language="en"):
-        """Process multiple questions in parallel."""
+    async def ingest_arxiv(self, query: str, max_results: int = 3) -> Dict[str, Any]:
+        """Ingest papers from ArXiv asynchronously."""
         async with aiohttp.ClientSession() as session:
-            tasks = [
-                self.query(session, q, language)
-                for q in questions
-            ]
-            return await asyncio.gather(*tasks)
+            async with session.post(
+                f"{self.base_url}/rag/ingest/arxiv",
+                json={"query": query, "max_results": max_results}
+            ) as response:
+                response.raise_for_status()
+                return await response.json()
+    
+    async def research_query(self, query: str, language: str = "en") -> Dict[str, Any]:
+        """Execute research query asynchronously."""
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{self.base_url}/research/query",
+                json={"query": query, "language": language},
+                timeout=aiohttp.ClientTimeout(total=60)
+            ) as response:
+                response.raise_for_status()
+                return await response.json()
+    
+    async def batch_queries(self, queries: List[str]) -> List[Dict[str, Any]]:
+        """Execute multiple queries in parallel."""
+        tasks = [self.research_query(q) for q in queries]
+        return await asyncio.gather(*tasks)
 
 # Usage
 async def main():
-    client = AsyncRAGClient()
+    client = AsyncResearchAssistant()
     
-    questions = [
-        "What is machine learning?",
-        "Explain neural networks",
-        "What is deep learning?"
+    # Single query
+    result = await client.research_query("What is machine learning?")
+    print(f"Answer: {result['answer']}")
+    
+    # Batch queries
+    queries = [
+        "What are neural networks?",
+        "Explain deep learning",
+        "What is reinforcement learning?"
     ]
+    results = await client.batch_queries(queries)
     
-    results = await client.batch_query(questions)
-    
-    for q, r in zip(questions, results):
-        print(f"Q: {q}")
-        print(f"A: {r['answer'][:100]}...")
-        print()
+    for query, result in zip(queries, results):
+        print(f"\nQ: {query}")
+        print(f"A: {result['answer'][:200]}...")
 
-# Run
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
 ---
 
-## Integration Examples
+## 🛡️ Error Handling
 
-### 11. Jupyter Notebook Integration
+### Comprehensive Error Handling
 ```python
-# Install in notebook
-!pip install requests ipywidgets
+import requests
+from typing import Dict, Any, Optional
+import time
 
-from IPython.display import Markdown, display
-import ipywidgets as widgets
-
-# Create UI
-question_input = widgets.Text(
-    placeholder='Enter your question',
-    description='Question:',
-    style={'description_width': 'initial'}
-)
-
-button = widgets.Button(description='Query')
-output = widgets.Output()
-
-def on_button_click(b):
-    with output:
-        output.clear_output()
-        display(Markdown("**Processing...**"))
-        
-        client = RAGClient()
-        result = client.query(question_input.value)
-        
-        output.clear_output()
-        display(Markdown(f"### Answer\n\n{result['answer']}"))
-
-button.on_click(on_button_click)
-
-# Display UI
-display(question_input, button, output)
-```
-
----
-
-### 12. Pandas Integration
-```python
-import pandas as pd
-
-def create_research_dataframe(questions):
-    """Create DataFrame with questions and answers."""
-    client = RAGClient()
+class RobustResearchClient:
+    def __init__(self, base_url: str = "http://localhost:8000", retries: int = 3):
+        self.base_url = base_url
+        self.retries = retries
     
-    data = []
-    for question in questions:
+    def _request_with_retry(self, method: str, endpoint: str, **kwargs) -> requests.Response:
+        """Make request with retry logic."""
+        url = f"{self.base_url}{endpoint}"
+        
+        for attempt in range(self.retries):
+            try:
+                response = requests.request(method, url, **kwargs)
+                response.raise_for_status()
+                return response
+                
+            except requests.exceptions.ConnectionError as e:
+                if attempt < self.retries - 1:
+                    wait_time = 2 ** attempt  # Exponential backoff
+                    print(f"Connection error. Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                else:
+                    raise Exception(f"Failed to connect after {self.retries} attempts: {e}")
+            
+            except requests.exceptions.Timeout as e:
+                if attempt < self.retries - 1:
+                    print(f"Request timeout. Retrying...")
+                    time.sleep(2)
+                else:
+                    raise Exception(f"Request timed out after {self.retries} attempts: {e}")
+            
+            except requests.exceptions.HTTPError as e:
+                if e.response.status_code == 503:  # Service Unavailable
+                    if attempt < self.retries - 1:
+                        print("Service unavailable. Retrying...")
+                        time.sleep(5)
+                    else:
+                        raise Exception("Service is unavailable")
+                else:
+                    raise  # Don't retry other HTTP errors
+    
+    def research_query(self, query: str, language: str = "en") -> Optional[Dict[str, Any]]:
+        """Execute research query with error handling."""
         try:
-            result = client.query(question)
-            data.append({
-                'question': question,
-                'answer': result['answer'],
-                'answer_length': len(result['answer']),
-                'status': 'success'
-            })
+            # Validate input
+            if not query or len(query) > 10000:
+                raise ValueError("Query must be between 1 and 10000 characters")
+            
+            # Make request
+            response = self._request_with_retry(
+                "POST",
+                "/research/query",
+                json={"query": query, "language": language},
+                timeout=60
+            )
+            
+            return response.json()
+            
+        except ValueError as e:
+            print(f"❌ Validation error: {e}")
+            return None
+        
         except Exception as e:
-            data.append({
-                'question': question,
-                'answer': None,
-                'answer_length': 0,
-                'status': f'error: {str(e)}'
-            })
-    
-    df = pd.DataFrame(data)
-    return df
+            print(f"❌ Error: {e}")
+            return None
 
 # Usage
-questions = [
-    "What is AI?",
-    "Explain machine learning",
-    "What are neural networks?"
-]
-
-df = create_research_dataframe(questions)
-df.to_csv("research_results.csv", index=False)
-print(df)
+if __name__ == "__main__":
+    client = RobustResearchClient()
+    
+    result = client.research_query("What is AI?")
+    if result:
+        print(f"✅ Success: {result['answer'][:100]}...")
+    else:
+        print("❌ Query failed")
 ```
 
 ---
 
-**[⬆ Back to Examples](README.md)**
+## 🌐 Web Integration
+
+### FastAPI Backend
+```python
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+import requests
+from typing import Optional
+
+app = FastAPI(title="Research Assistant Frontend")
+
+# CORS for web frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+class QueryRequest(BaseModel):
+    query: str
+    language: str = "en"
+    top_k: Optional[int] = 5
+
+class IngestRequest(BaseModel):
+    query: str
+    max_results: int = 3
+
+BACKEND_URL = "http://localhost:8000"
+
+@app.post("/api/research")
+async def research(request: QueryRequest):
+    """Execute research query."""
+    try:
+        response = requests.post(
+            f"{BACKEND_URL}/research/query",
+            json={
+                "query": request.query,
+                "language": request.language,
+                "top_k": request.top_k
+            },
+            timeout=60
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/ingest")
+async def ingest(request: IngestRequest):
+    """Ingest papers from ArXiv."""
+    try:
+        response = requests.post(
+            f"{BACKEND_URL}/rag/ingest/arxiv",
+            json={
+                "query": request.query,
+                "max_results": request.max_results
+            },
+            timeout=120
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/stats")
+async def stats():
+    """Get index statistics."""
+    try:
+        response = requests.get(f"{BACKEND_URL}/rag/stats")
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/health")
+async def health():
+    """Health check."""
+    try:
+        response = requests.get(f"{BACKEND_URL}/health", timeout=5)
+        return {"status": "healthy", "backend": response.json()}
+    except:
+        return {"status": "unhealthy"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8080)
+```
+
+---
+
+## 📦 Complete Package Example
+
+### `research_client` Package
+
+**`research_client/__init__.py`**:
+```python
+from .client import ResearchAssistant
+from .async_client import AsyncResearchAssistant
+
+__version__ = "1.0.0"
+__all__ = ["ResearchAssistant", "AsyncResearchAssistant"]
+```
+
+**`research_client/client.py`**:
+```python
+import requests
+from typing import Dict, Any, List
+from .exceptions import APIError, ConnectionError, ValidationError
+
+class ResearchAssistant:
+    """Synchronous client for ResearchAssistantGPT."""
+    
+    def __init__(self, base_url: str = "http://localhost:8000", timeout: int = 60):
+        self.base_url = base_url
+        self.timeout = timeout
+        self.session = requests.Session()
+    
+    def _request(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
+        """Make HTTP request."""
+        url = f"{self.base_url}{endpoint}"
+        try:
+            response = self.session.request(method, url, timeout=self.timeout, **kwargs)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.ConnectionError as e:
+            raise ConnectionError(f"Failed to connect to {url}: {e}")
+        except requests.exceptions.Timeout:
+            raise ConnectionError(f"Request to {url} timed out")
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 400:
+                raise ValidationError(e.response.json().get("detail", "Validation error"))
+            raise APIError(f"API error: {e}")
+    
+    def ingest_arxiv(self, query: str, max_results: int = 3) -> Dict[str, Any]:
+        """Ingest papers from ArXiv."""
+        return self._request("POST", "/rag/ingest/arxiv", json={
+            "query": query,
+            "max_results": max_results
+        })
+    
+    def research_query(self, query: str, language: str = "en", top_k: int = 5) -> Dict[str, Any]:
+        """Execute complete research workflow."""
+        return self._request("POST", "/research/query", json={
+            "query": query,
+            "language": language,
+            "top_k": top_k
+        })
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Get index statistics."""
+        return self._request("GET", "/rag/stats")
+    
+    def close(self):
+        """Close session."""
+        self.session.close()
+    
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, *args):
+        self.close()
+```
+
+**`research_client/exceptions.py`**:
+```python
+class ResearchClientError(Exception):
+    """Base exception for research client."""
+    pass
+
+class APIError(ResearchClientError):
+    """API returned an error."""
+    pass
+
+class ConnectionError(ResearchClientError):
+    """Failed to connect to API."""
+    pass
+
+class ValidationError(ResearchClientError):
+    """Invalid input."""
+    pass
+```
+
+**Usage**:
+```python
+from research_client import ResearchAssistant
+
+# Context manager
+with ResearchAssistant() as client:
+    result = client.research_query("What is AI?")
+    print(result['answer'])
+
+# Regular usage
+client = ResearchAssistant()
+try:
+    result = client.research_query("What is AI?")
+    print(result['answer'])
+finally:
+    client.close()
+```
+
+---
+
+## 📚 Related Documentation
+
+- **[Basic Usage](BASIC_USAGE.md)** - Simple examples
+- **[n8n Workflows](N8N_WORKFLOWS.md)** - Automation
+- **[API Reference](../api/ENDPOINTS.md)** - All endpoints
+
+---
+
+**[⬅ Back to Examples](README.md)**

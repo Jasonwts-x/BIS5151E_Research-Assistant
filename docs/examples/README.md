@@ -1,120 +1,110 @@
 # Usage Examples
 
-Practical examples for using ResearchAssistantGPT.
-
-## Quick Links
-
-- [API Usage Examples](api_usage.md)
-- [n8n Workflow Examples](workflow_examples.md)
-- [Python SDK Examples](python_examples.md)
-- [CLI Examples](cli_examples.md)
+Practical code examples and integration guides.
 
 ---
 
-## Quick Start Examples
+## 📚 Example Documentation
 
-### 1. Basic Query
-```bash
-curl -X POST http://localhost:8000/rag/query \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "What is machine learning?",
-    "language": "en"
-  }'
+| Document | Description |
+|----------|-------------|
+| **[BASIC_USAGE.md](BASIC_USAGE.md)** | Simple query examples |
+| **[PYTHON_EXAMPLES.md](PYTHON_EXAMPLES.md)** | Python SDK integration |
+| **[CLI_EXAMPLES.md](CLI_EXAMPLES.md)** | Command-line tools | # <- Add this
+
+---
+
+## 🚀 Quick Examples
+
+### PowerShell (Windows)
+```powershell
+# Ingest papers
+$body = @{
+    query = "machine learning"
+    max_results = 3
+} | ConvertTo-Json
+
+$response = Invoke-RestMethod -Uri "http://localhost:8000/rag/ingest/arxiv" `
+    -Method Post `
+    -ContentType "application/json" `
+    -Body $body
+
+Write-Host "Ingested: $($response.documents_loaded) papers"
+
+# Research query
+$body = @{
+    query = "What is machine learning?"
+    language = "en"
+} | ConvertTo-Json
+
+$response = Invoke-RestMethod -Uri "http://localhost:8000/research/query" `
+    -Method Post `
+    -ContentType "application/json" `
+    -Body $body
+
+Write-Host "`nAnswer:"
+Write-Host $response.answer
 ```
 
-### 2. Ingest ArXiv Papers
+### Bash (Linux/macOS)
 ```bash
+# Ingest papers
 curl -X POST http://localhost:8000/rag/ingest/arxiv \
   -H "Content-Type: application/json" \
-  -d '{
-    "query": "neural networks",
-    "max_results": 5
-  }'
+  -d '{"query":"machine learning","max_results":3}'
+
+# Research query
+curl -X POST http://localhost:8000/research/query \
+  -H "Content-Type: application/json" \
+  -d '{"query":"What is machine learning?","language":"en"}'
 ```
 
-### 3. Check System Health
-```bash
-curl http://localhost:8000/health
-curl http://localhost:8000/ready
+### Python
+```python
+import requests
+
+# Ingest
+response = requests.post(
+    "http://localhost:8000/rag/ingest/arxiv",
+    json={"query": "machine learning", "max_results": 3}
+)
+print(f"Ingested: {response.json()['documents_loaded']} papers")
+
+# Query
+response = requests.post(
+    "http://localhost:8000/research/query",
+    json={"query": "What is machine learning?", "language": "en"}
+)
+print(response.json()["answer"])
 ```
 
 ---
 
-## Common Workflows
+## 📖 By Use Case
 
-### Daily Research Update
-```bash
-#!/bin/bash
-# Fetch latest papers and generate summary
+### Academic Research
+- [Literature Review](BASIC_USAGE.md#literature-review)
+- [Paper Summaries](BASIC_USAGE.md#paper-summaries)
+- [Citation Extraction](BASIC_USAGE.md#citation-extraction)
 
-# 1. Ingest new papers
-curl -X POST http://localhost:8000/rag/ingest/arxiv \
-  -H "Content-Type: application/json" \
-  -d '{"query": "LLM reasoning", "max_results": 3}'
+### Automation
+- [Daily ArXiv Digest](N8N_WORKFLOWS.md#daily-digest)
+- [Scheduled Research](N8N_WORKFLOWS.md#scheduled-research)
+- [Email Notifications](N8N_WORKFLOWS.md#email-notifications)
 
-# 2. Generate summary
-curl -X POST http://localhost:8000/rag/query \
-  -H "Content-Type: application/json" \
-  -d '{"query": "What are recent advances in LLM reasoning?", "language": "en"}' \
-  | jq -r '.answer' > daily_summary.txt
-```
-
-### Literature Review
-```bash
-#!/bin/bash
-# Multi-topic literature review
-
-topics=("transformers" "attention mechanisms" "few-shot learning")
-
-for topic in "${topics[@]}"; do
-  echo "Processing: $topic"
-  
-  # Ingest
-  curl -X POST http://localhost:8000/rag/ingest/arxiv \
-    -H "Content-Type: application/json" \
-    -d "{\"query\": \"$topic\", \"max_results\": 5}"
-  
-  # Query
-  curl -X POST http://localhost:8000/rag/query \
-    -H "Content-Type: application/json" \
-    -d "{\"query\": \"Summarize research on $topic\", \"language\": \"en\"}" \
-    | jq -r '.answer' > "${topic}_summary.txt"
-done
-```
+### Integration
+- [Python Application](PYTHON_EXAMPLES.md#application-integration)
+- [Web Application](PYTHON_EXAMPLES.md#web-integration)
+- [REST API Client](ADVANCED_INTEGRATION.md#rest-client)
 
 ---
 
-## Language Examples
+## 🔗 Related Documentation
 
-### English Summary
-```bash
-curl -X POST http://localhost:8000/rag/query \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "Explain retrieval augmented generation",
-    "language": "en"
-  }'
-```
-
-### German Summary
-```bash
-curl -X POST http://localhost:8000/rag/query \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "Erklären Sie Retrieval Augmented Generation",
-    "language": "de"
-  }'
-```
+- **[API Reference](../api/ENDPOINTS.md)** - All endpoints
+- **[Setup Guide](../setup/INSTALLATION.md)** - Installation
+- **[n8n Setup](../setup/N8N.md)** - Workflow automation
 
 ---
 
-## See Also
-
-- [Full API Reference](../api/README.md)
-- [Python Examples](python_examples.md)
-- [n8n Workflows](workflow_examples.md)
-
----
-
-**[⬆ Back to Documentation](../README.md)**
+**[⬅ Back to Documentation](../README.md)**
